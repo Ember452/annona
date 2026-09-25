@@ -3,3 +3,6 @@ dist/
 .vite/
 *.local
 *.log
+
+# pnpm gen:api 的输出（后端 /v3/api-docs 拉过来现生成，不入库避免漂移）
+src/types/api.gen.ts
