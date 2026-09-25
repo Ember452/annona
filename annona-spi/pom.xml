@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.annona</groupId>
+        <artifactId>annona</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>annona-spi</artifactId>
+    <packaging>jar</packaging>
+    <name>annona-spi</name>
+    <description>扩展点契约层：五个 SPI 接口 + 跨模块契约 DTO + 领域事件定义。零 Spring / 零 Jakarta Persistence / 零 SDK。</description>
+
+    <dependencies>
+        <!-- 只依赖 annona-common 的纯 Java 部分（Result/ErrorCode 等）；
+             io.annona.spi.. 类禁止 import org.springframework.* / jakarta.persistence.* / 任何 SDK
+             —— 由 annona-server 的 ArchUnit 规则强制。annona-common 的 pom 已声明的唯一 Spring 依赖
+             只通过类路径传递，不进入本模块的 <dependencies>。 -->
+        <dependency>
+            <groupId>io.annona</groupId>
+            <artifactId>annona-common</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

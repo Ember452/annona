@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.annona</groupId>
+        <artifactId>annona</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>annona-common</artifactId>
+    <packaging>jar</packaging>
+    <name>annona-common</name>
+    <description>通用能力层：统一响应、异常体系、错误码、常量、切面基类；不含业务概念</description>
+
+    <dependencies>
+        <!-- GlobalExceptionHandler 依赖 @RestControllerAdvice，仅此项引入 Spring；
+             Result / ErrorCode / BusinessException 均为纯 Java。annona-spi 依赖本模块时
+             通过 ArchUnit 规则约束 io.annona.spi.. 不 import Spring。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
