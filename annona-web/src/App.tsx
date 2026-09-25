@@ -1,3 +1,17 @@
+import { Suspense } from 'react'
+import { RouterProvider } from 'react-router-dom'
+import { router } from './router'
+
 export default function App() {
-  return <h1 className="text-2xl font-bold p-8">annona · 年轮</h1>
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center text-neutral-500">
+          加载中…
+        </div>
+      }
+    >
+      <RouterProvider router={router} />
+    </Suspense>
+  )
 }
