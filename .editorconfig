@@ -1,0 +1,30 @@
+# editorconfig.org —— 与 AGENTS.md §4「命名与风格」保持一致
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# Java 与前端：2 空格（AGENTS.md §4 明确要求 2 空格缩进）
+[*.{java,kt,ts,tsx,js,jsx,json,css,scss}]
+indent_size = 2
+
+# Maven / XML 沿用社区惯例 4 空格（现有 pom.xml 即为 4 空格）
+[*.xml]
+indent_size = 4
+
+[*.{yml,yaml}]
+indent_size = 2
+
+[Makefile]
+indent_style = tab
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{bat,cmd}]
+end_of_line = crlf
