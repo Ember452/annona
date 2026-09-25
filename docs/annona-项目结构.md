@@ -452,12 +452,12 @@ io.annona.modules.planner..         禁止依赖 interview/voice/schedule（只�
 |---|---|---|---|
 | 1 | 根 `pom.xml` 改为 `packaging=pom` + `dependencyManagement`/`pluginManagement` + enforcer（JDK 21） | ✅ 已完成（P0-01） | 先于 B1 |
 | 2 | 新建 `annona-common`、`annona-spi`、`annona-infrastructure`、`annona-server` 四模块，把现有 `src/` 迁入 `annona-server` | ✅ 已完成（P0-02，PR #2 merge `37c1295`） | B1 |
-| 3 | `annona-web` 初始化（Vite + React + TS + Tailwind 4），配置构建产物拷贝进 `annona-server/resources/static` | ⬜ 待做 | B3（P0-09） |
-| 4 | 落地 `config/{web,async,persistence,security,properties,observability}` 六包骨架 + `shared/{domain,direction,signal,idempotent,meta}` 子包；`modules.<name>` 顶层包与 `shared` 子包必须有 `package-info.java` | 🔄 顶层 `shared/` 与 `modules/` package-info 已在 B1（P0-07）落；`config/*` 六包与 `shared/meta/MetaController.java` 在 B2（P0-05） | B2 |
-| 5 | Flyway 基线 `V1__baseline.sql`（含 `direction` 字典表）、`db/seed/`、`prompts/`、`skills/` 目录占位 | ⬜ 待做 | B2（P0-06） |
+| 3 | `annona-web` 初始化（Vite + React + TS + Tailwind 4），配置构建产物拷贝进 `annona-server/resources/static` | ✅ 已完成（P0-09，PR #4 merge `47c2979`） | B3 |
+| 4 | 落地 `config/{web,async,persistence,security,properties,observability}` 六包骨架 + `shared/{domain,direction,signal,idempotent,meta}` 子包；`modules.<name>` 顶层包与 `shared` 子包必须有 `package-info.java` | ✅ 已完成（B1 P0-07 落包骨架 + B2 P0-05 落六包与四线程池，PR #3 merge `f0a60d9`） | B1 + B2 |
+| 5 | Flyway 基线 `V1__baseline.sql`（含 `direction` 字典表）、`db/seed/`、`prompts/`、`skills/` 目录占位 | ✅ 已完成（P0-06，`V1__baseline.sql` + `docker/postgres/init.sql` 两文件，PR #3 merge `f0a60d9`）；`db/seed` 与 `prompts/` `skills/` 目录占位待 P1a 填 | B2 |
 | 6 | `annona-server/src/test/java/io/annona/arch/` 落地 §10 的 ArchUnit 七条规则（先失败后放行的红名单机制） | ✅ 已完成（P0-07，B1） | B1 |
-| 7 | `docker/` 双 compose、`deploy/nginx/`、`.github/workflows/ci.yml`（build/test/lint/archunit + gitleaks 密钥扫描） | ⬜ 待做 | B4（P0-10/13）+ B5（P0-11/12/14） |
-| 8 | 仓库门面：`README.md`、`LICENSE`（AGPL-3.0 FSF 原文）、`AGENTS.md`、`.env.example`、`SECURITY.md`、`CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`.editorconfig` 已落地；`.github/` 全套见 §13（P0-12）；决策记录已在 `docs/specs/` 落地 8 条 ADR | ✅ 门面已完成；`.github/` 待 B5 | — |
+| 7 | `docker/` 双 compose、`deploy/nginx/`、`.github/workflows/ci.yml`（build/test/lint/archunit + gitleaks 密钥扫描） | ✅ 已完成（P0-10 `docker/Dockerfile` 三阶段 + `docker-compose.yml`/`compose.dev.yml`，P0-11 hooks，P0-12 `ci.yml` 5 blocking jobs + 5 个辅助 workflow + `dependabot.yml`/`CODEOWNERS`/ISSUE/PR 模板/FUNDING，P0-13 `Makefile`） | B4 + B5 |
+| 8 | 仓库门面：`README.md`、`LICENSE`（AGPL-3.0 FSF 原文）、`AGENTS.md`、`.env.example`、`SECURITY.md`、`CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`.editorconfig` 已落地；`.github/` 全套见 §13（P0-12）；决策记录已在 `docs/specs/` 落地 8 条 ADR | ✅ 门面 + `.github/` 全套完成（P0-14，PR #6 本批；`CODEOWNERS` 强审 4 区：`planner/` `direction/` `annona-spi/` `docs/specs/` + `.github/` `.githooks/`） | B5 |
 
 **验收**：`mvn -q verify` 全绿、ArchUnit 七条规则生效（本机到此为止）；`docker compose up` 后首页 200 与 `/api/meta/ping` 、模型连通性测试由 **CI 验证并留存日志**（本机无 Docker，见 `specs/2026-09-25-dockerless-local-dev-adr.md`）。
 
