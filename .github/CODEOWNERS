@@ -1,0 +1,20 @@
+# annona 代码归属（对齐 docs/annona-项目结构.md §13.5 治理）
+#
+# 单人项目：所有 owner 目前都指向 @Ember452。planner 与 direction 是
+# 项目灵魂（可解释面板的数据源头），一旦有外部贡献触碰这两处必须走
+# 强审流程 —— CODEOWNERS 让 GitHub UI 自动 block 无 review 的合并。
+# 具体强审范围：
+#   - annona-server/src/main/java/io/annona/modules/planner/**
+#   - annona-server/src/main/java/io/annona/shared/direction/**
+#   - annona-spi/**（唯一发布到 Central 的 artifact，API 变更成本高）
+#   - docs/specs/**（ADR 是决策真相源，改动即改决策）
+#   - .github/**（workflow / hooks 影响门禁本身）
+
+*                                            @Ember452
+
+/annona-server/src/main/java/io/annona/modules/planner/    @Ember452
+/annona-server/src/main/java/io/annona/shared/direction/   @Ember452
+/annona-spi/                                               @Ember452
+/docs/specs/                                               @Ember452
+/.github/                                                  @Ember452
+/.githooks/                                                @Ember452

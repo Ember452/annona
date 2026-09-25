@@ -17,7 +17,7 @@
 | 阶段 | 状态 | 出口凭证 |
 |---|---|---|
 | 文档（设计/结构/计划/ADR）+ 入口（README/LICENSE/.env.example/SECURITY/CONTRIBUTING/CoC/.editorconfig） | ✅ done | 本仓 20+ 个文档文件；LICENSE 为 AGPL-3.0 FSF 原文（已校验） |
-| P0 骨架与门禁 | 🔄 doing —— P0-01 已完成（2026-09-25），代码仍是单模块 jar，`packaging=pom` 待 P0-02 | `mvn verify` + CI 全绿日志 |
+| P0 骨架与门禁 | ✅ done(2026-09-25, PR #2/#3/#4/#5/#6) —— P0-01 至 P0-14 全部完成；P0-15 属 GitHub 网页操作不产文件；详见 [reports/P0-骨架-阶段总结.md](./reports/P0-骨架-阶段总结.md) | `mvn -B -q verify EXIT=0`（39 tests）+ B5 合并后 Actions 首跑链接（回填阶段总结 §3 出口 ②） |
 | P1a 数据与知识底座 | ⬜ todo | — |
 | P1b 面试与评估 | ⬜ todo | — |
 | P1c 训练决策层 | ⬜ todo | — |
@@ -70,6 +70,15 @@ P0 骨架        P1 闭环内核                    P2 体验留存   P3 语音 
 | P0-05 异步与恢复 | `🅖 common/async/{AbstractStreamProducer,AbstractStreamConsumer}.java`、`common/async/recovery/*RecoveryProperties.java`、`common/constant/AsyncTaskStreamConstants.java`、`common/transaction/TransactionalExecutor.java` | Stream 消费模板 + 死信/恢复调度 + 事务边界工具化 | 消费前校验改为「实体不存在则 ACK 丢弃 + 记录 direction 已删」 |
 | P0-01/P1 线程池与防护 | `🅜 common/config/thread/{ThreadPoolConfig,ApplicationThreadPoolProperties}.java`、`toolkit/Threads.java`、`common/ratelimit/{RedissonRequestRateLimitService,RequestRateLimitKeyResolver,RequestRateLimitPolicy,RequestRateLimitService}.java` | 多级池隔离参数、队列与拒绝策略选型、Redisson 限流策略抽象 | 池名与 Micrometer 指标绑定；禁止直接搬 `Threads` 工具类（改为显式 Bean）。**禁用 `Executors.newXxx` 靠 ArchUnit 而不是 enforcer**（enforcer 只能管依赖坐标，管不了方法调用） |
 | P0-05 依赖名修正（已实测） | `🅖 app/build.gradle` | **Boot 4 的 starter 已改名**：`spring-boot-starter-webmvc`（不是 `-web`）、`spring-boot-starter-flyway`，以及 `-validation` / `-websocket` / `-data-jpa` / `-actuator` | 写错名字会在 CI 上拉不到依赖；`flyway-database-postgresql` 与 `postgresql` 是 `runtimeOnly` 定位 |
+| P0-06 Flyway V1 基线 | `🅖 docker/postgres/init.sql`, `🅢 prisma/schema.prisma::{User,Account,Session}`, `🅜 docker-compose.yml` | 表清单形状（session / token / attempt 三件套字段）；PG init 阶段的 CREATE EXTENSION 权限模型 | `init.sql` 只放扩展不放表（表归 Flyway V1，两条权限线分离）；CITEXT email；TIMESTAMPTZ；partial index；`direction` 上游根本没有 |
+| P0-07 ArchUnit 七条 | **三仓都没有 ArchUnit** | 无 | 全部自写；§10 规则来自 [结构 §10](./annona-项目结构.md)；`allowEmptyShould` 兜住无匹配类的假通过；`resources/archunit-whitelist.properties` 红名单机制 |
+| P0-08 StartupValidator | `🅖 common/ai/ApiKeyEncryptionService.java` 里 `DEV_FALLBACK_KEY` 是**反例**（[model-api-key-adr §背景](./specs/2026-09-25-model-api-key-adr.md) 明写拒绝） | 无（只借"缺 Key 应该报错"的直觉） | 上游静默 fallback，annona 硬拒；`ApplicationEnvironmentPreparedEvent` 时机 + `spring.factories` 注册 `ApplicationListener`；与 `FlywayMigrationStrategy` 双组件分工 |
+| P0-09 annona-web | `🅖 frontend/{package.json, vite.config.ts, tsconfig*.json, src/api/request.ts, src/App.tsx}` | Vite + React + TS 骨架与 axios 拦截器 | SUCCESS_CODE 从 200 改到 0；不引入 framer-motion/recharts/dayjs/onnxruntime；`build.outDir` 指向 annona-server static；单 tsconfig（🅖 有 base + app 两层）；pnpm 11 `onlyBuiltDependencies` 白名单 |
+| P0-10 Docker 交付 | `🅖 {app,frontend}/Dockerfile`, `🅢 Dockerfile`, `🅢 docker-compose.yml`, `🅖 docker-compose.yml`, `🅜 MockPilot-mian/docker-compose.yml` | 多阶段 build + healthcheck + depends_on 结构；MinIO 与 pgvector 镜像 pin 策略 | 三阶段（web-build 前置到同 Dockerfile）；服务命名 role 化（db/cache/storage/server/web）；MinIO 走 `MINIO_DEFAULT_BUCKETS` env 不建 init container；nginx 不 mount static（走 server 内嵌 static）；pgvector 镜像用 `pgvector/pgvector:pg16` 不用 `postgres:16` |
+| P0-11 githooks | `🅖 .githooks/{commit-msg, README.md}` | Conventional Commits 正则骨架与 perl `\p{Han}` 检测工具 | **反向**：annona 要求"标题不含汉字"（AGENTS.md §5）；不强制 `- ` bullet body；pre-commit gitleaks 硬拒无跳过（🅖 无 pre-commit）；Windows 用户走 Git Bash；`make setup` 与直接 `git config core.hooksPath .githooks` 两条激活路径 |
+| P0-12 CI 矩阵 | `🅖 .github/workflows/ci.yml`, `🅢 .github/workflows/ci.yml` | concurrency + cancel-in-progress + permissions least-privilege + 单一 backend job 骨架 | 5 blocking jobs（🅖/🅢 都只有 1 个 job）；docker-it 用 `services:` 起 pgvector+redis 而非 compose（runner 托管比 compose 快 30-60s）；compose-smoke 独立 job 是 P0 出口 ② 的机器化；gitleaks 独立 blocking job；`-DexcludedGroups=` 显式清空 pom 默认排除；`mvnw` 用 `git update-index --chmod=+x` 补 exec bit |
+| P0-13 Makefile | 三仓都无 Makefile | 无 | 全新引入 8 个 target（`setup / up / dev / test / eval / logs / reset / quickstart`）；与 [AGENTS.md §8.2](../AGENTS.md) "make 目标保留但不作为本机默认入口" 一致；Windows 用户 README 明写走原生 PowerShell 命令 |
+| P0-14/15 门面与仓库设置 | 无（🅖/🅢 有 CODEOWNERS 但内容完全不同） | 无 | CODEOWNERS / dependabot / ISSUE/PR 模板 / FUNDING 全部自写；`ISSUE_TEMPLATE/feature_request.yml` 内嵌 AGENTS.md §1 九条 Non-goals 自查；`skill-proposal.yml` 对齐 §13.3 表格新增面试方向提案；P0-15 branch protection 属 GitHub 网页操作，不产文件（作者手工） |
 | P1b-10 模型 Key 与额度 | `🅖 modules/llmprovider/service/{ApiKeyEncryptionService,LlmProviderConfigService,LlmProviderBootstrapService}.java`、`modules/llmprovider/dto/{ProviderDTO,AsrConfigDTO,TtsConfigDTO}.java`、`common/ai/{LlmProviderRegistry,ApiPathResolver,LlmEmbeddingConfig}.java`（+`common/config/LlmProviderProperties.java`）、`🅢 src/lib/{usage.ts,model-pool.ts,deepseek.ts}`、`prisma/schema.prisma::TokenUsage` | AES/GCM + nonce 结构、masked 字段形态、Provider 连通性测试、模型池 LOW 档降级思路 | **不抄 `DEV_FALLBACK_KEY`**（ADR 已定）；Key 改为五用途拆分；记账字段补 `prompt_hash/evaluator_version` |
 
 ### B. 后端·知识与面试链路（对应 P1a / P1b）
@@ -128,7 +137,7 @@ P0 骨架        P1 闭环内核                    P2 体验留存   P3 语音 
 
 ---
 
-## P0 骨架与门禁（10.5 人日，已完成 1）
+## P0 骨架与门禁（10.5 人日，已完成 P0-01 至 P0-14，详见 [P0 阶段总结](./reports/P0-骨架-阶段总结.md)）
 
 ### 批次划分（开发按批做，不按单任务做）
 

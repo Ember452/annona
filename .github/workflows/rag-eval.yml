@@ -1,0 +1,80 @@
+# RAG 检索评测。仅当 retrieval / chunk / scripts/rag-eval 变更时触发；
+# services 起 pgvector 复用 backend 环境。P1a-09 才落 scripts/rag-eval/，
+# 目前脚本不存在时优雅 skip（保留 workflow 结构，改动检索代码不会静默漂）。
+# 产物走 artifact 上传，PR 里贴报告链接（AGENTS.md §2 计划维护规则 8）。
+name: RAG Eval
+
+on:
+  pull_request:
+    paths:
+      - 'annona-server/src/main/java/io/annona/modules/retrieval/**'
+      - 'annona-server/src/main/java/io/annona/modules/knowledge/chunk/**'
+      - 'scripts/rag-eval/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    name: Recall@K / MRR regression gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: annona
+          POSTGRES_PASSWORD: annona
+          POSTGRES_DB: annona
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U annona -d annona"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: chmod mvnw
+        run: chmod +x mvnw
+      - name: Skip when scripts/rag-eval/ not yet in tree (P1a-09 pending)
+        run: |
+          if [ ! -f scripts/rag-eval/eval.py ]; then
+            echo "scripts/rag-eval/eval.py arrives in P1a-09; skipping"
+            echo "skip=true" >> "$GITHUB_ENV"
+          fi
+      - name: Build annona-server (skip tests, main CI already covers them)
+        if: env.skip != 'true'
+        run: ./mvnw -B -DskipTests package
+      - name: Run eval against local instance
+        if: env.skip != 'true'
+        run: |
+          java -jar annona-server/target/annona-server.jar &
+          APP_PID=$!
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then break; fi
+            sleep 2
+          done
+          python3 scripts/rag-eval/eval.py \
+            --base-url http://localhost:8080 \
+            --queries scripts/rag-eval/queries.json \
+            --report-dir out/rag-eval
+          kill $APP_PID
+        env:
+          SPRING_PROFILES_ACTIVE: docker
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/annona
+          SPRING_DATASOURCE_USERNAME: annona
+          SPRING_DATASOURCE_PASSWORD: annona
+          ANNONA_SECRET_KEY: ci-dummy-kek
+      - name: Upload report artifact
+        if: env.skip != 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rag-eval-report
+          path: out/rag-eval/
+          retention-days: 30

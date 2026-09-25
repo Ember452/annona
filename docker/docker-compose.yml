@@ -1,12 +1,17 @@
-# annona 完整栈：5 服务。
+# annona 完整栈：默认 4 服务（db / cache / server / web）+ 1 个可选服务
+#   storage，默认不启动。
 #   db       PostgreSQL 16 + pgvector + citext（不用官方 postgres:16，
 #            缺 vector 扩展 Flyway V1 会 fail，per dockerless ADR §CI 矩阵）
 #   cache    Redis 7（会话 / Stream / 限流）
-#   storage  MinIO（S3 兼容；bucket 通过 MINIO_DEFAULT_BUCKETS 自动建，
-#            不用单独的 createbuckets init container）
+#   storage  S3 兼容对象存储（默认 profile=gated，见下方 storage 块注释）
 #   server   annona-server 单 jar（内含 annona-web static，见 B3）
 #   web      nginx 反代，host:80；SPA fallback 目前落到 server 的 static
 #            处理（deep-link 需 P1a 补 WebMvcConfigurer；见 deploy/nginx/annona.conf）
+#
+# 启 storage：`docker compose --profile s3 up -d` 或 `COMPOSE_PROFILES=s3 ...`。
+# P0 阶段 annona-server 代码里 **无 S3 client bean**，storage 不参与应用启动；
+# storage 默认 gated 是为了不让 P0 出口 ② 的 “首页 200” 验证卡在不可控的上游
+# 镜像仓库上。详见 storage 块内注释 与 docs/reports/P0-骨架-阶段总结.md §5 D13。
 #
 # 所有敏感变量走 --env-file .env（Makefile 里默认注入）。compose 用 `:?` 强
 # 校验非空，缺关键变量时启动直接失败，与 StartupValidator 的 fail-fast 语义对齐。
@@ -37,11 +42,30 @@ services:
       retries: 20
 
   storage:
-    image: minio/minio:RELEASE.2025-01-20T14-49-07Z
+    # Gated behind the `s3` compose profile so `docker compose up -d` doesn't
+    # try to pull it. Rationale:
+    #   1) MinIO archived the community edition on 2026-02-13; every tag was
+    #      purged from Docker Hub by mid-Sep 2026. `minio/minio` and
+    #      `bitnami/minio` both return 404-shaped "pull access denied".
+    #   2) quay.io is the only remaining public mirror but returns
+    #      `unauthorized` for anonymous pulls from GitHub Actions runners on
+    #      every tag tested here (Jan 2025 tag not on mirror at all; Sep
+    #      2025 tag present but the pull still 401s).
+    #   3) annona-server's P0 code base has NO S3 client bean. Storage is
+    #      not on the critical path for P0 exit ② "fresh machine to homepage
+    #      200". Making it opt-in keeps the honest scope of that exit
+    #      condition verifiable in CI while we resolve a real S3-compatible
+    #      image selection (candidates: Garage MIT / SeaweedFS Apache 2.0 /
+    #      Silo / build MinIO from source) as tech debt D13 in
+    #      docs/reports/P0-骨架-阶段总结.md §5, targeted at P1a-05 (document
+    #      upload). Once selected, un-gate by removing the `profiles:` line
+    #      and re-adding S3_* to server's environment + depends_on entry.
+    profiles: ["s3"]
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-annona-dev-ak}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-annona-dev-sk-not-for-prod}
       # 官方支持的自举建桶方式；bucket 名与 annona-server 的 S3_BUCKET 一致
       MINIO_DEFAULT_BUCKETS: ${S3_BUCKET:-annona}
     volumes:
@@ -64,10 +88,10 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?}
       REDIS_HOST: cache
       REDIS_PORT: 6379
-      S3_ENDPOINT: http://storage:9000
-      S3_BUCKET: ${S3_BUCKET:-annona}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:?}
+      # S3_ENDPOINT / S3_BUCKET / S3_ACCESS_KEY / S3_SECRET_KEY intentionally
+      # omitted here for P0: annona-server has no S3 client bean yet, so
+      # nothing reads them. When P1a-05 wires S3 upload, re-add the four
+      # lines plus the corresponding `depends_on: storage` entry below.
       # StartupValidator（B2）在 prod/docker profile 缺 KEK 会直接拒绝启动；
       # `:?` 让 compose 阶段就报可读错，而不是等到应用启动。
       ANNONA_SECRET_KEY: ${ANNONA_SECRET_KEY:?generate with 'openssl rand -base64 32'}
@@ -75,9 +99,11 @@ services:
       ANNONA_MODEL_MODE: ${ANNONA_MODEL_MODE:-byok}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost}
     depends_on:
-      db:      { condition: service_healthy }
-      cache:   { condition: service_healthy }
-      storage: { condition: service_healthy }
+      db:    { condition: service_healthy }
+      cache: { condition: service_healthy }
+      # storage intentionally absent for P0 (see storage block comment);
+      # P1a-05 re-adds `storage: { condition: service_healthy }` once the
+      # S3 selection ADR lands and the image actually pulls on CI.
     expose:
       - "8080"
     # 8080 不映射到 host，唯一入口是 web:80；直接暴露 8080 便于本地调试时手动打开注释
@@ -93,8 +119,12 @@ services:
     depends_on:
       server: { condition: service_healthy }
     healthcheck:
-      # busybox 的 wget；探活命中 server 的 /actuator/health 经反代
-      test: ["CMD", "wget", "-qO-", "http://localhost/actuator/health"]
+      # busybox wget 探自己的 80 端口（经反代命中 server 的 /actuator/health）。
+      # 写 127.0.0.1 而不是 localhost：alpine 下 wget 会优先解 ::1，而 annona.conf
+      # 只 listen 80 IPv4（nginx 官方镜像的 10-listen-on-ipv6-by-default.sh 想补
+      # IPv6 listener 但 conf 文件只读，补不上），healthcheck 会因 IPv6 拒接而
+      # 不健康。B5 首次踩到，阶段总结 §5 D15。
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/actuator/health"]
       interval: 10s
       timeout: 3s
       retries: 10

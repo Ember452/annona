@@ -1,0 +1,31 @@
+# docker profile：由 docker/docker-compose.yml 的 server 服务通过
+# SPRING_PROFILES_ACTIVE=docker 激活。语义与 prod 同构（fail-fast 检查全开），
+# 差别只在 datasource / redis / S3 都走 compose 内网 service name 而不是
+# 外部主机，以及日志保持 INFO 便于 `docker compose logs` 直读。
+#
+# 触发时机：CI 的 compose-smoke job 会起 db/cache/server/web 四个服务
+# （storage 默认 profile-gated，见 docker-compose.yml §D13），本 profile 就是
+# 那条链路的运行时配置。缺这个文件会让 StartupValidator 读到空的
+# annona.kek.secret 直接抛错——B5 首次 Actions 跑 compose-smoke 就是撞在这上面
+# （见 docs/reports/P0-骨架-阶段总结.md §5 D14）。
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://db:5432/annona}
+    username: ${SPRING_DATASOURCE_USERNAME:annona}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+annona:
+  startup:
+    require-kek: true
+    check-pg-extensions: true
+  kek:
+    secret: ${ANNONA_SECRET_KEY:}
+
+logging:
+  level:
+    io.annona: INFO
+  pattern:
+    console: "%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n"

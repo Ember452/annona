@@ -1,0 +1,50 @@
+# annona-spi 是唯一发到 Maven Central 的 artifact（结构 §13.3；docs/specs/
+# 2026-09-25-module-granularity-adr.md 讲清了为什么只发一个）。
+# 触发：v* tag；且 secrets.OSSRH_USERNAME 已配（未配的 fork PR / 首次未 setup 时跳过）。
+# GPG 私钥用于签名，Central 强制要求。
+name: Publish SPI
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Deploy annona-spi to Maven Central
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          server-id: ossrh
+          server-username: OSSRH_USERNAME
+          server-password: OSSRH_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: GPG_PASSPHRASE
+      - name: Skip when publishing secrets are not configured
+        id: gate
+        run: |
+          if [ -z "${{ secrets.OSSRH_USERNAME }}" ]; then
+            echo "OSSRH_USERNAME secret not set; skipping publish (expected on forks and pre-setup repos)"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: chmod mvnw
+        if: steps.gate.outputs.skip != 'true'
+        run: chmod +x mvnw
+      - name: Deploy (GPG sign + sources + javadoc jars per Central requirement)
+        if: steps.gate.outputs.skip != 'true'
+        run: ./mvnw -B -pl annona-spi -am -DskipTests deploy
+        env:
+          OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}

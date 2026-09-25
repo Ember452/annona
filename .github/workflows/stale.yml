@@ -1,0 +1,35 @@
+# 30 天无回应的 issue / PR 自动关闭；再 7 天无回应则锁定。
+# 单人项目的健康度：issue 悬挂会挤压 maintainer 心智，机器化关闭释放注意力。
+name: Stale
+
+on:
+  schedule:
+    - cron: '0 0 * * *'   # 每日 UTC 00:00
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          days-before-stale: 30
+          days-before-close: 7
+          stale-issue-message: >
+            这个 issue 30 天无人回应。若问题已解决或有新信息，请回复移除
+            stale 标记；否则 7 天后自动关闭。
+          stale-pr-message: >
+            这个 PR 30 天无更新。若有进展请回复；否则 7 天后自动关闭。
+          close-issue-message: >
+            因长期无回应自动关闭。若仍需处理，重开或新建并 link 本 issue。
+          close-pr-message: >
+            因长期无更新自动关闭。可重开或联系 @Ember452。
+          exempt-issue-labels: 'good-first-issue,skill-proposal,pinned'
+          exempt-pr-labels: 'pinned,needs-review'
+          # 只碰 issue 与 PR，不碰其它
+          operations-per-run: 30
