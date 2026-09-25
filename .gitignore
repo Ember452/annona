@@ -48,6 +48,9 @@ node_modules/
 dist/
 .vite/
 *.local
+# annona-web 构建产物（pnpm build 输出到 annona-server 的 classpath static/，
+# 前端源码在 annona-web/src/；static/ 不入库，由 CI 的 pnpm build 步骤生成）
+annona-server/src/main/resources/static/
 
 ### 运行时产物 ###
 logs/

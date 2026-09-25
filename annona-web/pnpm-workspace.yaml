@@ -1,0 +1,6 @@
+# annona-web 独立工程（不是 pnpm workspace 成员），但仍可用 pnpm-workspace.yaml 承载
+# pnpm 11 的项目级设置。allowBuilds 白名单里 esbuild=true：Vite 5 的构建依赖，
+# 其 postinstall 会下载平台相关的原生二进制。pnpm 10+ 默认拒绝任何 postinstall 以
+# 阻断供应链攻击，因此需要显式白名单。参见 https://pnpm.io/settings#allowbuilds
+allowBuilds:
+  esbuild: true
