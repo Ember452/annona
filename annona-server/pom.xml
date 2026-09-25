@@ -59,6 +59,13 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- B3 (P0-09) 前端 OpenAPI 类型生成需要 /v3/api-docs 与 Swagger UI；
+             Boot 4 兼容的 springdoc 版本由根 pom 的 dependencyManagement 控制（当前 3.1.1）。 -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        </dependency>
+
         <!-- runtime scope：驱动与 PG 方言（Boot 的 starter-flyway 不自带 postgres 方言） -->
         <dependency>
             <groupId>org.postgresql</groupId>
