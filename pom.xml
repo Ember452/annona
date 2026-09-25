@@ -50,6 +50,14 @@
         <spring-ai.version>2.0.0</spring-ai.version>
         <maven-enforcer-plugin.version>3.5.0</maven-enforcer-plugin.version>
         <archunit.version>1.3.0</archunit.version>
+        <!-- springdoc-openapi 3.x 适配 Spring Boot 4（官方 FAQ：https://springdoc.org/faq.html）。
+             2.x 只兼容 Boot 3；上 Boot 4 后不能直接升到 2.x 最后一版。 -->
+        <springdoc.version>3.1.1</springdoc.version>
+        <!-- Boot 4.1.1 默认 Jackson BOM = 2.21.5；springdoc 3.1.1 内部 swagger-core-jakarta
+             2.2.55 拉 2.22.1，不升级会触发 enforcer 的 requireUpperBoundDeps 失败。
+             Boot 4 分家管两个 Jackson BOM：jackson-2-bom.version = fasterxml（legacy Jackson 2），
+             jackson-bom.version = tools.jackson（Jackson 3）。本 override 只针对 Jackson 2。 -->
+        <jackson-2-bom.version>2.22.1</jackson-2-bom.version>
 
         <!-- Mockito 在 JDK 21 上动态 attach 会告警，显式放行（surefire 与 CI 同一口径） -->
         <annona.test.jvmArgs>--enable-native-access=ALL-UNNAMED</annona.test.jvmArgs>
@@ -90,6 +98,15 @@
                 <artifactId>archunit-junit5</artifactId>
                 <version>${archunit.version}</version>
                 <scope>test</scope>
+            </dependency>
+
+            <!-- springdoc-openapi 自动装配 OpenAPI 3 文档与 Swagger UI（annona-server 引入）。
+                 与 P0-09 前端 OpenAPI 类型生成脚本直接相关（pnpm gen:api 拉 /v3/api-docs）。
+                 Boot 4 不自动管理 springdoc 版本，因此需显式声明。 -->
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
