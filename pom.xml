@@ -11,9 +11,13 @@
     <groupId>io.annona</groupId>
     <artifactId>annona</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <!-- P0-02 拆出 annona-common / annona-spi / annona-infrastructure / annona-server 后，
-         本 pom 改为 packaging=pom 的聚合器，src/ 迁入 annona-server。此处保持 jar 以免中途断构。 -->
-    <packaging>jar</packaging>
+    <packaging>pom</packaging>
+    <modules>
+        <module>annona-common</module>
+        <module>annona-spi</module>
+        <module>annona-infrastructure</module>
+        <module>annona-server</module>
+    </modules>
     <name>annona</name>
     <description>年轮 · annona — study minutes become the shape of your next question.</description>
     <url>https://github.com/Ember452/annona</url>
@@ -45,6 +49,7 @@
         <!-- 第三方版本只在这一处出现；子模块的 <dependency> 一律不写 version -->
         <spring-ai.version>2.0.0</spring-ai.version>
         <maven-enforcer-plugin.version>3.5.0</maven-enforcer-plugin.version>
+        <archunit.version>1.3.0</archunit.version>
 
         <!-- Mockito 在 JDK 21 上动态 attach 会告警，显式放行（surefire 与 CI 同一口径） -->
         <annona.test.jvmArgs>--enable-native-access=ALL-UNNAMED</annona.test.jvmArgs>
@@ -52,6 +57,23 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- 内部模块坐标集中在父 pom；子模块引用不写 version -->
+            <dependency>
+                <groupId>io.annona</groupId>
+                <artifactId>annona-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.annona</groupId>
+                <artifactId>annona-spi</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.annona</groupId>
+                <artifactId>annona-infrastructure</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
             <!-- spring-boot-starter-parent 已管理 Boot 生态版本；这里只补 AI 侧的 BOM。
                  2.0.0 已确认可从 Maven Central 直接解析，不需要 repo.spring.io/milestone。 -->
             <dependency>
@@ -61,21 +83,16 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+
+            <!-- ArchUnit 由 annona-server 的 test scope 引入，版本集中管理 -->
+            <dependency>
+                <groupId>com.tngtech.archunit</groupId>
+                <artifactId>archunit-junit5</artifactId>
+                <version>${archunit.version}</version>
+                <scope>test</scope>
+            </dependency>
         </dependencies>
     </dependencyManagement>
-
-    <dependencies>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
 
     <build>
         <pluginManagement>
@@ -90,11 +107,6 @@
         </pluginManagement>
 
         <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>

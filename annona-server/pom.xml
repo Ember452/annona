@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.annona</groupId>
+        <artifactId>annona</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>annona-server</artifactId>
+    <packaging>jar</packaging>
+    <name>annona-server</name>
+    <description>应用层：唯一可执行 jar。全部业务模块 + Web/SSE/WS 接口 + 启动类 + CLI + prompt 与 skill 资源。</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.annona</groupId>
+            <artifactId>annona-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.annona</groupId>
+            <artifactId>annona-spi</artifactId>
+        </dependency>
+        <!-- 编译期不直接依赖 infrastructure 的具体实现类；运行期由 Spring 装配 SPI 实现。
+             ArchUnit 规则强制 io.annona.modules.. 不 import io.annona.infrastructure..。 -->
+        <dependency>
+            <groupId>io.annona</groupId>
+            <artifactId>annona-infrastructure</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Boot 4 模块化的 starter 名（详见 docs/annona-开发计划.md 借鉴地图 A 表）：
+             - spring-boot-starter：核心 + 日志
+             - spring-boot-starter-webmvc：MVC + Jackson + Tomcat（原 -web 已改名） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>annona-server</finalName>
+        <plugins>
+            <!-- 只有 annona-server 打成可执行 Boot jar；其他三个模块是普通 library jar。
+                 版本由 spring-boot-starter-parent 的 pluginManagement 提供。 -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>io.annona.AnnonaApplication</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.annona</groupId>
+        <artifactId>annona</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>annona-infrastructure</artifactId>
+    <packaging>jar</packaging>
+    <name>annona-infrastructure</name>
+    <description>技术实现层：SPI 的具体实现与外部系统适配（PG/pgvector、Redis、S3、LLM HTTP、加密、PDF、分词）。P0 只有包骨架；P1a 起落入实现。</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.annona</groupId>
+            <artifactId>annona-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.annona</groupId>
+            <artifactId>annona-spi</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
