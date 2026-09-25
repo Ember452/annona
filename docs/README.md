@@ -5,9 +5,11 @@
 **第一次接触本项目？** 按这个顺序读：
 
 ```
-annona-项目设计文档.md   →   annona-项目结构.md   →   annona-开发计划.md   →   architecture/overview.md
-      (做什么)                  (放在哪)                 (何时做)                 (怎么连)
+../README.md → annona-项目设计文档.md → annona-项目结构.md → annona-开发计划.md → architecture/overview.md
+  (仓库入口+当前状态)      (做什么)              (放在哪)              (何时做/做到哪)          (怎么连)
 ```
+
+仓库根 [`../README.md`](../README.md) 是人与 AI 的第一入口，里面有**当前仓库状态**与能跑/不能跑的命令清单。
 
 ---
 
@@ -91,6 +93,7 @@ docs/
 5. **过期文档不删，标注**：文件头加 `> ⚠️ Superseded by <link>`，保留决策脉络。
 6. 图表用 Mermaid 或 ASCII，不用图片（diff 不友好）；`assets/` 仅在 README 截图需要时创建。
 7. 新增/重命名文档 → 同步更新本 README 与 `architecture/INDEX.md`（视为同一次提交）。
+8. **命令与验收必须标注执行环境**（本机 / CI / 部署环境）。本机无 Docker：凡容器、真实中间件、浏览器、压测类验证一律写“CI 执行”（其依据与代价见 `specs/2026-09-25-dockerless-local-dev-adr.md`）。
 
 ## 4. 代码注释与文档的分工
 

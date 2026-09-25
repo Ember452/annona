@@ -6,7 +6,7 @@
 | 关联文档 | [README.md](./README.md)（文档总导航）、[annona-项目设计文档.md](./annona-项目设计文档.md)（产品设计，功能与领域模型以该文档为准）、[architecture/overview.md](./architecture/overview.md)（分层与请求生命周期） |
 | 结构流派 | **package-by-feature（按特性垂直切）+ 模块内分层（水平切）**，Maven 多模块聚合，依赖方向严格指向 SPI |
 | 参照样板 | Apache HertzBeat / Nacos（多模块聚合 + common/infra 分层）、Spring Boot 官方 starter 约定、阿里 COLA（adapter/app/domain/infrastructure 分层思想） |
-| 状态 | v1.0 待评审 |
+| 状态 | v1.0 定稿（已评审） |
 
 ---
 
@@ -447,13 +447,13 @@ io.annona.modules.planner..         禁止依赖 interview/voice/schedule（只�
 1. 根 `pom.xml` 改为 `packaging=pom` + `dependencyManagement`/`pluginManagement` + enforcer（JDK 21）。
 2. 新建 `annona-common`、`annona-spi`、`annona-infrastructure`、`annona-server` 四模块，把现有 `src/` 迁入 `annona-server`。
 3. `annona-web` 初始化（Vite + React + TS + Tailwind 4），配置构建产物拷贝进 `annona-server/resources/static`。
-4. 落地 `config/{web,async,persistence,security,properties,observability}` 与 `shared/{domain,direction,signal,idempotent}` 空骨架 + `package-info.java`。
+4. 落地 `config/{web,async,persistence,security,properties,observability}` 与 `shared/{domain,direction,signal,idempotent}` 空骨架；`modules.<name>` 顶层包与 `shared` 子包必须有 `package-info.java`（子包不强制）。
 5. Flyway 基线 `V1__baseline.sql`（含 `direction` 字典表）、`db/seed/`、`prompts/`、`skills/` 目录占位。
 6. `annona-server/src/test/java/io/annona/arch/` 落地 §10 的 ArchUnit 规则（先失败后放行的红名单机制）。
 7. `docker/` 双 compose、`deploy/nginx/`、`.github/workflows/ci.yml`（build/test/lint/archunit + gitleaks 密钥扫描）。
-8. `README/SECURITY/CONTRIBUTING/CODE_OF_CONDUCT/LICENSE/AGENTS.md` + `.github/` 全套（见 §13）；决策记录已在 `docs/specs/` 落地 7 条 ADR；`AGENTS.md` 已定稿（行为规范、commit 要求、借鉴扫描、ADR 与阶段总结义务）。
+8. `README/SECURITY/CONTRIBUTING/CODE_OF_CONDUCT/LICENSE/AGENTS.md` + `.github/` 全套（见 §13）；决策记录已在 `docs/specs/` 落地 8 条 ADR；`AGENTS.md` 已定稿（行为规范、commit 要求、借鉴扫描、无 Docker 开发循环、ADR 与阶段总结义务）。
 
-**验收**：`mvn -q verify` 全绿，`docker compose up` 后访问首页 200，`/api/meta/ping` 与一次模型连通性测试通过，ArchUnit 七条规则全部生效。
+**验收**：`mvn -q verify` 全绿、ArchUnit 七条规则生效（本机到此为止）；`docker compose up` 后首页 200 与 `/api/meta/ping` 、模型连通性测试由 **CI 验证并留存日志**（本机无 Docker，见 `specs/2026-09-25-dockerless-local-dev-adr.md`）。
 
 ---
 
@@ -465,13 +465,15 @@ io.annona.modules.planner..         禁止依赖 interview/voice/schedule（只�
 
 | 文件 | 职责 | 触发 |
 |---|---|---|
-| `workflows/ci.yml` | 编译 + 单测 + ArchUnit + 前端 typecheck/lint/build + gitleaks 密钥扫描 | PR 与主干 push |
+| `workflows/ci.yml` | 五个 job：编译 + 单测 + ArchUnit + 前端 typecheck/lint/build + gitleaks 密钥扫描；**集测用 `services:`（`pgvector/pgvector:pg16` + `redis:7-alpine`），compose 冒烟单独一个 job** | PR 与主干 push |
 | `workflows/e2e.yml` | Playwright 跑关键路径（注册→上传→面试→报告） | PR 标签 `needs-e2e` 或每日定时 |
 | `workflows/rag-eval.yml` | 跑 `scripts/rag-eval`，将 Recall@K/MRR 差值写成 PR 评论 | 改动 `retrieval/` 或 `knowledge/chunk/` 时 |
 | `workflows/release.yml` | 打 tag → 构建镜像 → GitHub Release + changelog | `v*` tag |
 | `workflows/publish-spi.yml` | 将 `annona-spi` 发布到 Maven Central（GPG 签名 + sources/javadoc） | spi 目录变更的 tag |
 | `workflows/stale.yml` | 30 天无回应自动关闭 issue/PR | 定时 |
 | `dependabot.yml` | 分三组：生产依赖（只开 patch）、构建依赖、npm、docker | 每周 |
+
+本表的**完整执行矩阵（哪个验证用 `services:`、哪个才用 compose、用哪个镜像、paths 怎么过滤）以 `docs/specs/2026-09-25-dockerless-local-dev-adr.md` 为准**。要点：集测不走 compose（runner 托管的 services 更快），真正需要 compose 的只有“验证交付物”那一个 job。
 
 ### 13.2 降低参与门槛的四个具体物品
 
@@ -501,6 +503,7 @@ io.annona.modules.planner..         禁止依赖 interview/voice/schedule（只�
 | PR | ArchUnit 7 条结构规则 | CI 红，不可合并 |
 | PR | 测试覆盖率阈值（`planner`/`evaluation`/`chunk` 三个关键包 85%，其余 60%） | CI 红 |
 | PR | 检索指标退化（Recall@K 降幅 > 2%） | 黄标提醒，需 PR 描述里给出理由 |
+| PR | `@Tag("docker")` 集成测试与 compose 冒烟 | **仅 CI 执行**（本机无 Docker），未绿不可合并 |
 | 合并 | DCO 签名（`Signed-off-by`），不用 CLA | 机器人拦截未签名提交 |
 
 ### 13.5 治理

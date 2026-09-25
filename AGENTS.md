@@ -16,6 +16,7 @@
 6. **绝不引入未讨论的依赖或框架**。需要引入时先给出：解决什么问题、不用它的代价、为什么现有方案不够、是否可移除。
 7. **绝不删除你不理解的代码**。发现可疑的死代码或设计问题：说出来，不要顺手清理。
 8. **绝不在没有跑过验证命令的情况下声明"完成/修好了/测试通过"**。命令与输出是唯一凭证。
+9. **开发期间不跑任何 Docker 命令与容器测试**（本机无 Docker）。依赖中间件（PG/Redis/S3）的测试一律打 `@Tag("docker")` 并在本机排除；容器类验证由 CI 有 Docker 的 runner 负责。不得为了"本地能跑"而 mock 掉 SQL 与向量能力或改用 H2 当开发库（见 `docs/specs/2026-09-25-dockerless-local-dev-adr.md`）。
 
 ---
 
@@ -37,12 +38,15 @@
 
 | 我想知道… | 去读 | 什么时候必须更新它 |
 |---|---|---|
+| 仓库现在到底是什么状态、哪些命令真能跑 | `README.md`（根目录，含当前进度横幅） | 阶段切换时更新状态表 |
 | 做什么、给谁、有哪些功能、领域模型与表 | `docs/annona-项目设计文档.md` | 功能范围或数据模型变化 |
 | 代码放哪、包边界、依赖方向、命名规范 | `docs/annona-项目结构.md` | 新增/移动模块、调整包结构 |
 | 全局分层、一次请求的生命周期、五个 SPI | `docs/architecture/overview.md` | 跨模块流程变化 |
 | 某个难懂模块的内部设计 | `docs/architecture/<module>.md`（索引见 `INDEX.md`） | 该模块内部结构调整 |
 | 某个决策为什么这么定、否决了什么 | `docs/specs/YYYY-MM-DD-<topic>-adr.md` | 见 §6 触发清单 |
 | 跨 ≥3 模块的改造方案 | `docs/plans/<TOPIC>_PLAN.md` | 计划推进或中止 |
+| 阶段级进度（P0–P5 到哪了） | `docs/annona-开发计划.md` 顶部「当前进度」表 | 阶段开工与出口时 |
+| 任务级进度 | 对应 GitHub issue 的开关状态 | 任务完成时关闭并回链 commit |
 | 当前阶段做到哪、遗留什么 | `docs/reports/P<n>-<名>-阶段总结.md` | 每个阶段收尾（见 §7） |
 | 指标怎么测、实测结果 | `docs/tests/指标测试-<模块>.md`、`docs/benchmarks/<主题>_YYYYMMDD.md` | 每次跑评测/压测 |
 | 接口清单 | `docs/api/` 或 SpringDoc `/v3/api-docs` | 由脚本生成，不手写 |
@@ -144,11 +148,11 @@
 **测试最低门槛**
 
 - 关键纯逻辑包（`planner/mastery`、`planner/guard`、`evaluation/structured`、`knowledge/chunk`、`infrastructure` 的分词与向量序列化）**必须有纯逻辑单测 + golden 快照**，覆盖率阈值 85%；其余 60%。**阈值从 P1a 起生效**（P0 只有项目骨架，卡覆盖率只会逼人写空测试）。
-- 集成测试用 H2 配置；限流相关测试需要真实 Redis；LLM 相关测试默认打 `@External` 标签，CI 不跑。
+- **测试分层（本机无 Docker，见 §0.9 与 `specs/2026-09-25-dockerless-local-dev-adr.md`）**：无 tag = 纯逻辑单测（本机默认跑）；`@Tag("slice")` = Mockito 切片；`@Tag("docker")` = 需真实 PG/Redis/S3，**本机不跑，surefire 默认 excludedGroups=docker，仅 CI 以 `-Dgroups=docker` 执行**。
 - 测试意图用中文 `@DisplayName` 描述，复杂场景 `@Nested` 分组。
 - 改动公共能力必须跑 `mvn verify`；改动必须附带能证伪它的命令。
 
-**完成定义（DoD）**：已按借鉴地图扫描并留下借鉴说明 → 编译通过 → 相关测试通过 → ArchUnit 无违规 → 无未用 import/孤儿代码 → 文档按 §2 同步 → 若涉及决策或指标，ADR / 评测文档已落 → **输出实际命令结果**。
+**完成定义（DoD）**：已按借鉴地图扫描并留下借鉴说明 → 编译通过 → 本机测试集（unit + slice）通过 → ArchUnit 无违规 → 无未用 import/孤儿代码 → 文档按 §2 同步 → 若涉及决策或指标，ADR / 评测文档已落 → **输出实际跑过的命令与结果**（容器类与 `@Tag("docker")` 集成测试的凭证可以是 CI 日志链接）。
 
 ---
 
@@ -248,33 +252,35 @@ Signed-off-by: ...      ← DCO 签名，提交时带 -s
 
 ## 8. 常用命令
 
+### 8.1 本机可跑（日常验证就是这些，Windows PowerShell；Java 21，JAVA_HOME=D:\jdk）
+
 ```bash
-# 借鉴扫描（开工前先看 docs/annona-开发计划.md §借鉴地图定位路径）
-#   🅖 D:\DEVELOP\interview-guide-master        （后端 app\src\main\java\interview\guide\，前端 frontend\src\）
-#   🅜 D:\DEVELOP\java\MockPilot-project      （后端 MockPilot-mian\AI-Meeting-main\admin\...\xunzhi\，前端 + scripts\）
-#   🅢 D:\DEVELOP\summer-checkin-master       （src\、server\、prisma\、scripts\、tests\）
-
-# 后端（Windows PowerShell；Java 21，JAVA_HOME=D:\jdk）
-.\mvnw.cmd -q verify                    # 编译 + 全部测试 + ArchUnit
-.\mvnw.cmd -q test -Dtest=MasteryCalculatorTest   # 单跑一个测试类
-.\mvnw.cmd -q -pl annona-server -am package        # 打包（P0 多模块拆分后）
-
-# 前端
-cd annona-web; pnpm install; pnpm dev; pnpm build; pnpm typecheck
-
-# 环境与数据
-docker compose -f docker/docker-compose.yml up -d          # PG(+pgvector) + Redis + MinIO
-docker compose -f docker/docker-compose.dev.yml up -d      # 只起中间件，本地跑 app
-.\mvnw.cmd -pl annona-server spring-boot:run                # 本地启动（8080）
-
-# 运维面（同一 jar，profile=cli）
-java -jar annona-server/target/annona-server.jar --annona.cli.command=reindex --scope=keyword
-java -jar annona-server/target/annona-server.jar --annona.cli.command=seed --weeks=6
-
-# 评测与压测（数字必须有脚本支撑）
-node scripts/rag-eval/run.mjs --dataset=docs/../eval --topk=4      # Recall@K / MRR
+.\mvnw.cmd -q verify                                  # 编译 + 单测 + ArchUnit（默认排除 docker 组）
+.\mvnw.cmd -q test -Dtest=MasteryCalculatorTest       # 单跑一个纯逻辑测试类（类名以实际代码为准）
+.\mvnw.cmd -q -pl annona-server -am package            # 打包（P0-02 拆分模块后）
+cd annona-web; pnpm install; pnpm typecheck; pnpm build; pnpm dev   # 前端（P0-09 后）
 ```
 
-`make quickstart` / `make up` / `make eval` 等统一入口在 P0 落地后可用；在此之前请先按上面的原始命令执行，**不要假设 make 目标存在**。
+### 8.2 本机不跑（由 CI 或部署环境执行；不得因本机跑不了而删除或 mock 这些测试）
 
-**提醒**：`mvn` 绿了不等于功能可用。改动的用户可见部分，必须给出实际跑通的路径（请求、页面操作序列或截图）。
+| 命令 / 活动 | 执行方 |
+|---|---|
+| `docker compose -f docker/docker-compose.yml up -d`、compose 冒烟 | CI compose job |
+| `@Tag("docker")` 集成测试（Flyway 迁移、pgvector、`tsvector`/`pg_trgm`、Redis 限流） | CI services: postgres + redis |
+| Playwright e2e、`scripts/rag-eval`、`scripts/bench` | CI（`e2e.yml` / `rag-eval.yml`）或定时 |
+| `make quickstart` / `make up` / `make eval`（依赖 Docker） | CI 与用户环境；本机日常用 §8.1 原始命令 |
+| `annona-cli` 的 `reindex` / `export` / `seed` | 部署环境或 CI（需真实数据库） |
+
+### 8.3 本机确实要把应用跑起来时（P1 起才会需要）
+
+自行安装 **Windows 原生 PostgreSQL 16**（含 `vector`、`citext` 扩展）与 **Redis**，参数写进 `.env`（模板 `.env.example`），再 `.\mvnw.cmd -pl annona-server spring-boot:run`。这是调试路径，**不是日常验证手段**，也不是把测试从 CI 搬回本机的理由。
+
+### 8.4 借鉴扫描路径（开工前先查 `docs/annona-开发计划.md` §借鉴地图）
+
+```text
+🅖 D:\DEVELOP\interview-guide-master   后端 app\src\main\java\interview\guide\ · 前端 frontend\src\
+🅜 D:\DEVELOP\java\MockPilot-project  后端 MockPilot-mian\AI-Meeting-main\admin\...\xunzhi\ · scripts\rag-eval · scripts\bench
+🅢 D:\DEVELOP\summer-checkin-master    src\ · server\ · prisma\ · scripts\ · tests\
+```
+
+**提醒**：`mvn verify` 绿了不等于功能可用——本机跑不到中间件层，因此**PR 等 CI 绿了才算完成**；用户可见改动还要给出实际可复现的路径（请求序列或截图）。
