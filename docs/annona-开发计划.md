@@ -7,16 +7,30 @@
 |---|---|
 | 工作量单位 | 1 人日 = 6 小时有效编码时间，含写测试，不含等 CI 与胡思乱想 |
 | 人力假设 | 1 人主导 + AI 协作实现；估时已含 AI 产出的审阅与返工 |
+| **验证环境** | **本机无 Docker**：开发期只跑代码正确性校验（`mvn verify` + 前端构建），容器与集成测试全部由 CI 执行（见 `specs/2026-09-25-dockerless-local-dev-adr.md`） |
 | 任务编号 | `P<阶段><子阶段>-<序号>`，例 `P1a-07`；每个任务对应一个 GitHub issue，commit 用 `Refs: #<issue>` 回链 |
-| 总规模 | 约 **84 人日**（P0 6 · P1 36 · P2 12 · P3 12 · P4 10 · P5 8） |
+| 总规模 | 约 **85 人日**（P0 7 · P1 36 · P2 12 · P3 12 · P4 10 · P5 8） |
 | 硬规则 | **上一阶段出口条件未全部满足 + 阶段总结未写，不得开始下一阶段**（AGENTS.md §7） |
+
+## 当前进度（唯一状态源）
+
+| 阶段 | 状态 | 出口凭证 |
+|---|---|---|
+| 文档（设计/结构/计划/ADR） | ✅ done | 本仓 20 个文档文件 |
+| P0 骨架与门禁 | ⬜ todo（尚未开工，代码仍是 Initializr 骨架） | `mvn verify` + CI 全绿日志 |
+| P1a 数据与知识底座 | ⬜ todo | — |
+| P1b 面试与评估 | ⬜ todo | — |
+| P1c 训练决策层 | ⬜ todo | — |
+| P2 / P3 / P4 / P5 | ⬜ todo | — |
+
+状态取值：`todo` / `doing` / `blocked(原因)` / `done(日期+凭证链接)`。**任务级**的逐项完成状态以对应 GitHub issue 的关闭为准，本表只跟到阶段级。
 
 ## 里程碑总览
 
 ```text
 P0 骨架        P1 闭环内核                    P2 体验留存   P3 语音    P4 编排     P5 打磨发布
 ───────────  ────────────────────────────  ───────────  ────────  ─────────  ──────────
-6d           36d = 12 + 14 + 10             12d          12d       10d        8d
+7d           36d = 12 + 14 + 10             12d          12d       10d        8d
              P1a 数据与知识底座
              P1b 面试与评估
              P1c 训练决策层
@@ -113,7 +127,7 @@ P0 骨架        P1 闭环内核                    P2 体验留存   P3 语音 
 
 ---
 
-## P0 骨架与门禁（6 人日）
+## P0 骨架与门禁（7 人日）
 
 **目标**：仓库结构、依赖方向、CI/CD 与本地一键跑通全部到位，后续每个阶段只需往里填业务。
 **为什么先做门禁**：`AGENTS.md` 承诺的 commit hook、密钥扫描、ArchUnit、SPI 发布流水线在 P0 之前**一条都不存在**。规范先行于实现是本项目最大的风险，必须在写业务代码前补齐。
@@ -129,13 +143,14 @@ P0 骨架        P1 闭环内核                    P2 体验留存   P3 语音 
 | P0-07 | ArchUnit 七条结构规则（项目结构 §10），白名单机制 + `shared/` `modules/` 包骨架 + `package-info.java` | 故意让 `modules/*` import `infrastructure/*` → `mvn test` 失败 | 0.5 | P0-04 |
 | P0-08 | `StartupValidator`：缺 `ANNONA_SECRET_KEY`（prod profile）即启动失败；缺 pgvector/citext 扩展时给出可执行提示 | 三种场景实测：prod 无 KEK → 拒绝启动；dev → 正常；无扩展 → 明确报错文案 | 0.5 | P0-06 |
 | P0-09 | `annona-web`：Vite + React + TS + Tailwind4 骨架、Axios 单实例、路由与四平级入口布局、构建产物拷贝进 server `static` | `pnpm build` 后访问 `localhost:8080` 出首页；OpenAPI 类型生成脚本可跑 | 1 | P0-03 |
-| P0-10 | `docker/`：多阶段 Dockerfile、`docker-compose.yml`（PG+Redis+MinIO+server+web）、`compose.dev.yml`、`postgres/init.sql` | 全新机器 `docker compose up -d` → 首页 200，无需任何手工步骤 | 1 | P0-06,P0-09 |
+| P0-10 | `docker/`：多阶段 Dockerfile、`docker-compose.yml`（PG+Redis+MinIO+server+web）、`compose.dev.yml`、`postgres/init.sql` | **本机不跑**：文件写完即可，实际启动验证由 CI compose job 完成（全新机器一条命令到首页 200） | 1 | P0-06,P0-09 |
 | P0-11 | `.githooks/`：commit-msg（Conventional Commits + 英文校验）、pre-commit（gitleaks）；`core.hooksPath` 由 `make setup` 配置 | 中文 subject 与 `update` 类消息被拒；写一个假 Key 进文件被拦 | 0.5 | — |
-| P0-12 | `.github/`：`ci.yml`（build+test+archunit+前端+gitleaks）、`e2e.yml`、`rag-eval.yml`、`release.yml`、`publish-spi.yml`、`stale.yml`、`dependabot.yml`、`CODEOWNERS`、ISSUE/PR 模板、FUNDING | PR 上六项检查齐全且能红能绿 | 1 | P0-07,P0-11 |
-| P0-13 | `Makefile`：`setup / up / dev / test / eval / logs / reset / quickstart`；`quickstart` = 起中间件 → 迁移 → seed → 打印地址与演示账号 | 从空仓库执行 `make quickstart` 一条命令可用 | 0.5 | P0-10 |
+| P0-12 | `.github/`：`ci.yml`（unit+ArchUnit / `services:` 跑 pgvector+redis 集测 / compose 冒烟 / 前端 / gitleaks 五个 job）、`e2e.yml`（Playwright 容器 job）、`rag-eval.yml`、`release.yml`、`publish-spi.yml`、`stale.yml`、`dependabot.yml`、`CODEOWNERS`、ISSUE/PR 模板、FUNDING | 按 `specs/2026-09-25-dockerless-local-dev-adr.md` 的 **CI 执行矩阵**建 job；故意提交一个失败断言，确认集测 job 真能红并能拦合并 | 1.5 | P0-07,P0-11 |
+| P0-13 | `Makefile`：`setup / up / dev / test / eval / logs / reset / quickstart`；`quickstart` = 起中间件 → 迁移 → seed → 打印地址与演示账号 | **在 CI/容器环境验证**（本机无 Docker，只验 `make` 语法与目标存在） | 0.5 | P0-10 |
 | P0-14 | 仓库门面：`README`（一句话定位 + quickstart + 上游致谢 + 声明不内置 Key）、`SECURITY`、`CONTRIBUTING`、`CODE_OF_CONDUCT`、`LICENSE`(AGPL-3.0 全文，**当前缺失，公开前必须补**)、`.editorconfig`、`.env.example`、`docs/architecture/INDEX.md` 登记 | 新同事只读 README 能跑起来（真找一人验证） | 1 | P0-12 |
+| P0-15 | 仓库设置（需在 GitHub 网页/API 做，不产生文件）：branch protection 将集测与 compose job 设为**必需检查**、开启 Dependabot alerts、建 `good-first-issue`/`skill-proposal` 标签、填仓库描述与 topics | 未过 CI 的 PR 无法合并；`gh api` 或设置页截图存档到阶段总结 | 0.5 | P0-12 |
 
-**出口条件**：① `mvn -q verify` 绿且 ArchUnit 七条生效；② 全新机器 `docker compose up -d` + `make quickstart` 一条命令到首页；③ 三个 SPI 有骨架与 Fake 实现；④ hook 与 CI 能拦截违规提交；⑤ `/api/meta/ping` 与一次真实模型连通性测试通过；⑥ `docs/reports/P0-骨架-阶段总结.md` 已写。
+**出口条件**：① `mvn -q verify` 绿且 ArchUnit 七条生效（**本机验证到此为止**）；② 全新机器 `docker compose up -d` + `make quickstart` 到首页 200（**由 CI 验证并留存日志链接**，本机无 Docker 不跑）；③ 五个 SPI 有骨架与 Fake 实现；④ hook 与 CI 能拦截违规提交；⑤ `/api/meta/ping` 与一次模型连通性测试通过（可在 CI 或本机自备的 PG/Redis 环境）；⑥ `docs/reports/P0-骨架-阶段总结.md` 已写。
 
 ---
 
@@ -264,13 +279,14 @@ P0 骨架        P1 闭环内核                    P2 体验留存   P3 语音 
 
 ## 计划维护规则
 
-1. 本文档的**任务表是唯一进度来源**：完成一项就勾选并把 issue 关闭，不另起进度表。
+1. 进度登记分两层：**阶段级看本文顶部「当前进度」表**，**任务级看对应 GitHub issue 的关闭状态**；不另起第三份进度表，也不在任务表里塞 checkbox（那会变成第二个真相源）。
 2. 估时偏差 > 30% 时，在对应阶段小结里写清原因（是漏了什么，还是砍了什么），**不许悄悄挪工作量到下一阶段**。
 3. 新增功能必须先回答"是否服务闭环主线"。若否 → 进设计文档 §15 Non-goals 讨论，不进计划。
 4. 任何跨 ≥3 模块的改造另开 `docs/plans/<TOPIC>_PLAN.md`，本文档只登记结论与出口条件变化。
 5. 砍范围的优先顺序（当时间不够时）：P2 的 3D 岛 → P4 的 Agent → P3 的语音 → **绝不允许砍 P1c 的可解释面板与保护规则**（砍了项目就退化成又一个面试套壳）。
 6. 每阶段收尾必须同时产出：代码 + 测试 + `docs/reports/P<n>-<名>-阶段总结.md` + 受影响文档的同步更新（设计文档 / 结构文档 / architecture / ADR）。缺任一项即视为阶段未完成。
 7. **借鉴扫描先于实现**：任何任务开工前先查本文「借鉴地图」并读对应路径，在 issue 里留下借鉴说明（§借鉴地图 使用方式第 1 条）。地图里没有的新板块，扫完必须把路径补进地图——**地图不完整本身就是缺陷**。
+8. **验收命令的执行环境**：凡验收条涉及 Docker、真实数据库/Redis、浏览器、真实模型调用或压测，默认**在 CI 或部署环境执行并留存日志链接**；本机验收以 `mvn -q verify`（unit + slice + ArchUnit）与前端 `typecheck/build` 为准。不得因本机跑不了而删除、降级或 mock 这类测试。
 
 ## 风险登记（计划层面）
 
@@ -280,5 +296,6 @@ P0 骨架        P1 闭环内核                    P2 体验留存   P3 语音 
 | 混合检索实测不如纯向量，关键词通道成负资产 | 中 | 中 | P1a-09 早于面试实现做评测；不达标就走 ADR 的重新评估分支 |
 | 端到端语音延迟达不到可用 | 中 | 中 | P3-06 前置验证 + 已定义降级路径，不作为 P1/P2 依赖 |
 | 决策层在真实数据上表现平平 | 中 | 高 | P1c-08 的 A/B 是诚实检验；若平平则改写宣传语而非伪造对比 |
+| 本机无 Docker 导致反馈延迟变大（迁移与检索问题到 CI 才暴露） | 高 | 中 | 纯逻辑与 IO 彻底分离 + `@Tag("docker")` 分层 + CI 集测与 compose 冒烟强制运行；PR 等 CI 绿才合并 |
 | 单人开发断档（课业/求职） | 高 | 中 | 每阶段出口物必须独立可演示，断档后能从任何一个出口重新启动 |
 | 规范先行但门禁未落地 | 中 | 高 | 全部门禁类任务压在 P0（P0-07/08/11/12），P0 未出口不开 P1 |
