@@ -42,6 +42,35 @@
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
 
+        <!-- B2 启动与基线：P0-05/P0-06/P0-08 共同引入
+             - starter-flyway：Flyway autoconfig（Boot 4 已改名，不是 -flyway-core）
+             - starter-data-jpa：为 P0-06 验收项 "ddl-auto: validate 下应用可启动" 提供 autoconfig（本阶段无 Entity，validate 空跑）
+             - starter-actuator：为线程池提供 MeterRegistry Bean，支撑 Micrometer 绑定（AGENTS.md 借鉴地图 A 表“池名与 Micrometer 指标绑定”硬约束） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- runtime scope：驱动与 PG 方言（Boot 的 starter-flyway 不自带 postgres 方言） -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
