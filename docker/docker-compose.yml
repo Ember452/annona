@@ -37,14 +37,16 @@ services:
       retries: 20
 
   storage:
-    # MinIO archived the community edition on 2026-02-13 and removed every
-    # tag from Docker Hub (announcement Oct 2025, wipe completed Sep 2026).
-    # `docker pull minio/minio:<tag>` now returns "pull access denied".
-    # quay.io/minio/minio is the still-published mirror with the same tag
-    # namespace; verified by milvus-io/milvus#53430 (2026-09-14). Long-term
-    # replacement (Garage / SeaweedFS / Silo) is tracked as tech debt D13
-    # in docs/reports/P0-骨架-阶段总结.md §5.
-    image: quay.io/minio/minio:RELEASE.2025-01-20T14-49-07Z
+    # MinIO archived the community edition on 2026-02-13 and purged every tag
+    # from Docker Hub by mid-September 2026 (`minio/minio` and `bitnami/minio`
+    # both gone). quay.io is the only still-published mirror, but its tag
+    # namespace starts at ~2025-04 (Jan 2025 tags never made it over). Bumped
+    # from RELEASE.2025-01-20T14-49-07Z (B4 pin, now 404 everywhere) to
+    # RELEASE.2025-09-07T16-13-09Z (verified pull on quay.io via community
+    # reports 2026-09-17 and milvus-io/milvus#53430 pattern).
+    # Long-term replacement (Garage MIT / SeaweedFS Apache 2.0 / Silo) is
+    # tracked as tech debt D13 in docs/reports/P0-骨架-阶段总结.md §5.
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
