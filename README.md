@@ -18,6 +18,7 @@
 |---|---|
 | 设计 / 结构 / 开发计划 / 8 条 ADR | ✅ 已定稿，在 [`docs/`](./docs/README.md) |
 | AI 协作规范 | ✅ [`AGENTS.md`](./AGENTS.md) |
+| 仓库入口文件 | ✅ `README` / `LICENSE`(AGPL-3.0 全文) / `SECURITY` / `CONTRIBUTING` / `CODE_OF_CONDUCT` / `.editorconfig` / `.env.example` |
 | **代码实现** | 🚧 **仅 Spring Boot Initializr 骨架**（`src/` 共 3 个文件），尚未按目标结构拆分模块 |
 | **施工阶段** | **P0 未开始**，任务清单见 [docs/annona-开发计划.md](./docs/annona-开发计划.md) 的 P0 表 |
 | Maven 多模块 / 16 个业务包 | ❌ 尚未创建（P0-02 / P0-04） |
@@ -84,7 +85,9 @@ cd annona-web; pnpm install; pnpm typecheck; pnpm build       # 前端类型与�
 
 ## 许可证
 
-本仓库整体采用 **AGPL-3.0**（`pom.xml` 已声明）。仓库根 `LICENSE` 全文文件待补（任务见开发计划 P0-14），在补齐前请以 `pom.xml` 的 `<licenses>` 声明与 <https://www.gnu.org/licenses/agpl-3.0.html> 原文为准。`skills/` 目录下的内置 `SKILL.md` 采用 CC-BY-4.0，便于社区引用与改写。
+本仓库整体采用 **AGPL-3.0**：许可全文已逐字落在根目录 [`LICENSE`](./LICENSE)（FSF 标准文本，661 行），`pom.xml` 的 `<licenses>` 与之一致。`skills/` 目录下的内置 `SKILL.md` 采用 **CC-BY-4.0**（便于站外引用与社区改写；该声明随 P0 建 `skills/` 目录时一并加入）。
+
+> `LICENSE` 文件必须保持与 FSF 原文逐字一致，**不得修改、不得“适配项目名”**；需要声明项目自身的版权时，另写头部注释或 `NOTICE`，不要动 `LICENSE`。
 
 ## 上游致谢
 

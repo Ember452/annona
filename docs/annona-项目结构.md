@@ -54,13 +54,14 @@ annona/
 ├── .mvn/wrapper/                  # Maven Wrapper（统一 mvn 版本，clone 即可构建）
 ├── .githooks/                     # Git hooks：commit-msg 规范、pre-commit 密钥扫描
 ├── lombok.config                  # Lombok 全局配置（copyableAnnotations 等）
-├── .editorconfig                  # 跨 IDE 缩进/编码一致性（P0 待建，文件名带前导点）
+├── .editorconfig                  # 跨 IDE 缩进/编码一致性（已落地，Java/前端 2 空格、XML 4 空格）
 ├── .env.example                   # 环境变量模板（只放占位符，绝不放真实 Key）
 ├── .gitignore / .gitattributes    # 忽略规则与换行/LFS 约定
 ├── LICENSE                        # AGPL-3.0
 ├── README.md                      # 首屏：一句话定位 + 5 分钟跑通 + 截图 + 上游致谢
 ├── SECURITY.md                    # 密钥处理、数据导出删除、漏洞上报渠道
-└── CONTRIBUTING.md                # 分支/提交/SKILL.md 贡献规范
+├── CONTRIBUTING.md                # 参与路径（指向规则，不重复内容）
+└── CODE_OF_CONDUCT.md             # 行为准则（项目自有简短版，可整体换为 Contributor Covenant）
 ```
 
 ---
@@ -451,7 +452,7 @@ io.annona.modules.planner..         禁止依赖 interview/voice/schedule（只�
 5. Flyway 基线 `V1__baseline.sql`（含 `direction` 字典表）、`db/seed/`、`prompts/`、`skills/` 目录占位。
 6. `annona-server/src/test/java/io/annona/arch/` 落地 §10 的 ArchUnit 规则（先失败后放行的红名单机制）。
 7. `docker/` 双 compose、`deploy/nginx/`、`.github/workflows/ci.yml`（build/test/lint/archunit + gitleaks 密钥扫描）。
-8. `README/SECURITY/CONTRIBUTING/CODE_OF_CONDUCT/LICENSE/AGENTS.md` + `.github/` 全套（见 §13）；决策记录已在 `docs/specs/` 落地 8 条 ADR；`AGENTS.md` 已定稿（行为规范、commit 要求、借鉴扫描、无 Docker 开发循环、ADR 与阶段总结义务）。
+8. 仓库门面：`README.md`、`LICENSE`（AGPL-3.0 FSF 原文）、`AGENTS.md`、`.env.example`、`SECURITY.md`、`CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`.editorconfig` **已落地**；`.github/` 全套见 §13（P0-12）；决策记录已在 `docs/specs/` 落地 8 条 ADR。
 
 **验收**：`mvn -q verify` 全绿、ArchUnit 七条规则生效（本机到此为止）；`docker compose up` 后首页 200 与 `/api/meta/ping` 、模型连通性测试由 **CI 验证并留存日志**（本机无 Docker，见 `specs/2026-09-25-dockerless-local-dev-adr.md`）。
 
