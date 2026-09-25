@@ -1,0 +1,50 @@
+# docker build context 最小化：只把 build 需要的东西传进 daemon。
+# 保留：所有 pom.xml、src/、mvnw、annona-web/{package.json,pnpm-lock.yaml,pnpm-workspace.yaml,src,*.ts,*.json,*.cjs,*.html,index.html}、
+#       docker/postgres/init.sql、.env.example。
+# 其余全排除。
+
+# Maven 与 IDE 产物
+**/target/
+.idea/
+*.iml
+.vscode/
+
+# 前端依赖与本地构建产物
+**/node_modules/
+annona-web/dist/
+annona-web/.vite/
+annona-web/src/types/api.gen.ts
+
+# Git 与本地数据
+.git/
+.gitignore
+.gitattributes
+
+# 本地开发与运行时
+.env
+.env.local
+*.log
+logs/
+data/
+uploads/
+hs_err_pid*
+
+# 文档与工程外物（Dockerfile 只需要能 build 项目，不需要读文档）
+docs/
+README.md
+LICENSE
+SECURITY.md
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+AGENTS.md
+
+# Docker 自身
+docker/docker-compose.yml
+docker/docker-compose.dev.yml
+docker/Dockerfile
+.dockerignore
+deploy/
+
+# CI 与 GitHub
+.github/
+.mvn/wrapper/maven-wrapper.jar

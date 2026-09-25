@@ -1,0 +1,29 @@
+# 开发用的中间件栈：只起 3 个 backend dependency（db / cache / storage），
+# 让开发者在 host 上跑 annona-server（`./mvnw -pl annona-server -am spring-boot:run`）
+# 与 annona-web（`cd annona-web && pnpm dev`），获得热重载与 IDE 断点能力。
+#
+# 服务定义 extends 主 compose 避免重复；只是把端口映射到 host。
+# 用法：docker compose -f docker/docker-compose.dev.yml --env-file .env up -d
+
+services:
+  db:
+    extends:
+      file: docker-compose.yml
+      service: db
+    ports:
+      - "5432:5432"
+
+  cache:
+    extends:
+      file: docker-compose.yml
+      service: cache
+    ports:
+      - "6379:6379"
+
+  storage:
+    extends:
+      file: docker-compose.yml
+      service: storage
+    ports:
+      - "9000:9000"
+      - "9001:9001"
