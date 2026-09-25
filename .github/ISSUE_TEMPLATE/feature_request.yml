@@ -1,0 +1,81 @@
+name: Feature request
+description: 提一个新能力。项目定位收敛（AGPL + 双轨部署），提案要先回答"是否服务闭环主线"。
+title: '[feat] '
+labels: ['enhancement']
+body:
+  - type: markdown
+    value: >
+      先读 [docs/annona-项目设计文档.md §15 Non-goals](../blob/main/docs/annona-项目设计文档.md)
+      确认不属于明确不做的事；否则提了会被关掉并 link 过去。
+      **能一句话回答"自习室采集 → planner 决策 → 面试出题 这条链上，这个能力在什么位置"就大概率通过。**
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决的问题
+      description: 不是"想要什么功能"，而是"现在没这个功能我卡在哪"。用户视角，一到三句。
+      placeholder: 我每周用 annona 备考时，需要 ... 但现在只能 ...
+    validations: { required: true }
+
+  - type: textarea
+    id: mainline
+    attributes:
+      label: 与闭环主线的关系
+      description: |
+        annona 的闭环是 "study/plan/checkin → shared.signal → planner → interview → evaluation → decision_trace → 面板 → 反哺 plan"。
+        你的提案在这条链的哪一段？跨段还是加深单段？
+      placeholder: 影响 planner 与 interview 之间的 trace 呈现 ...
+    validations: { required: true }
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: 主要影响的模块
+      options:
+        - identity
+        - study
+        - plan
+        - knowledge
+        - retrieval
+        - qa
+        - questionbank
+        - interview
+        - evaluation
+        - planner
+        - voice
+        - schedule
+        - agent
+        - usage
+        - resume
+        - notify
+        - web
+        - cross-cutting
+    validations: { required: true }
+
+  - type: textarea
+    id: alternative
+    attributes:
+      label: 你考虑过的替代方案
+      description: 包括"不做"也是一种方案；说明为什么这个方案不合适。
+    validations: { required: true }
+
+  - type: textarea
+    id: non-goal
+    attributes:
+      label: Non-goals 自查
+      description: |
+        逐条对照：神态表情分析 / 群聊与 @AI / 多人无领导小组 / 徽章积分 / 付费墙锁核心 /
+        workspace & RBAC / 移动端原生 / 自研模型 & 微调 / ES 默认后端。
+        **命中任意一条 → 关掉本 tab 别提交。**
+      placeholder: 无命中
+    validations: { required: true }
+
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: 影响面自查
+      options:
+        - label: 会改数据模型（触发 ADR + Flyway 迁移）
+        - label: 会改决策算法（触发 ADR）
+        - label: 会影响检索指标
+        - label: 会引入新外部依赖 / Provider

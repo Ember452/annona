@@ -1,0 +1,93 @@
+name: Skill proposal (new interview direction)
+description: 为 annona 新增一个面试方向（SKILL.md）。非技术方向的 SKILL 也可以，但内容必须来自公开可核验来源（考纲、官方题解），项目自身不产法考 / CPA 等专业考试题目。
+title: '[skill] '
+labels: ['skill-proposal', 'good-first-issue']
+body:
+  - type: markdown
+    value: >
+      这是 annona 生态最友好的贡献入口：**只加一个 `annona-server/src/main/resources/skills/<key>/SKILL.md` 文件即可**，
+      不需要写 Java。详见 [docs/annona-项目结构.md §13.3](../blob/main/docs/annona-项目结构.md)。
+      技术方向（Java / 前端 / 数据结构等）欢迎内置；非技术方向请锚定到一份知识库文档或权威考纲。
+
+  - type: input
+    id: key
+    attributes:
+      label: 方向 key
+      description: 全小写 dashed 格式（如 `java-concurrency`, `system-design-basics`）；对应 `direction.key` 主键
+      placeholder: java-concurrency
+    validations:
+      required: true
+      pattern: '^[a-z][a-z0-9]*(-[a-z0-9]+)*$'
+
+  - type: input
+    id: name
+    attributes:
+      label: 方向显示名
+      description: 用户 UI 上看到的一行名
+      placeholder: Java 并发
+    validations: { required: true }
+
+  - type: input
+    id: parent
+    attributes:
+      label: 父方向 key（可空）
+      description: 单跳父子（如 `java-concurrency` 的 parent 是 `java`）。无父填 `none`。
+      placeholder: java
+
+  - type: dropdown
+    id: origin
+    attributes:
+      label: 方向来源
+      description: 对应 `direction.origin` 枚举，见 docs/specs/2026-09-25-direction-master-data-adr.md
+      options:
+        - SKILL_BUILTIN     # 内置技术方向，随主仓发版
+        - USER_CUSTOM       # 用户从自己知识库派生（这里请说明如何复现）
+        - KNOWLEDGE_BASE    # 从某个具体知识库文档锚定
+        - JD_PARSED         # 从面试邀请 JD 解析
+    validations: { required: true }
+
+  - type: textarea
+    id: sample-questions
+    attributes:
+      label: 至少 3 道样题（主问题 + 参考答案要点 + 评分标准要点）
+      description: |
+        用来验证 SKILL.md 的结构能否真的驱动出题。技术方向用你熟悉的面试题；
+        非技术方向**必须引用公开可核验来源**（考纲、公开题解、官方教材），
+        标注出处避免版权风险。
+      value: |
+        **Q1**：...
+        参考答案要点：...
+        评分标准：...
+        来源：...
+
+        **Q2**：...
+        **Q3**：...
+    validations: { required: true }
+
+  - type: textarea
+    id: difficulty-distribution
+    attributes:
+      label: 难度分布依据
+      description: |
+        3-5 档难度（1 简单 → 5 极难）里，本方向每个档大致几道题？
+        为什么这样分？（比如 "Java 并发" 1 档 20%、2 档 30%、3 档 30%、4 档 15%、5 档 5%）
+    validations: { required: true }
+
+  - type: textarea
+    id: methodology
+    attributes:
+      label: 方法论标注（可选）
+      description: |
+        本方向的题目是"考点型"（技术问答 / 概念解释）还是"方法型"（结构化 / STAR / 项目深挖）？
+        两者共存的话，比例多少？
+        方法型 SKILL 上游没有，是 annona 独有；这类提案优先合入。
+
+  - type: checkboxes
+    id: license
+    attributes:
+      label: 授权声明
+      options:
+        - label: 我贡献的 SKILL.md 内容以 CC-BY-4.0 授权（与主仓 AGPL-3.0 分离，见 docs/annona-项目结构.md §13.5）
+          required: true
+        - label: 非技术方向内容全部来自公开可核验来源，已在正文标注出处
+          required: true

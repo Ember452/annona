@@ -1,0 +1,93 @@
+name: Bug report
+description: 报告一个可复现的缺陷。项目所有决定都应可解释，任何"面板说的话和代码做的事不一致"都是最高优先级 bug。
+title: '[bug] '
+labels: ['bug', 'triage']
+body:
+  - type: markdown
+    value: >
+      感谢反馈。填之前先扫一眼 [SECURITY.md](../blob/main/SECURITY.md)：
+      安全类问题请走私有渠道，不要开公开 issue。
+      **单人项目响应时间不设 SLA，但每一条都会读**。
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: 影响的模块
+      description: 不确定时选 `unknown`，作者会重定向。
+      options:
+        - identity
+        - study
+        - plan
+        - knowledge
+        - retrieval
+        - qa
+        - questionbank
+        - interview
+        - evaluation
+        - planner
+        - voice
+        - schedule
+        - agent
+        - usage
+        - resume
+        - notify
+        - web
+        - infra
+        - docs
+        - unknown
+    validations: { required: true }
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: |
+        最小、可粘贴、能一步跑出问题的操作序列。含 API 请求 body 或前端操作。
+        决策可解释性相关的问题请一并贴 `/api/decision-trace/{id}` 的响应 JSON。
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. Scroll to ...
+        4. See error
+    validations: { required: true }
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望
+      placeholder: 一句话说明"正确"是什么行为
+    validations: { required: true }
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际
+      placeholder: 一句话说明实际看到什么
+    validations: { required: true }
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / traceId / 决策留痕
+      description: |
+        后端 `logs/annona.log` 的相关行；`Result` 响应里的 `traceId`；
+        若是决策面板说反话，附上 `decision_trace` 表的对应记录。
+        **敏感数据（邮箱、API Key 前缀）请脱敏**。
+      render: text
+
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: 影响面自查
+      options:
+        - label: 影响决策输入（planner / mastery / trace 计算）
+        - label: 影响检索指标（Recall@K / MRR）
+        - label: 影响用户数据完整性（丢失 / 错乱 / 归属错误）
+        - label: 只是外观 / 文案问题
+
+  - type: input
+    id: env
+    attributes:
+      label: 运行环境
+      description: 版本号来自 `GET /api/meta/version`；docker 部署填 compose 版本，本机部署填 profile。
+      placeholder: e.g. v0.0.1-SNAPSHOT @ docker compose, annona-server 4.1.1 / Boot 4.1.1
