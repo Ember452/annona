@@ -1,0 +1,49 @@
+# Playwright 端到端。annona-web 目前 (P0-09) 只有骨架没有真实页面，e2e/ 目录
+# 不存在；workflow 先就位，P1a-01 (identity) 首次加真实用例时自动生效。
+# 手动触发：给 PR 打 `needs-e2e` 标签；每日凌晨 3:00 UTC 定时跑主干。
+name: E2E
+
+on:
+  pull_request:
+    types: [labeled]
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright:
+    name: Playwright container job
+    # 只有打了 needs-e2e 标签的 PR 或定时/手动触发才跑
+    if: >
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.label.name == 'needs-e2e')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # 官方镜像自带 chromium/firefox/webkit + 系统依赖；比 npx playwright install 快很多
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+    defaults:
+      run:
+        working-directory: annona-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: annona-web/package.json
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+      - name: Skip when no e2e specs yet (P0 phase)
+        run: |
+          if [ ! -d e2e ]; then
+            echo "annona-web/e2e/ not present yet (arrives in P1a-01); skipping"
+            exit 0
+          fi
+          pnpm exec playwright test
