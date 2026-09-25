@@ -480,7 +480,7 @@ io.annona.modules.planner..         禁止依赖 interview/voice/schedule（只�
 
 1. **`Makefile`（或 justfile）入口**，新人不需要记 Maven/npm 命令：`make up / make dev / make test / make eval / make logs / make reset`。
 2. **`make quickstart` 一条命令**：起中间件 → 迁移 → seed 演示数据（含 6 周合成学习记录）→ 打出登录地址与演示账号。README 首屏就写这一条，它是 star 转 self-host 的转化率关键。
-3. **`good-first-issue` 标签体系**：预置三类不碰核心逻辑的首 PR 入口 —— 新增/修订 `skills/<direction>/SKILL.md`、前端主题 token 包、文档与翻译。目录固定，贡献者不需要理解 Java。
+3. **`good-first-issue` 标签体系**：预置三类不碰核心逻辑的首 PR 入口 —— 新增/修订 `skills/<direction>/SKILL.md`、前端主题 token 包、文档与翻译。目录固定，贡献者不需要理解 Java。**投放时机：P2 有可演示物之后**——在那之前挂标签等于邀请别人改一个还跑不起来的项目。另：本项目自身施工任务**不建 issue**，进度真相源是开发计划任务表，**每阶段一个汇总 issue** 对外展示进度。
 4. **`docs/development/NN-*.md` 专题教程**：同一个问题被问两次就写一期，首三篇建议：`01-本地跑通与目录导航`、`02-写一个自己的SKILL.md`、`03-实现一个Retriever`。
 
 ### 13.3 四类贡献各自的落点

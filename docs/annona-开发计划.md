@@ -8,7 +8,7 @@
 | 工作量单位 | 1 人日 = 6 小时有效编码时间，含写测试，不含等 CI 与胡思乱想 |
 | 人力假设 | 1 人主导 + AI 协作实现；估时已含 AI 产出的审阅与返工 |
 | **验证环境** | **本机无 Docker**：开发期只跑代码正确性校验（`mvn verify` + 前端构建），容器与集成测试全部由 CI 执行（见 `specs/2026-09-25-dockerless-local-dev-adr.md`） |
-| 任务编号 | `P<阶段><子阶段>-<序号>`，例 `P1a-07`；每个任务对应一个 GitHub issue，commit 用 `Refs: #<issue>` 回链 |
+| 任务编号 | `P<阶段><子阶段>-<序号>`，例 `P1a-07`；任务清单与进度**以本文任务表为唯一真相源**。对外另维**一个阶段一个 issue**（阶段开工前建，正文引用本阶段任务表），commit 正文写 `Task: P0-01`；`Refs: #<n>` 只用于关联 bug / 提案类 issue |
 | 总规模 | 约 **85 人日**（P0 7 · P1 36 · P2 12 · P3 12 · P4 10 · P5 8） |
 | 硬规则 | **上一阶段出口条件未全部满足 + 阶段总结未写，不得开始下一阶段**（AGENTS.md §7） |
 
@@ -17,7 +17,7 @@
 | 阶段 | 状态 | 出口凭证 |
 |---|---|---|
 | 文档（设计/结构/计划/ADR）+ 入口（README/LICENSE/.env.example/SECURITY/CONTRIBUTING/CoC/.editorconfig） | ✅ done | 本仓 20+ 个文档文件；LICENSE 为 AGPL-3.0 FSF 原文（已校验） |
-| P0 骨架与门禁 | ⬜ todo（尚未开工，代码仍是 Initializr 骨架） | `mvn verify` + CI 全绿日志 |
+| P0 骨架与门禁 | 🔄 doing —— P0-01 已完成（2026-09-25），代码仍是单模块 jar，`packaging=pom` 待 P0-02 | `mvn verify` + CI 全绿日志 |
 | P1a 数据与知识底座 | ⬜ todo | — |
 | P1b 面试与评估 | ⬜ todo | — |
 | P1c 训练决策层 | ⬜ todo | — |
@@ -48,8 +48,8 @@ P0 骨架        P1 闭环内核                    P2 体验留存   P3 语音 
 
 ### 使用方式（强制）
 
-1. 任务开工前，先扫描该任务在下表中的路径（批量读文件或派 Explore subagent），产出一段**借鉴说明**贴在该任务的 issue 首条评论：读过哪些文件 → 借鉴哪个机制 → 必须改掉的不适配点及理由 → 上游根本没有的部分。
-2. **未扫描 = 任务未开始**；PR 描述必须引用该借鉴说明。阶段总结的第 8 节记录本阶段实际借鉴了什么。
+1. 任务开工前，先扫描该任务在下表中的路径（批量读文件或派 Explore subagent），产出一段**借鉴说明**写在该任务的 commit 正文（或关联的 bug/提案 issue）：读过哪些文件 → 借鉴哪个机制 → 必须改掉的不适配点及理由 → 上游根本没有的部分。
+2. **未扫描 = 任务未开始**；阶段 issue 与阶段总结的第 8 节汇总本阶段实际借鉴了什么。
 3. 借鉴 = **参考机制、结构、参数取值与测试用例清单**，不是复制代码（见 `specs/2026-09-25-zero-migration-adr.md`）。若确实搬了代码：文件头保留 AGPL 来源注释并在 issue 记录；跨文件成片搬运才需先征得用户同意。
 4. 路径均为 2026-09-25 实测存在，**相对各自仓库根**。上游重构后先改本表再开工。
 
@@ -68,7 +68,8 @@ P0 骨架        P1 闭环内核                    P2 体验留存   P3 语音 
 | P0-03 统一响应与异常 | `🅖 common/result/Result.java`、`common/exception/{BusinessException,ErrorCode,GlobalExceptionHandler,RateLimitExceededException}.java`、`common/log/ErrorLogSanitizer.java` | Result 结构、ErrorCode 分段、全局兜底不泄露栈、错误日志脱敏 | 包名换 `io.annona.common`；Result 加 `traceId`；ErrorCode 按 annona 模块重排段号 |
 | P0-05 配置与限流 | `🅖 common/annotation/RateLimit.java`、`common/aspect/RateLimitAspect.java`、`app/src/main/resources/scripts/rate_limit_single.lua`、`common/config/{CorsConfig,JacksonConfig,S3Config,WebMvcAsyncConfiguration,OpenApiConfig}.java` | 可重复注解 + key 解析器 + Lua 令牌桶的完整组合；异步 MVC 配置 | 限流维度加 token 配额联动（不只 QPS）；CORS 配置需覆盖 SSE 与 WS |
 | P0-05 异步与恢复 | `🅖 common/async/{AbstractStreamProducer,AbstractStreamConsumer}.java`、`common/async/recovery/*RecoveryProperties.java`、`common/constant/AsyncTaskStreamConstants.java`、`common/transaction/TransactionalExecutor.java` | Stream 消费模板 + 死信/恢复调度 + 事务边界工具化 | 消费前校验改为「实体不存在则 ACK 丢弃 + 记录 direction 已删」 |
-| P0-01/P1 线程池与防护 | `🅜 common/config/thread/{ThreadPoolConfig,ApplicationThreadPoolProperties}.java`、`toolkit/Threads.java`、`common/ratelimit/{RedissonRequestRateLimitService,RequestRateLimitKeyResolver,RequestRateLimitPolicy,RequestRateLimitService}.java` | 多级池隔离参数、队列与拒绝策略选型、Redisson 限流策略抽象 | 池名与 Micrometer 指标绑定；禁止直接搬 `Threads` 工具类（改为显式 Bean） |
+| P0-01/P1 线程池与防护 | `🅜 common/config/thread/{ThreadPoolConfig,ApplicationThreadPoolProperties}.java`、`toolkit/Threads.java`、`common/ratelimit/{RedissonRequestRateLimitService,RequestRateLimitKeyResolver,RequestRateLimitPolicy,RequestRateLimitService}.java` | 多级池隔离参数、队列与拒绝策略选型、Redisson 限流策略抽象 | 池名与 Micrometer 指标绑定；禁止直接搬 `Threads` 工具类（改为显式 Bean）。**禁用 `Executors.newXxx` 靠 ArchUnit 而不是 enforcer**（enforcer 只能管依赖坐标，管不了方法调用） |
+| P0-05 依赖名修正（已实测） | `🅖 app/build.gradle` | **Boot 4 的 starter 已改名**：`spring-boot-starter-webmvc`（不是 `-web`）、`spring-boot-starter-flyway`，以及 `-validation` / `-websocket` / `-data-jpa` / `-actuator` | 写错名字会在 CI 上拉不到依赖；`flyway-database-postgresql` 与 `postgresql` 是 `runtimeOnly` 定位 |
 | P1b-10 模型 Key 与额度 | `🅖 modules/llmprovider/service/{ApiKeyEncryptionService,LlmProviderConfigService,LlmProviderBootstrapService}.java`、`modules/llmprovider/dto/{ProviderDTO,AsrConfigDTO,TtsConfigDTO}.java`、`common/ai/{LlmProviderRegistry,ApiPathResolver,LlmEmbeddingConfig}.java`（+`common/config/LlmProviderProperties.java`）、`🅢 src/lib/{usage.ts,model-pool.ts,deepseek.ts}`、`prisma/schema.prisma::TokenUsage` | AES/GCM + nonce 结构、masked 字段形态、Provider 连通性测试、模型池 LOW 档降级思路 | **不抄 `DEV_FALLBACK_KEY`**（ADR 已定）；Key 改为五用途拆分；记账字段补 `prompt_hash/evaluator_version` |
 
 ### B. 后端·知识与面试链路（对应 P1a / P1b）
@@ -134,8 +135,8 @@ P0 骨架        P1 闭环内核                    P2 体验留存   P3 语音 
 
 | ID | 任务 | 验收（必须贴命令输出） | 人日 | 依赖 |
 |---|---|---|---|---|
-| P0-01 | 根 pom 改 `packaging=pom`：`dependencyManagement`（spring-boot-dependencies + spring-ai-bom）、`pluginManagement`、enforcer（JDK 21、banned `Executors.newXxx`、依赖收敛） | `.\mvnw.cmd -q validate` 通过；故意写 `Executors.newFixedThreadPool` 时 enforcer 报错 | 1 | — |
-| P0-02 | 建 4 个 Java 模块 `annona-common` / `annona-spi` / `annona-infrastructure` / `annona-server`，现有 `AnnonaApplication` 迁入 server | `mvn -q verify` 全绿，四个 jar 产出 | 1 | P0-01 |
+| P0-01 | 根 pom 建立**依赖与插件治理**：`dependencyManagement`（`spring-ai-bom` 2.0.0）、`pluginManagement`（enforcer 版本）、enforcer 四条规则（JDK 21+、Maven 3.9+、`requireUpperBoundDeps`、**禁用 MySQL/Mongo/ES 依赖坐标**）、surefire 默认 `excludedGroups=docker` + `--enable-native-access`。**`packaging` 暂留 jar**：聚合器不能持有 `src/`，`packaging=pom` 与源码迁移必须同在 P0-02，否则中途断构 | ① `mvnw -B -q verify` `EXIT=0`；② 临时塞入 `com.mysql:mysql-connector-j` 后 `mvnw validate` **必须失败**（已实测 `EXIT=1`）；③ `dependency:get` 能解析 spring-ai 2.0.0（已实测，无需 milestone 仓库） | 1 | — |
+| P0-02 | 根 pom 改 `packaging=pom` + `<modules>`；建 `annona-common`、`annona-spi`、`annona-infrastructure`、`annona-server` 四模块，把现有 `src/` 迁入 `annona-server` | `mvn -q verify` 全绿，四个 jar 产出 | 1 | P0-01 |
 | P0-03 | `annona-common`：`Result<T>`、`ErrorCode`、`BusinessException`、全局异常处理器（HTTP 200 + `Result.error`）、枚举与常量基类 | `/api/meta/ping` 返回 `Result`；抛 `BusinessException` 返回结构正确，未知异常被兜底且不泄露栈 | 0.5 | P0-02 |
 | P0-04 | `annona-spi`：五个扩展点接口骨架（`IdentityProvider` `ModelProvider` `Retriever` `LearningSignalReader` `DecisionRule`）+ 跨模块契约 DTO，**零 Spring 依赖** | 模块 pom 无 spring-*；ArchUnit 规则通过 | 0.5 | P0-02 |
 | P0-05 | `config/` 六包骨架（web/async/persistence/security/properties/observability）+ 四类线程池 + `@ConfigurationProperties` 分组（`annona.*`） | 启动日志打印四类池参数；`application.yml` 无散落业务配置 | 1 | P0-03 |
@@ -279,7 +280,7 @@ P0 骨架        P1 闭环内核                    P2 体验留存   P3 语音 
 
 ## 计划维护规则
 
-1. 进度登记分两层：**阶段级看本文顶部「当前进度」表**，**任务级看对应 GitHub issue 的关闭状态**；不另起第三份进度表，也不在任务表里塞 checkbox（那会变成第二个真相源）。
+1. 进度登记只有一层：**任务级看本文各阶段任务表**，**阶段级状态看顶部「当前进度」表**；不建任务级 issue，不在任务表里塞 checkbox，阶段 issue 只作为本文的**摘要视图**（不得在 issue 里单独维护一份与此不同的任务列表）。
 2. 估时偏差 > 30% 时，在对应阶段小结里写清原因（是漏了什么，还是砍了什么），**不许悄悄挪工作量到下一阶段**。
 3. 新增功能必须先回答"是否服务闭环主线"。若否 → 进设计文档 §15 Non-goals 讨论，不进计划。
 4. 任何跨 ≥3 模块的改造另开 `docs/plans/<TOPIC>_PLAN.md`，本文档只登记结论与出口条件变化。

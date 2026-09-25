@@ -133,7 +133,7 @@
 **借鉴扫描义务（写任何一块前先做）**
 
 1. 到 `docs/annona-开发计划.md` §借鉴地图 找到本任务对应的扫描路径，**先读后写**（可派 Explore subagent 批量读）。未扫描 = 任务未开始。
-2. 在任务 issue 里留四行借鉴说明：读过哪些文件 → 借鉴哪个机制 → 必须改掉的不适配点及理由 → 上游根本没有的部分。
+2. 在该任务的 commit 正文留四行借鉴说明（无代码提交时写进阶段 issue）：读过哪些文件 → 借鉴哪个机制 → 必须改掉的不适配点及理由 → 上游根本没有的部分。
 3. 借鉴 = 机制、结构、参数取值、**测试用例清单**（上游 `summer-checkin/tests/` 与 `interview-guide/frontend/src/**/*.test.ts` 是现成的行为规格）；不是复制代码。若确实搬了代码：在文件头保留 AGPL 来源注释并在 issue 记录；**成片（跨文件）搬运才需要先征得用户同意**。
 4. 地图里没有的新板块，扫完把路径回写进地图——**地图不完整本身就是缺陷**。
 5. **琐碎任务例外**：纯文档修改、错字修正、单行配置调整可省略四行借鉴说明（但仍需先查地图确认无对应条目）。本例外不适用于任何业务代码与数据结构改动。
@@ -175,7 +175,9 @@
 
 <body: 每行 ≤100 字符，解释 WHAT changed 与 WHY，而非 how>
 
-Refs: #<issue>          ← 有关联 issue 时必填
+Refs: #<issue>          ← 仅在关联 bug / 提案类 issue 时写
+Task: P0-01             ← 对应 docs/annona-开发计划.md 的任务 ID，必写
+
 Signed-off-by: ...      ← DCO 签名，提交时带 -s
 ```
 
@@ -183,6 +185,7 @@ Signed-off-by: ...      ← DCO 签名，提交时带 -s
 - `scope` 用模块名：`planner` `interview` `evaluation` `retrieval` `knowledge` `questionbank` `study` `plan` `voice` `schedule` `agent` `usage` `identity` `web` `infra` `docs`。
 - 破坏性变更：type 后加 `!`（`refactor(direction)!: replace subject string with direction_key fk`）并在 body 写迁移方案。
 - subject 用祈使句现在时（`add`，不是 `added` / `adds`）。
+- **任务级进度不建 issue**：开发计划的任务表是唯一真相源，**每个阶段一个 issue**（阶段开工前建，作为对外可见的进度摘要）。因此 commit 不强制 `Refs:`，改用 `Task: P<n><子>-<序号>` 回指任务 ID。
 - 只有 `fix` / `feat` 进入 changelog，其余必须用可忽略的 type 或 `*` 前缀。
 
 **提交前自查**：`mvn -q verify` 通过、ArchUnit 无违规、diff 里没有无关格式化、不含任何真实密钥（gitleaks 已挂在 pre-commit，禁止 `--no-verify` 绕过）。
