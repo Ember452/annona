@@ -1,9 +1,14 @@
-# 开发用的中间件栈：只起 3 个 backend dependency（db / cache / storage），
+# 开发用的中间件栈：默认起 2 个 backend dependency（db / cache），
 # 让开发者在 host 上跑 annona-server（`./mvnw -pl annona-server -am spring-boot:run`）
 # 与 annona-web（`cd annona-web && pnpm dev`），获得热重载与 IDE 断点能力。
 #
+# storage（S3）默认 profile-gated（主 compose 同名 service 已加
+# `profiles: ["s3"]`），P0 阶段 annona-server 不读 S3。想开 storage：
+#   docker compose -f docker/docker-compose.dev.yml --profile s3 up -d
+# （需先确保 storage.image 在当前网络下真能拉，见阶段总结 §5 D13）
+#
 # 服务定义 extends 主 compose 避免重复；只是把端口映射到 host。
-# 用法：docker compose -f docker/docker-compose.dev.yml --env-file .env up -d
+# 默认用法：docker compose -f docker/docker-compose.dev.yml --env-file .env up -d
 
 services:
   db:
