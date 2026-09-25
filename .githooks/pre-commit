@@ -1,0 +1,32 @@
+#!/bin/sh
+# annona pre-commit hook
+#
+# 唯一的动作：跑 gitleaks 扫 staged diff，检测硬编码密钥。
+# 权威门禁在 CI（.github/workflows/ci.yml 的 gitleaks job + branch protection）；
+# 这里是**本地第一道**，让开发者在 commit 前就看到，而不是等 3 分钟 CI 红。
+#
+# 激活：git config core.hooksPath .githooks  或  make setup
+# 参考：docs/specs/2026-09-25-model-api-key-adr.md（项目不内置任何可用 Key）
+#      AGENTS.md §0.2（绝不硬编码密钥）与 §5 提交前自查
+
+set -eu
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  cat >&2 <<'MSG'
+pre-commit hook: 未找到 gitleaks。annona 要求本地上密钥扫描，不通过后
+门（AGENTS.md §0 "禁止 --no-verify 绕过"），因此本 commit 中止。
+
+安装（任选其一）：
+  Windows: winget install Gitleaks.gitleaks
+  macOS:   brew install gitleaks
+  其他:    https://github.com/gitleaks/gitleaks/releases 下载对应平台二进制
+           放到 PATH 上（例如 ~/.local/bin 或 /usr/local/bin）
+
+装好后重新 git commit。
+MSG
+  exit 1
+fi
+
+# --staged 只扫暂存区，速度比全历史快；--redact 让命中片段脱敏，避免 hook 输出反泄漏
+# --no-banner 静默模式，方便与其它 hook 输出统一格式
+exec gitleaks protect --staged --no-banner --redact

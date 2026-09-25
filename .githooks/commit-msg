@@ -1,0 +1,92 @@
+#!/bin/sh
+# annona commit-msg hook
+#
+# Conventional Commits 校验 + 英文强制（AGENTS.md §5 "commit message 一律英文"）。
+# 参考 🅖 .githooks/commit-msg 的骨架但**语义反转**：🅖 要求 subject 必须含汉字，
+# annona 要求 subject 不得含汉字。骨架 regex 与 Merge/Revert/fixup bypass 沿用。
+#
+# 激活：git config core.hooksPath .githooks  或  make setup
+# 反查规则详见 AGENTS.md §5 与 docs/annona-项目结构.md §13.4 评审门禁表。
+
+set -eu
+
+MESSAGE_FILE=${1:?usage: commit-msg <message-file>}
+# 去掉 # 注释行与尾随空白
+MESSAGE=$(git stripspace --strip-comments < "$MESSAGE_FILE")
+SUBJECT=$(printf '%s\n' "$MESSAGE" | sed -n '1p')
+
+# 合并/回退/fixup/squash 类提交由 git 自动生成，不套规则
+case "$SUBJECT" in
+  Merge\ *|Revert\ *|fixup\!\ *|squash\!\ *|amend\!\ *)
+    exit 0
+    ;;
+esac
+
+fail() {
+  printf '%s\n' "commit-msg hook: $1" >&2
+  printf '%s\n' "" >&2
+  printf '%s\n' "允许的格式（AGENTS.md §5）：" >&2
+  printf '%s\n' "  feat(scope): imperative subject, <=72 chars, no trailing period" >&2
+  printf '%s\n' "  body lines wrapped to <=100 chars, English only" >&2
+  printf '%s\n' "" >&2
+  printf '%s\n' "示例：" >&2
+  printf '%s\n' "  feat(planner): add sample-size guard before difficulty adjustment" >&2
+  printf '%s\n' "  fix(retrieval): handle empty query result without throwing" >&2
+  printf '%s\n' "  docs(specs): record KEK rotation ADR" >&2
+  printf '%s\n' "" >&2
+  printf '%s\n' "type: feat fix refactor perf test docs build ci chore revert" >&2
+  printf '%s\n' "scope: 模块名 planner interview evaluation retrieval knowledge questionbank" >&2
+  printf '%s\n' "       study plan voice schedule agent usage identity web infra docs spi common pom" >&2
+  exit 1
+}
+
+# Han 检查用 perl 的 \p{Han}；无 perl 时禁用整个校验（会静默放过中文，风险更大，故要求装）
+if ! command -v perl >/dev/null 2>&1; then
+  fail "本机缺少 perl，无法执行英文检查。装 Git for Windows 完整版（自带 perl）或系统 perl。"
+fi
+
+contains_han() {
+  printf '%s\n' "$1" \
+    | perl -CSD -ne '$found ||= /\p{Han}/; END { exit($found ? 0 : 1) }'
+}
+
+# 1) Conventional Commits 前缀
+if ! printf '%s\n' "$SUBJECT" \
+    | grep -Eq '^(feat|fix|refactor|perf|test|docs|build|ci|chore|revert)(\(([a-z0-9._/-]+)\))?!?: .+'; then
+  fail "subject 不匹配 Conventional Commits：type(scope)!: subject"
+fi
+
+# 2) subject 必须英文（不含汉字）
+if contains_han "$SUBJECT"; then
+  fail "subject 含汉字。AGENTS.md §5 规定 commit message 一律英文。"
+fi
+
+# 3) subject 长度 ≤72
+SUBJECT_LEN=$(printf '%s' "$SUBJECT" | wc -m | tr -d ' ')
+if [ "$SUBJECT_LEN" -gt 72 ]; then
+  fail "subject 长度 ${SUBJECT_LEN} 超过 72 字符"
+fi
+
+# 4) subject 不以句号结尾
+case "$SUBJECT" in
+  *. )
+    fail "subject 不以标点结尾（末尾的 . 是常见误写）"
+    ;;
+esac
+
+# 5) body 分隔：第二行必须为空
+SECOND_LINE=$(printf '%s\n' "$MESSAGE" | sed -n '2p')
+if [ -n "$SECOND_LINE" ]; then
+  fail "subject 与 body 之间必须留一个空行"
+fi
+
+# 6) body 每行 ≤100 字符（AGENTS.md §5）；不强制 - bullet 前缀
+BODY=$(printf '%s\n' "$MESSAGE" | sed '1,2d')
+if [ -n "$BODY" ]; then
+  OVERLONG=$(printf '%s\n' "$BODY" | awk 'length($0) > 100 { print NR": "length($0)" chars"; exit }')
+  if [ -n "$OVERLONG" ]; then
+    fail "body 第 $OVERLONG 超过 100 字符（AGENTS.md §5）"
+  fi
+fi
+
+exit 0
