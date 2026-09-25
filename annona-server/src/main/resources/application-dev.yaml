@@ -1,0 +1,8 @@
+# 本机开发（Windows 原生 PostgreSQL 16 + pgvector；见 docs/specs/2026-09-25-dockerless-local-dev-adr.md §8.3）
+# datasource url 与凭据由 .env 或 shell 环境变量注入；本文件不写死默认值。
+annona:
+  startup:
+    require-kek: false
+    check-pg-extensions: false
+  kek:
+    secret: ${ANNONA_SECRET_KEY:dev-only-fallback-do-not-use-in-prod}

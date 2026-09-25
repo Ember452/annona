@@ -1,0 +1,23 @@
+# 本机测试 profile：无 Docker 与 PG 时，Boot 会因 DataSource autoconfig 失败而无法启动 context。
+# 排除数据库相关 autoconfig，让 AnnonaApplicationTests 与配置/异常测试能在无 PG/Redis 环境下运行。
+# 需要真数据库的测试打 @Tag("docker") 由 CI 的 pgvector/pgvector:pg16 service 承担。
+# 见 docs/specs/2026-09-25-dockerless-local-dev-adr.md
+#
+# 注意：Boot 4 已把 autoconfig 拆到 per-module jar 并改包路径
+#   （org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration，
+#     不是老 Boot 3 的 org.springframework.boot.autoconfigure.jdbc.*）。
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration
+      - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
+      - org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration
+  jpa:
+    hibernate:
+      ddl-auto: none
+
+annona:
+  startup:
+    require-kek: false
+    check-pg-extensions: false
