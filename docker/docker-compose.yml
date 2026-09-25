@@ -119,8 +119,12 @@ services:
     depends_on:
       server: { condition: service_healthy }
     healthcheck:
-      # busybox 的 wget；探活命中 server 的 /actuator/health 经反代
-      test: ["CMD", "wget", "-qO-", "http://localhost/actuator/health"]
+      # busybox wget 探自己的 80 端口（经反代命中 server 的 /actuator/health）。
+      # 写 127.0.0.1 而不是 localhost：alpine 下 wget 会优先解 ::1，而 annona.conf
+      # 只 listen 80 IPv4（nginx 官方镜像的 10-listen-on-ipv6-by-default.sh 想补
+      # IPv6 listener 但 conf 文件只读，补不上），healthcheck 会因 IPv6 拒接而
+      # 不健康。B5 首次踩到，阶段总结 §5 D15。
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/actuator/health"]
       interval: 10s
       timeout: 3s
       retries: 10
