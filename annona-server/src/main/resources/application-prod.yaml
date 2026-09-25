@@ -1,0 +1,25 @@
+# 生产环境（AGPL 自部署 / 官方托管）
+# KEK 缺失时 StartupValidator 会在 Flyway 与 DataSource 初始化之前直接抛错。
+# 见 docs/specs/2026-09-25-model-api-key-adr.md（明确拒绝 dev fallback 进 prod 镜像）
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+logging:
+  level:
+    io.annona: INFO
+    root: WARN
+  pattern:
+    console: "%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n"
+
+annona:
+  startup:
+    require-kek: true
+    check-pg-extensions: true
+  kek:
+    secret: ${ANNONA_SECRET_KEY:}

@@ -1,0 +1,5 @@
+# Boot 4 仍支持用 spring.factories 注册 ApplicationListener（autoconfig 部分已迁到
+# META-INF/spring/*.imports，但 listener 通道没变）。StartupValidator 必须在
+# ApplicationEnvironmentPreparedEvent 阶段跑，早于任何 @Component 扫描。
+org.springframework.context.ApplicationListener=\
+io.annona.bootstrap.StartupValidator

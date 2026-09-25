@@ -105,6 +105,8 @@ annona/
 
 ## 4. 后端包结构（`annona-server/src/main/java`）
 
+> **本节仅描述 `annona-server` 模块的内部包结构**；仓库顶层目录见 §2，其他 3 个 Maven 模块（`annona-common` / `annona-spi` / `annona-infrastructure`）的职责与允许依赖见 §3 表格。将代码归入哪个模块的判据在 §3，本节的树形仅回答"进了 `annona-server` 之后放哪儿"。
+
 ```text
 io.annona
 ├── AnnonaApplication.java             # 启动类：仅 @SpringBootApplication + @EnableConfigurationProperties 汇总
@@ -121,7 +123,8 @@ io.annona
 │   ├── domain/                        #   领域事件定义（StudySessionClosed、InterviewEvaluated…）
 │   ├── direction/                     #   方向字典只读访问（被 6 个模块消费，故独立于 identity/study）
 │   ├── signal/                        #   LearningSignalReader 的门面与信号快照模型
-│   └── idempotent/                    #   幂等键生成与消费模板（交卷、回写、异步任务）
+│   ├── idempotent/                    #   幂等键生成与消费模板（交卷、回写、异步任务）
+│   └── meta/                          #   非业务的运维探针端点（/api/meta/ping 等，P0-03 引入）
 │
 ├── modules/                           # 【业务特性】每个包自包含，禁止跨模块 import 内部类
 │   ├── identity/                      # 账号与身份
@@ -443,16 +446,18 @@ io.annona.modules.planner..         禁止依赖 interview/voice/schedule（只�
 
 ## 12. 当前仓库 → 目标结构的 P0 重组清单
 
-现状是 Spring Initializr 生成的单模块骨架（仅 `io.annona.AnnonaApplication` + 4 行 `application.yaml`）。P0 需要做的结构调整（均为结构，不含业务）：
+目标结构（§2–§11 描述的完整形态）不是一次到位的，P0 分 5 批交付。下表登记当前进度：
 
-1. 根 `pom.xml` 改为 `packaging=pom` + `dependencyManagement`/`pluginManagement` + enforcer（JDK 21）。
-2. 新建 `annona-common`、`annona-spi`、`annona-infrastructure`、`annona-server` 四模块，把现有 `src/` 迁入 `annona-server`。
-3. `annona-web` 初始化（Vite + React + TS + Tailwind 4），配置构建产物拷贝进 `annona-server/resources/static`。
-4. 落地 `config/{web,async,persistence,security,properties,observability}` 与 `shared/{domain,direction,signal,idempotent}` 空骨架；`modules.<name>` 顶层包与 `shared` 子包必须有 `package-info.java`（子包不强制）。
-5. Flyway 基线 `V1__baseline.sql`（含 `direction` 字典表）、`db/seed/`、`prompts/`、`skills/` 目录占位。
-6. `annona-server/src/test/java/io/annona/arch/` 落地 §10 的 ArchUnit 规则（先失败后放行的红名单机制）。
-7. `docker/` 双 compose、`deploy/nginx/`、`.github/workflows/ci.yml`（build/test/lint/archunit + gitleaks 密钥扫描）。
-8. 仓库门面：`README.md`、`LICENSE`（AGPL-3.0 FSF 原文）、`AGENTS.md`、`.env.example`、`SECURITY.md`、`CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`.editorconfig` **已落地**；`.github/` 全套见 §13（P0-12）；决策记录已在 `docs/specs/` 落地 8 条 ADR。
+| # | 目标 | 状态 | 落地批次 |
+|---|---|---|---|
+| 1 | 根 `pom.xml` 改为 `packaging=pom` + `dependencyManagement`/`pluginManagement` + enforcer（JDK 21） | ✅ 已完成（P0-01） | 先于 B1 |
+| 2 | 新建 `annona-common`、`annona-spi`、`annona-infrastructure`、`annona-server` 四模块，把现有 `src/` 迁入 `annona-server` | ✅ 已完成（P0-02，PR #2 merge `37c1295`） | B1 |
+| 3 | `annona-web` 初始化（Vite + React + TS + Tailwind 4），配置构建产物拷贝进 `annona-server/resources/static` | ⬜ 待做 | B3（P0-09） |
+| 4 | 落地 `config/{web,async,persistence,security,properties,observability}` 六包骨架 + `shared/{domain,direction,signal,idempotent,meta}` 子包；`modules.<name>` 顶层包与 `shared` 子包必须有 `package-info.java` | 🔄 顶层 `shared/` 与 `modules/` package-info 已在 B1（P0-07）落；`config/*` 六包与 `shared/meta/MetaController.java` 在 B2（P0-05） | B2 |
+| 5 | Flyway 基线 `V1__baseline.sql`（含 `direction` 字典表）、`db/seed/`、`prompts/`、`skills/` 目录占位 | ⬜ 待做 | B2（P0-06） |
+| 6 | `annona-server/src/test/java/io/annona/arch/` 落地 §10 的 ArchUnit 七条规则（先失败后放行的红名单机制） | ✅ 已完成（P0-07，B1） | B1 |
+| 7 | `docker/` 双 compose、`deploy/nginx/`、`.github/workflows/ci.yml`（build/test/lint/archunit + gitleaks 密钥扫描） | ⬜ 待做 | B4（P0-10/13）+ B5（P0-11/12/14） |
+| 8 | 仓库门面：`README.md`、`LICENSE`（AGPL-3.0 FSF 原文）、`AGENTS.md`、`.env.example`、`SECURITY.md`、`CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`.editorconfig` 已落地；`.github/` 全套见 §13（P0-12）；决策记录已在 `docs/specs/` 落地 8 条 ADR | ✅ 门面已完成；`.github/` 待 B5 | — |
 
 **验收**：`mvn -q verify` 全绿、ArchUnit 七条规则生效（本机到此为止）；`docker compose up` 后首页 200 与 `/api/meta/ping` 、模型连通性测试由 **CI 验证并留存日志**（本机无 Docker，见 `specs/2026-09-25-dockerless-local-dev-adr.md`）。
 

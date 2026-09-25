@@ -160,6 +160,17 @@
                          见 docs/specs/2026-09-25-dockerless-local-dev-adr.md -->
                     <excludedGroups>docker</excludedGroups>
                     <argLine>${annona.test.jvmArgs}</argLine>
+                    <!-- 把 *IT.java 也纳入 surefire（默认只扫 *Test.java）。
+                         annona 约定：@Tag("docker") 的集成测试统一 *IT.java 后缀，与
+                         纯单测 *Test.java 区分；CI 靠 groups 参数筛，不靠文件名。
+                         若改日引入 maven-failsafe，把 *IT.java 从 surefire 扫到 failsafe 扫。 -->
+                    <includes>
+                        <include>**/Test*.java</include>
+                        <include>**/*Test.java</include>
+                        <include>**/*Tests.java</include>
+                        <include>**/*TestCase.java</include>
+                        <include>**/*IT.java</include>
+                    </includes>
                 </configuration>
             </plugin>
         </plugins>

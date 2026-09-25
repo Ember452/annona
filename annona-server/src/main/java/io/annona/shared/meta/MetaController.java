@@ -1,4 +1,4 @@
-package io.annona.web;
+package io.annona.shared.meta;
 
 import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
