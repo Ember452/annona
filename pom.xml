@@ -11,6 +11,9 @@
     <groupId>io.annona</groupId>
     <artifactId>annona</artifactId>
     <version>0.0.1-SNAPSHOT</version>
+    <!-- P0-02 拆出 annona-common / annona-spi / annona-infrastructure / annona-server 后，
+         本 pom 改为 packaging=pom 的聚合器，src/ 迁入 annona-server。此处保持 jar 以免中途断构。 -->
+    <packaging>jar</packaging>
     <name>annona</name>
     <description>年轮 · annona — study minutes become the shape of your next question.</description>
     <url>https://github.com/Ember452/annona</url>
@@ -33,10 +36,34 @@
         <url>https://github.com/Ember452/annona</url>
         <tag>HEAD</tag>
     </scm>
+
     <properties>
         <java.version>21</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+        <!-- 第三方版本只在这一处出现；子模块的 <dependency> 一律不写 version -->
+        <spring-ai.version>2.0.0</spring-ai.version>
+        <maven-enforcer-plugin.version>3.5.0</maven-enforcer-plugin.version>
+
+        <!-- Mockito 在 JDK 21 上动态 attach 会告警，显式放行（surefire 与 CI 同一口径） -->
+        <annona.test.jvmArgs>--enable-native-access=ALL-UNNAMED</annona.test.jvmArgs>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- spring-boot-starter-parent 已管理 Boot 生态版本；这里只补 AI 侧的 BOM。
+                 2.0.0 已确认可从 Maven Central 直接解析，不需要 repo.spring.io/milestone。 -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -51,12 +78,78 @@
     </dependencies>
 
     <build>
+        <pluginManagement>
+            <plugins>
+                <!-- 未被 Boot 父 POM 管理的插件版本在此集中，子模块继承即可 -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-enforcer-plugin</artifactId>
+                    <version>${maven-enforcer-plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>enforce-project-rules</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <phase>validate</phase>
+                        <configuration>
+                            <fail>true</fail>
+                            <rules>
+                                <requireJavaVersion>
+                                    <version>[21,)</version>
+                                    <message>annona 需要 JDK 21 及以上（见 docs/annona-项目结构.md §11）。</message>
+                                </requireJavaVersion>
+                                <requireMavenVersion>
+                                    <version>[3.9,)</version>
+                                    <message>Maven 3.9 以下版本不受支持，请使用 ./mvnw。</message>
+                                </requireMavenVersion>
+
+                                <!-- 依赖冲突上收到根 pom：避免子模块各自传递出不同版本 -->
+                                <requireUpperBoundDeps/>
+
+                                <!-- 存储栈已收敛为 PostgreSQL + Redis + S3，
+                                     见 docs/specs/2026-09-25-storage-single-postgres-adr.md。
+                                     任何人（或 AI）误加回 MySQL/Mongo/ES 依赖时，构建直接失败。 -->
+                                <bannedDependencies>
+                                    <excludes>
+                                        <exclude>mysql:mysql-connector-java</exclude>
+                                        <exclude>com.mysql:mysql-connector-j</exclude>
+                                        <exclude>org.mariadb.jdbc:*</exclude>
+                                        <exclude>org.mongodb:*</exclude>
+                                        <exclude>org.elasticsearch*:*</exclude>
+                                        <exclude>co.elastic.clients:*</exclude>
+                                    </excludes>
+                                    <searchTransitive>true</searchTransitive>
+                                </bannedDependencies>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- 本机无 Docker：默认排除需要真实中间件的测试，由 CI 以 -Dgroups=docker 专跑。
+                         见 docs/specs/2026-09-25-dockerless-local-dev-adr.md -->
+                    <excludedGroups>docker</excludedGroups>
+                    <argLine>${annona.test.jvmArgs}</argLine>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
-
 </project>
