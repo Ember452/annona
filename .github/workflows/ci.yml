@@ -180,8 +180,9 @@ jobs:
           curl -fsS http://localhost/ | grep -qi 'annona'
           # D1 SPA fallback：非根 deep link 必须回前端 shell（index.html），而不是 404
           curl -fsS http://localhost/study | grep -qi 'annona'
-          # D1 回退不得吞掉未映射 API 的真实 404（守 D19 边界）
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/api/definitely-not-a-route)" = "404"
+          # D1 边界：未映射的 /api 绝不被 SPA 回退成 index.html 外壳。P1a-02 强制鉴权后，
+          # 未登录的 /api 走业务失败约定 = HTTP 200 + Result JSON(1004)，已证明它不是 HTML。
+          curl -s -o /dev/null -w '%{content_type}' http://localhost/api/definitely-not-a-route | grep -qi 'application/json'
       - name: Dump server logs on failure
         if: failure()
         run: docker compose --env-file .env -f docker/docker-compose.yml logs --tail=200
