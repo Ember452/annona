@@ -48,7 +48,7 @@ annona/
 │   ├── workflows/                 #   ci.yml、e2e.yml、rag-eval.yml、release.yml、publish-spi.yml、stale.yml
 │   ├── ISSUE_TEMPLATE/            #   bug_report / feature_request / skill-proposal（新增面试方向提案）
 │   ├── PULL_REQUEST_TEMPLATE.md   #   含「是否影响决策输入或检索指标」勾选项
-│   ├── dependabot.yml             #   maven / npm / docker 依赖升级分组与节奏
+│   ├── dependabot.yml             #   （P1b-10 重新引入，见阶段总结 §5 D16；P0-P1a 期间不启用）
 │   ├── CODEOWNERS                 #   模块目录 → 维护者，控制合并权限与评审路由
 │   └── FUNDING.yml                #   赞助入口（开源可持续性）
 ├── .mvn/wrapper/                  # Maven Wrapper（统一 mvn 版本，clone 即可构建）
@@ -456,7 +456,7 @@ io.annona.modules.planner..         禁止依赖 interview/voice/schedule（只�
 | 4 | 落地 `config/{web,async,persistence,security,properties,observability}` 六包骨架 + `shared/{domain,direction,signal,idempotent,meta}` 子包；`modules.<name>` 顶层包与 `shared` 子包必须有 `package-info.java` | ✅ 已完成（B1 P0-07 落包骨架 + B2 P0-05 落六包与四线程池，PR #3 merge `f0a60d9`） | B1 + B2 |
 | 5 | Flyway 基线 `V1__baseline.sql`（含 `direction` 字典表）、`db/seed/`、`prompts/`、`skills/` 目录占位 | ✅ 已完成（P0-06，`V1__baseline.sql` + `docker/postgres/init.sql` 两文件，PR #3 merge `f0a60d9`）；`db/seed` 与 `prompts/` `skills/` 目录占位待 P1a 填 | B2 |
 | 6 | `annona-server/src/test/java/io/annona/arch/` 落地 §10 的 ArchUnit 七条规则（先失败后放行的红名单机制） | ✅ 已完成（P0-07，B1） | B1 |
-| 7 | `docker/` 双 compose、`deploy/nginx/`、`.github/workflows/ci.yml`（build/test/lint/archunit + gitleaks 密钥扫描） | ✅ 已完成（P0-10 `docker/Dockerfile` 三阶段 + `docker-compose.yml`/`compose.dev.yml`，P0-11 hooks，P0-12 `ci.yml` 5 blocking jobs + 5 个辅助 workflow + `dependabot.yml`/`CODEOWNERS`/ISSUE/PR 模板/FUNDING，P0-13 `Makefile`） | B4 + B5 |
+| 7 | `docker/` 双 compose、`deploy/nginx/`、`.github/workflows/ci.yml`（build/test/lint/archunit + gitleaks 密钥扫描） | ✅ 已完成（P0-10 `docker/Dockerfile` 三阶段 + `docker-compose.yml`/`compose.dev.yml`，P0-11 hooks，P0-12 `ci.yml` 5 blocking jobs + 5 个辅助 workflow + `CODEOWNERS`/ISSUE/PR 模板/FUNDING，P0-13 `Makefile`）。~~`dependabot.yml`~~ 已从 P0 产出中移除（见 D16） | B4 + B5 |
 | 8 | 仓库门面：`README.md`、`LICENSE`（AGPL-3.0 FSF 原文）、`AGENTS.md`、`.env.example`、`SECURITY.md`、`CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`.editorconfig` 已落地；`.github/` 全套见 §13（P0-12）；决策记录已在 `docs/specs/` 落地 8 条 ADR | ✅ 门面 + `.github/` 全套完成（P0-14，PR #6 本批；`CODEOWNERS` 强审 4 区：`planner/` `direction/` `annona-spi/` `docs/specs/` + `.github/` `.githooks/`） | B5 |
 
 **验收**：`mvn -q verify` 全绿、ArchUnit 七条规则生效（本机到此为止）；`docker compose up` 后首页 200 与 `/api/meta/ping` 、模型连通性测试由 **CI 验证并留存日志**（本机无 Docker，见 `specs/2026-09-25-dockerless-local-dev-adr.md`）。
@@ -477,7 +477,7 @@ io.annona.modules.planner..         禁止依赖 interview/voice/schedule（只�
 | `workflows/release.yml` | 打 tag → 构建镜像 → GitHub Release + changelog | `v*` tag |
 | `workflows/publish-spi.yml` | 将 `annona-spi` 发布到 Maven Central（GPG 签名 + sources/javadoc） | spi 目录变更的 tag |
 | `workflows/stale.yml` | 30 天无回应自动关闭 issue/PR | 定时 |
-| `dependabot.yml` | 分三组：生产依赖（只开 patch）、构建依赖、npm、docker | 每周 |
+| `dependabot.yml` | **P0-P1a 不启用**（骨架阶段无 CVE 暴露面，自动 PR 噪声大于价值）。P1b-10 首次接 BYOK 真实 Key 前写 ADR 重新引入，分组与 ignore 策略届时定。见阶段总结 §5 D16 | 目标 P1b-10+ |
 
 本表的**完整执行矩阵（哪个验证用 `services:`、哪个才用 compose、用哪个镜像、paths 怎么过滤）以 `docs/specs/2026-09-25-dockerless-local-dev-adr.md` 为准**。要点：集测不走 compose（runner 托管的 services 更快），真正需要 compose 的只有“验证交付物”那一个 job。
 

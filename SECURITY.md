@@ -40,5 +40,5 @@
 
 ## 依赖与自动化
 
-- CI 阶段包含密钥扫描（gitleaks，pre-commit + workflow 双道）与 Dependabot 依赖升级告警。
+- CI 阶段包含密钥扫描（gitleaks，pre-commit + workflow 双道）。Dependabot 依赖升级告警在 P0-P1a 骨架阶段未启用（无真实部署与 CVE 暴露面，自动 PR 噪声大于价值）；P1b-10 首次接 BYOK 真实 Key 前会写一条 ADR 重新引入，届时本文件会同步更新。
 - 供应链风险接受度：本项目优先减少中间件与依赖数量（单库 PG + Redis + S3），以降低被攻击面；新增依赖须先通过 [`AGENTS.md`](AGENTS.md) §0.6 的引入评估。
