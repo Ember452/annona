@@ -6,7 +6,8 @@
 | 项 | 内容 |
 |---|---|
 | 工作量单位 | 1 人日 = 6 小时有效编码时间，含写测试，不含等 CI 与胡思乱想 |
-| 人力假设 | 1 人主导 + AI 协作实现；估时已含 AI 产出的审阅与返工 |
+| 人力假设 | 1 人主导 + AI 协作实现。**人日按完整交付循环估：实现 → 测试 → 评审 → 加固**；安全/并发敏感模块按两轮加固估（P1a-01 首个标定点：标 2 人日、含两轮加固实耗 ≈3，加固 ≈ 实现的 50%）。此前按纯实现口径估的任务不回改，偏差按维护规则 2 记录 |
+| 实现深度 | **结构性决策一步到位，反馈依赖项等反馈再做**。前者（事后返工代价指数级）：数据模型与迁移、模块边界、门禁与 CI、测试分层、密钥处理；后者（没有真实使用数据就做等于猜）：检索参数调优、性能目标校准、体验打磨——v1 一律用可工作的最简起点与借鉴参数，调优等真实反馈 |
 | **验证环境** | **本机无 Docker**：开发期只跑代码正确性校验（`mvn verify` + 前端构建），容器与集成测试全部由 CI 执行（见 `specs/2026-09-25-dockerless-local-dev-adr.md`） |
 | 任务编号 | `P<阶段><子阶段>-<序号>`，例 `P1a-07`；任务清单与进度**以本文任务表为唯一真相源**。对外另维**一个阶段一个 issue**（阶段开工前建，正文引用本阶段任务表），commit 正文写 `Task: P0-01`；`Refs: #<n>` 只用于关联 bug / 提案类 issue |
 | 总规模 | 约 **88.5 人日**（P0 10.5 · P1 36 · P2 12 · P3 12 · P4 10 · P5 8） |
@@ -18,7 +19,7 @@
 |---|---|---|
 | 文档（设计/结构/计划/ADR）+ 入口（README/LICENSE/.env.example/SECURITY/CONTRIBUTING/CoC/.editorconfig） | ✅ done | 本仓 20+ 个文档文件；LICENSE 为 AGPL-3.0 FSF 原文（已校验） |
 | P0 骨架与门禁 | ✅ done(2026-09-26) —— 六条出口全部满足；② compose-smoke + docker-it 均已在真 PG/Redis 上实证（main run [#14](https://github.com/Ember452/annona/actions/runs/36220137784) 六 job 全绿） | `mvn -B -q verify` EXIT=0（48 tests）、6 个 workflow 解析通过、CI run #14 Success（含 gate）、本地与 `origin/main` 齐平；详见 [reports/P0-骨架-阶段总结.md](./reports/P0-骨架-阶段总结.md) §3 |
-| P1a 数据与知识底座 | 🔶 doing —— P1a-01 identity 后端已实现（注册/登录/登出/Redisson 会话/锁定/scrypt+透明重哈希/改密），本机 `mvn -B -q verify` 绿（含 ArchUnit）；**docker 集测凭证待 CI，尚未提交** | — |
+| P1a 数据与知识底座 | 🔶 doing —— P1a-01 identity 后端已完成并入 main（a356cb7 feat → 0484f5c docs → 9730074 加固批）；CI run #15/#16 六 job 全绿，含真实 PG+Redis 集测（登录闭环 / 会话 CRUD / schema validate）与 compose 冒烟（[run #16](https://github.com/Ember452/annona/actions/runs/36226190524)）；下一任务 P1a-02 | — |
 | P1b 面试与评估 | ⬜ todo | — |
 | P1c 训练决策层 | ⬜ todo | — |
 | P2 / P3 / P4 / P5 | ⬜ todo | — |
@@ -189,7 +190,7 @@ P0-15（仓库设置）不计批次，需你在 GitHub 网页操作。
 
 | ID | 任务 | 验收 | 人日 | 依赖 |
 |---|---|---|---|---|
-| P1a-01 | `identity` 模块：注册/登录/登出/会话、Redis 会话（7 天滑动）、`user_profile`、`login_attempt` 锁定、scrypt 编码器与透明重哈希 | 注册→登录→改密→旧口令失效；10 次失败登录被锁；`user_session` 写失败不影响登录 | 2 | P0-06 |
+| P1a-01 | `identity` 模块：注册/登录/登出/会话、Redis 会话（7 天滑动）、`user_profile`、`login_attempt` 锁定、scrypt 编码器与透明重哈希 | 注册→登录→改密→旧口令失效；10 次失败登录被锁；`user_session` 写失败不影响登录 | 2（实测含两轮加固 ≈3，加固系数标定点） | P0-06 |
 | P1a-02 | `IdentityProvider` 三实现：`local` / `platform` / `none`（单机 bootstrap `id=local`） | 三种 mode 下同一套业务代码都能跑；none 模式无登录页直达首页 | 1 | P1a-01 |
 | P1a-03 | `direction` 字典服务 + 方向选择器组件（下拉 + 即时新建 + 升级为绑定知识库） | 新建方向即落库；`USER_CUSTOM` 可绑 `kb_doc_id`；有历史数据的方向只能归档不能删 | 1.5 | P0-06 |
 | P1a-04 | `study` 采集：打卡、番茄钟、`study_session` + `study_event`、服务端心跳与质量分级（VERIFIED/PARTIAL/SELF_REPORTED） | 挂机 30 分钟无心跳 → 标 PARTIAL；手动补录 → SELF_REPORTED 且不进决策计算（有测试） | 2 | P1a-03 |
@@ -197,7 +198,7 @@ P0-15（仓库设置）不计批次，需你在 GitHub 网页操作。
 | P1a-06 | 分块器纯逻辑实现 + 单测（死循环兜底、段落边界、重叠滑窗、上限保护） | `chunk` 包覆盖率 ≥85%，golden 快照入库 | 1 | P1a-05 |
 | P1a-07 | `retrieval`：语义通道（HNSW）+ 关键词通道（应用层分词 + `simple` + `pg_trgm`）+ RRF + 余弦重排；`PgVectorRetriever` 实现 SPI | 检索测试接口给出命中与分数；改 `annona.retrieval.backend` 不报错（Fake ES） | 2 | P1a-05 |
 | P1a-08 | `qa`：SSE 流式问答、会话管理、源引用追溯、Markdown 净化渲染 | 一次提问，前端逐字输出且引用可点击跳回原文段落 | 1.5 | P1a-07 |
-| P1a-09 | `scripts/rag-eval` + `docs/tests/指标测试-检索.md`：Recall@K / MRR 基线，纯向量 vs 混合对比 | 出报告（真实数字），`retrieval_eval_run` 有记录；结论写进 `docs/benchmarks/` | 1 | P1a-07 |
+| P1a-09 | `scripts/rag-eval` + `docs/tests/指标测试-检索.md`：Recall@K / MRR 基线，纯向量 vs 混合对比 | 出报告（真实数字），`retrieval_eval_run` 有记录；结论写进 `docs/benchmarks/`。**定位是选型实证（混合 vs 纯向量），不是参数调优**：阈值/TopK/RRF 权重沿用借鉴值，参数调优推迟到有真实问答数据后（触发：P1b 上线或真实问答 ≥100 次，以本基线为参照） | 1 | P1a-07 |
 
 **出口条件**：① 真实资料入库后可流式问答并显示引用；② 心跳与质量分级有单测与实测证据；③ 混合检索相对纯向量的 Recall@K 提升**有实测数字**（若为负，按 ADR 触发条件重开检索方案讨论）；④ `chunk` 包覆盖率达标；⑤ 阶段总结已写。
 
@@ -315,6 +316,7 @@ P0-15（仓库设置）不计批次，需你在 GitHub 网页操作。
 6. 每阶段收尾必须同时产出：代码 + 测试 + `docs/reports/P<n>-<名>-阶段总结.md` + 受影响文档的同步更新（设计文档 / 结构文档 / architecture / ADR）。缺任一项即视为阶段未完成。
 7. **借鉴扫描先于实现**：任何任务开工前先查本文「借鉴地图」并读对应路径，在 issue 里留下借鉴说明（§借鉴地图 使用方式第 1 条）。地图里没有的新板块，扫完必须把路径补进地图——**地图不完整本身就是缺陷**。
 8. **验收命令的执行环境**：凡验收条涉及 Docker、真实数据库/Redis、浏览器、真实模型调用或压测，默认**在 CI 或部署环境执行并留存日志链接**；本机验收以 `mvn -q verify`（unit + slice + ArchUnit）与前端 `typecheck/build` 为准。不得因本机跑不了而删除、降级或 mock 这类测试。
+9. **估算含加固轮**：任务人日按「实现 → 测试 → 评审 → 加固」整循环估（P1a-01 标定：加固批 ≈ 实现批的 50%，安全/并发敏感模块两轮）。评审或复查再发现的缺陷按加固批处理、回指原任务号，不另立新任务。
 
 ## 风险登记（计划层面）
 
