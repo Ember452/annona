@@ -128,6 +128,7 @@
 - 分层：`Controller`（路由、校验、委托）→ `Service`（编排，`@Transactional` 只在此层且范围最小）→ `Repository`（JPA，自定义查询用方法名或 `@Query`）。
 - 异常出口分两类：**业务失败**返回 HTTP 200 + `Result.error(code, msg)`；**路由/传输层错误**（404/405/400/500）返回真实 HTTP 状态码 + 同样的 `Result` 体。不得把后者也压成 200（会吞掉故障信号并伪装 SPA fallback 缺失）。
 - 新增业务模块 = 在 `annona-server` 加包 + 更新 ArchUnit 白名单，**不动 pom**；出现第二个可部署产物才新建 Maven 模块。
+- **改 `.github/workflows/**` 后必跑** `python scripts/ci/validate-workflows.py`：GitHub 对无效 workflow 是**静默不运行**（不报错、不产生 check run），跟假绿一样隐蔽；让 CI 自校 CI 配置是鸡生蛋问题，以本地钩子为唯一防线。YAML 普通标量里不能出现 `: `（冒号+空格），含它的 `run:` 一律用块形 scalar。
 - 基础设施能力放 `annona-infrastructure` 或 `common`，禁止散落到业务 Service。
 - `io.annona.modules.<name>` 顶层包与 `io.annona.shared.*` 必须有 `package-info.java` 声明职责与允许依赖（子包不强制，避免堆无用文件）。
 
@@ -259,11 +260,14 @@ Signed-off-by: ...      ← DCO 签名，提交时带 -s
 ### 8.1 本机可跑（日常验证就是这些，Windows PowerShell；Java 21，JAVA_HOME=D:\jdk）
 
 ```bash
-.\mvnw.cmd -q verify                                  # 编译 + 单测 + ArchUnit（默认排除 docker 组）
-.\mvnw.cmd -q test -Dtest=MasteryCalculatorTest       # 单跑一个纯逻辑测试类（类名以实际代码为准）
-.\mvnw.cmd -q -pl annona-server -am package            # 打包（P0-02 拆分模块后）
-cd annona-web; pnpm install; pnpm typecheck; pnpm build; pnpm dev   # 前端（P0-09 后）
+.\mvnw.cmd -B -q verify                                  # 编译 + 单测 + slice + ArchUnit（默认排除 docker 组）
+.\mvnw.cmd -B -q test -Dtest=ArchitectureTest            # 单跑一个纯逻辑测试类
+.\mvnw.cmd -B -q -pl annona-server -am package           # 打包（已拆 4 个 Java 模块）
+cd annona-web; pnpm install; pnpm typecheck; pnpm build   # 前端（产物写入 annona-server 的 static/）
+python scripts\ci\validate-workflows.py                  # 改过 .github/workflows 时必跑
 ```
+
+上述命令均已在当前 HEAD 实跑验证（`verify` 与前端 `typecheck/build` 均 EXIT=0）。
 
 ### 8.2 本机不跑（由 CI 或部署环境执行；不得因本机跑不了而删除或 mock 这些测试）
 

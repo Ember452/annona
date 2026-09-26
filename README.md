@@ -55,9 +55,14 @@
 .\mvnw.cmd -B -q verify                                   # 编译 + 单测 + slice + ArchUnit（默认已排除 docker 组）
 .\mvnw.cmd -B -q test -Dtest=ArchitectureTest             # 单跑一个纯逻辑测试类
 cd annona-web; pnpm install; pnpm typecheck; pnpm build    # 前端（产物直接写入 annona-server 的 static/）
+python scripts\ci\validate-workflows.py                   # 改过 .github/workflows 时必跑
 ```
 
-> 上面三条**现在都能跑**（不依赖 Docker、PG、Redis）。完整分区见 [AGENTS.md §8](./AGENTS.md)。
+> 上面四条**现在都能跑**（不依赖 Docker、PG、Redis）。完整分区见 [AGENTS.md §8](./AGENTS.md)。
+>
+> **为什么最后一条重要**：GitHub 对无法解析的 workflow 文件是**静默不运行** —— 不报错、不产生
+> check run，只会在 Actions 页面留一行提示。曾因此让一整批 CI 改动实际从未执行，所以改
+> `.github/workflows/**` 必须本地先校。
 
 ### 本机不跑（CI / 部署环境执行）
 
