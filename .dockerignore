@@ -14,6 +14,9 @@
 annona-web/dist/
 annona-web/.vite/
 annona-web/src/types/api.gen.ts
+# 关键：必须排除本地产物，否则 Stage 2 的 `COPY . .` 会用开发者机器上可
+# 能陈旧的 static/ 盖掉 Stage 1 刚构建的前端（镜像里出现旧页面且难以发现）。
+annona-server/src/main/resources/static/
 
 # Git 与本地数据
 .git/
