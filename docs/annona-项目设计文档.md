@@ -10,7 +10,7 @@
 | 定位 | 不是「自习工具 + 面试工具 + 知识库工具」的合集，而是用一条数据主线把它们缝成一个能自我修正的系统 |
 | 后端 | Java 21 · Spring Boot 4.1.x · Spring AI 2.0.x · Maven · Flyway |
 | 前端 | React 19 · TypeScript · Vite · TailwindCSS 4 · three.js/react-three-fiber |
-| 存储 | PostgreSQL 16 + pgvector · Redis 7 · S3 兼容对象存储（**不用 MySQL / MongoDB / 默认不部署 ES**，理由见 [specs/2026-09-25-storage-single-postgres-adr.md](./specs/2026-09-25-storage-single-postgres-adr.md)） |
+| 存储 | PostgreSQL 16 + pgvector · Redis 7 · S3 兼容对象存储（实现选型 PGSTY Silo，见 [specs/2026-09-26-s3-storage-silo-adr.md](./specs/2026-09-26-s3-storage-silo-adr.md)；**不用 MySQL / MongoDB / 默认不部署 ES**，理由见 [specs/2026-09-25-storage-single-postgres-adr.md](./specs/2026-09-25-storage-single-postgres-adr.md)） |
 | 文档状态 | v1.0 设计定稿（已评审） |
 | 关联文档 | [README.md](./README.md)（文档总导航）、[annona-项目结构.md](./annona-项目结构.md)（Maven 模块与包结构）、[architecture/overview.md](./architecture/overview.md)（分层与生命周期）、[specs/](./specs/)（ADR 决策记录） |
 
@@ -203,7 +203,7 @@
 | Redis Stream 异步模板（简历分析、向量化、出题、报告）+ 失败重试与死信 | G |
 | Flyway 迁移 + `ddl-auto: validate` | G |
 | S3/RustFS 对象存储、SpringDoc OpenAPI、统一 `Result<T>`、全局异常 | G |
-| Docker Compose 一键部署（PG+Redis+MinIO+App+Nginx）+ CI（typecheck/lint/test） | G+S |
+| Docker Compose 一键部署（PG+Redis+S3对象存储(Silo)+App+Nginx）+ CI（typecheck/lint/test） | G+S |
 | 纯逻辑单测：分块死循环、向量序列化契约、结构化输出边界、HTML 净化白名单 | S |
 | **RAG 评测与压测脚本**：Recall@K / MRR、并发延迟分位数 | M |
 
@@ -534,7 +534,7 @@ Micrometer 埋点：ASR 首字、LLM 首 token、TTS 首包、端到端（用户
 | 语音 | 用户自备 ASR/TTS Key | 平台提供，默认关闭按量开放 |
 | 许可 | AGPL-3.0 | AGPL-3.0（托管亦提供完整修改后源码下载） |
 
-`docker compose up -d` 必须能拉起 PG(+pgvector) + Redis + MinIO + App + Web，并带 `seed` 出 1 个演示用户、1 份内置技术 SKILL、1 篇示例讲义。README 首屏承诺「5 分钟看到第一场模拟面试」，同时 README 明确标注基于/参考了哪些上游开源项目（AGPL 合规 + 社区观感）。
+`docker compose up -d` 必须能拉起 PG(+pgvector) + Redis + S3 兼容对象存储（PGSTY Silo，见 s3-storage-silo-adr） + App + Web，并带 `seed` 出 1 个演示用户、1 份内置技术 SKILL、1 篇示例讲义。README 首屏承诺「5 分钟看到第一场模拟面试」，同时 README 明确标注基于/参考了哪些上游开源项目（AGPL 合规 + 社区观感）。
 
 ---
 

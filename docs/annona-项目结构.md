@@ -388,7 +388,7 @@ scripts/
 
 docker/
 ├── Dockerfile                       # 多阶段：前端 build → maven package → JRE 运行时
-├── docker-compose.yml               # pgvector + redis + minio + server + web
+├── docker-compose.yml               # pgvector + redis + s3(pgsty/silo) + server + web
 ├── docker-compose.dev.yml           # 只起中间件，本地跑 app
 └── postgres/init.sql                # CREATE EXTENSION vector
 

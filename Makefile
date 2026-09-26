@@ -36,9 +36,9 @@ up:
 	@echo "annona 已启动："
 	@echo "  应用:       http://localhost        (web:80 -> server:8080)"
 	@echo "  Swagger:    http://localhost/swagger-ui/index.html"
-	@echo "  S3/MinIO:   默认不启动（P0 annona-server 不读 S3）。想开："
+	@echo "  S3 (Silo):  默认不启动（P0 annona-server 不读 S3）。想开："
 	@echo "                docker compose -f docker/docker-compose.yml --env-file .env --profile s3 up -d"
-	@echo "              目前镜像不可拉（阶段总结 §5 D13），P1a-05 选定后 un-gate"
+	@echo "              选型已定 PGSTY Silo（specs/2026-09-26-s3-storage-silo-adr.md），P1a-05 实测后 un-gate"
 	@echo "停止: make down"
 
 down:

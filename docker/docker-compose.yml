@@ -11,7 +11,9 @@
 # 启 storage：`docker compose --profile s3 up -d` 或 `COMPOSE_PROFILES=s3 ...`。
 # P0 阶段 annona-server 代码里 **无 S3 client bean**，storage 不参与应用启动；
 # storage 默认 gated 是为了不让 P0 出口 ② 的 “首页 200” 验证卡在不可控的上游
-# 镜像仓库上。详见 storage 块内注释 与 docs/reports/P0-骨架-阶段总结.md §5 D13。
+# 镜像仓库上。**选型已定**（2026-09-26）：PGSTY Silo，见
+# docs/specs/2026-09-26-s3-storage-silo-adr.md；un-gate 与两项 CI 实测在 P1a-05。
+# 详见 storage 块内注释 与 docs/reports/P0-骨架-阶段总结.md §5 D13。
 #
 # 所有敏感变量走 --env-file .env（Makefile 里默认注入）。compose 用 `:?` 强
 # 校验非空，缺关键变量时启动直接失败，与 StartupValidator 的 fail-fast 语义对齐。
@@ -42,26 +44,25 @@ services:
       retries: 20
 
   storage:
-    # Gated behind the `s3` compose profile so `docker compose up -d` doesn't
-    # try to pull it. Rationale:
-    #   1) MinIO archived the community edition on 2026-02-13; every tag was
-    #      purged from Docker Hub by mid-Sep 2026. `minio/minio` and
-    #      `bitnami/minio` both return 404-shaped "pull access denied".
-    #   2) quay.io is the only remaining public mirror but returns
-    #      `unauthorized` for anonymous pulls from GitHub Actions runners on
-    #      every tag tested here (Jan 2025 tag not on mirror at all; Sep
-    #      2025 tag present but the pull still 401s).
-    #   3) annona-server's P0 code base has NO S3 client bean. Storage is
-    #      not on the critical path for P0 exit ② "fresh machine to homepage
-    #      200". Making it opt-in keeps the honest scope of that exit
-    #      condition verifiable in CI while we resolve a real S3-compatible
-    #      image selection (candidates: Garage MIT / SeaweedFS Apache 2.0 /
-    #      Silo / build MinIO from source) as tech debt D13 in
-    #      docs/reports/P0-骨架-阶段总结.md §5, targeted at P1a-05 (document
-    #      upload). Once selected, un-gate by removing the `profiles:` line
-    #      and re-adding S3_* to server's environment + depends_on entry.
+    # S3-compatible object storage. Selection decided 2026-09-26:
+    # PGSTY Silo (AGPL-3.0 community continuation line of the MinIO server;
+    # the upstream `minio/minio` Docker Hub repo was deleted 2026-09-11 and
+    # the quay.io copy 401s anonymous pulls). Silo keeps the compatibility
+    # contract: MINIO_* env vars, /minio/* routes (incl. the healthcheck
+    # path below), minio_* metrics and the .minio.sys on-disk format, so
+    # nothing else in this block changes. Pin a release tag, never `latest`.
+    # Full rationale & rejected alternatives:
+    #   docs/specs/2026-09-26-s3-storage-silo-adr.md  (tech debt D13)
+    # Still gated behind the `s3` compose profile until P1a-05: annona-server
+    # has no S3 client bean yet, and two CI checks must pass first —
+    #   ① anonymous `docker pull pgsty/silo:<pin>` on the runner,
+    #   ② MINIO_DEFAULT_BUCKETS actually bootstraps the bucket on this fork
+    #     (the no-init-container decision was made against upstream behavior;
+    #      if it doesn't hold, add a one-shot `mcli mb` init service instead).
+    # Then un-gate by removing the `profiles:` line and re-adding S3_* to
+    # server's environment + depends_on entry.
     profiles: ["s3"]
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: docker.io/pgsty/silo:20260903
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY:-annona-dev-ak}
