@@ -126,6 +126,7 @@
 
 - 依赖方向只能是 `modules → spi → common`；`modules/*` 之间禁止 import，除白名单 `interview/orchestrator → planner/advisor`。跨模块通信只有两种：只读走 `XxxQueryService` / `shared` 读模型；写走领域事件。
 - 分层：`Controller`（路由、校验、委托）→ `Service`（编排，`@Transactional` 只在此层且范围最小）→ `Repository`（JPA，自定义查询用方法名或 `@Query`）。
+- 异常出口分两类：**业务失败**返回 HTTP 200 + `Result.error(code, msg)`；**路由/传输层错误**（404/405/400/500）返回真实 HTTP 状态码 + 同样的 `Result` 体。不得把后者也压成 200（会吞掉故障信号并伪装 SPA fallback 缺失）。
 - 新增业务模块 = 在 `annona-server` 加包 + 更新 ArchUnit 白名单，**不动 pom**；出现第二个可部署产物才新建 Maven 模块。
 - 基础设施能力放 `annona-infrastructure` 或 `common`，禁止散落到业务 Service。
 - `io.annona.modules.<name>` 顶层包与 `io.annona.shared.*` 必须有 `package-info.java` 声明职责与允许依赖（子包不强制，避免堆无用文件）。
@@ -143,7 +144,7 @@
 - 后缀：`XxxEntity` / `XxxRequest` / `XxxResponse` / `XxxDTO` / `XxxRepository` / `XxxMapper`；请求体优先 `record`；Entity↔DTO 一律 MapStruct。
 - 2 空格缩进、无通配符 import、避免内联全限定类名、构造器注入 + `@RequiredArgsConstructor`。
 - 命名一致性优先：同一概念在全仓只用一个词（`direction` 不混用 `topic/subject/category`；`session` 不混用 `round/conversation` 表达同一物）。
-- 方向类参数一律用 `DirectionKey` 值对象，禁止裸 `String`。
+- 方向引用一律走 `direction.id` 外键（`key` 只在 owner 内唯一，存字符串无法定位归属），禁止用自由文本表示方向。
 
 **测试最低门槛**
 

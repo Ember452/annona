@@ -38,3 +38,27 @@
 ## 何时重新评估
 
 - 若出现真正的多层学科树需求（考研专业课目录、法考章节树），再评估引入闭包表或 `ltree`；届时 `parent_key` 单层模型需要一次数据迁移，成本可控。
+
+---
+
+## 修订记录
+
+### 2026-09-26｜主键改为代理键，方向命名空间改为 owner 内
+
+**原决策的缺口**：本文原定“`direction.key` 做全局主键、业务表外键到 `key`”。这在多人场景下直接失败——
+两个用户各自新建一个叫「刑法学」的 `USER_CUSTOM` 方向时，第一个人能建、第二个人会撞主键；
+而“非技术方向由用户自定”是产品主张三的根基，不是边缘场景。同期还发现
+`direction.user_id` 外键没带 `ON DELETE CASCADE`，用户物理删除会因孤立方向而失败。
+
+**修正后**：
+
+- `direction` 用代理键 `id UUID PRIMARY KEY DEFAULT gen_random_uuid()`；
+- `key` 以 owner 为命名空间：`UNIQUE NULLS NOT DISTINCT (user_id, key)`（PG15+）——
+  内置方向（`user_id IS NULL`）之间仍保持全局唯一，不牺牲原有约束；
+- 层级改用 `parent_id UUID REFERENCES direction(id)`；
+- `user_id REFERENCES app_user(id) ON DELETE CASCADE`；
+- **业务表方向列从 `direction_key` 改为 `direction_id`**（存 key 字符串无法定位 owner）。
+
+**影响面**：本文“一律外键到 `direction.key`”与“决策参数用 `DirectionKey` 裸字符串”两处陈述以本修订为准；
+设计文档 §5.1 / §5.2 已同步。因 V1 尚未在用户环境执行过，本次原地改 V1 而非开 V2（V1 头部已写下“一旦
+有环境跑过就禁止再改”的规则）。`FlywayBaselineSqlSyntaxTest` 新增一条用例锁定“不得回到 key 当全局主键”的形状。

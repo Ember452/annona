@@ -124,7 +124,8 @@ io.annona
 │   ├── direction/                     #   方向字典只读访问（被 6 个模块消费，故独立于 identity/study）
 │   ├── signal/                        #   LearningSignalReader 的门面与信号快照模型
 │   ├── idempotent/                    #   幂等键生成与消费模板（交卷、回写、异步任务）
-│   └── meta/                          #   非业务的运维探针端点（/api/meta/ping 等，P0-03 引入）
+│   └── meta/                          #   非业务的运维探针端点（/api/meta/ping 等，P0-03 引入）；
+│                                      #   错误探针限 @Profile("!prod")，生产探活走 /actuator/health
 │
 ├── modules/                           # 【业务特性】每个包自包含，禁止跨模块 import 内部类
 │   ├── identity/                      # 账号与身份
@@ -418,6 +419,10 @@ io.annona.spi..                     禁止依赖 Spring / Jakarta Persistence / 
 io.annona.modules.planner..         禁止依赖 interview/voice/schedule（只能被它们调用或读 shared 信号）
 全局                                  禁止 java.util.concurrent.Executors 的 newCached/newFixed 等方法
 ```
+
+另有一条 **不在 ArchUnit 而在 enforcer** 的结构约束：`annona-spi` 不得传递携带
+Spring / Persistence / SDK 依赖（ArchUnit 只看 import，看不到传递依赖，而 spi 是要发到
+Maven Central 的对外契约）。两边分工写清，免得后人误以为 ArchUnit 能兜住依赖。
 
 新增例外只能通过在 `docs/specs/` 提交一条 ADR 后修改白名单，不允许在代码里 `// noop` 绕过。
 

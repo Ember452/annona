@@ -19,12 +19,14 @@
 | 设计 / 结构 / 开发计划 / 8 条 ADR | ✅ 已定稿，在 [`docs/`](./docs/README.md) |
 | AI 协作规范 | ✅ [`AGENTS.md`](./AGENTS.md) |
 | 仓库入口文件 | ✅ `README` / `LICENSE`(AGPL-3.0 全文) / `SECURITY` / `CONTRIBUTING` / `CODE_OF_CONDUCT` / `.editorconfig` / `.env.example` |
-| **代码实现** | 🚧 **仅 Spring Boot Initializr 骨架**（`src/` 共 3 个文件），尚未按目标结构拆分模块 |
-| **施工阶段** | **P0 未开始**，任务清单见 [docs/annona-开发计划.md](./docs/annona-开发计划.md) 的 P0 表 |
-| Maven 多模块 / 16 个业务包 | ❌ 尚未创建（P0-02 / P0-04） |
-| Docker 相关文件 | 📄 已在文档中设计，本机**不运行**（见下） |
+| **Maven 结构** | ✅ 已拆为 4 个 Java 模块（`annona-common` / `annona-spi` / `annona-infrastructure` / `annona-server`）+ 聚合根 pom；`annona-web` 为 Vite 子项目 |
+| **业务代码** | 🚧 `io.annona.modules.*` 与 `annona-infrastructure` 下**只有 `package-info.java`**，16 个业务模块尚无任何实现类（从 P1a 起逐个填充） |
+| 已落地的技术基座 | ✅ `Result`/异常体系、`traceId` 过滤器、四类线程池 + Micrometer、启动 fail-fast（缺 KEK / 缺 pgvector 拒起）、Flyway V1（身份 7 表 + `direction` 主数据）、ArchUnit 七条、`.githooks/`、5+1 job 的 `ci.yml`、compose 三阶段 Dockerfile、`Makefile`、CI 密钥扫描 |
+| **施工阶段** | 🔶 **P0 收尾中**：剩 P0-15（GitHub 网页设置）与 P0 评审整改项；任务清单见 [docs/annona-开发计划.md](./docs/annona-开发计划.md) |
+| Docker 相关 | 📄 文件已交，**本机不跑**（无 Docker），验证全部在 CI（见下） |
 
-**目标结构与当前结构的差异，以 [docs/annona-项目结构.md](./docs/annona-项目结构.md) §12 的 8 步重组清单为准**——那份清单就是 P0 的施工图。
+> **一句话定位现状**：地基与门禁已就位，产品功能一行都没写。下一个阶段是 P1a（采集 + 知识库 + 检索 + 问答）。
+> 目标结构与当前代码的差异，以 [docs/annona-项目结构.md](./docs/annona-项目结构.md) §12 的状态列与 [开发计划](./docs/annona-开发计划.md) 「当前进度」表为准。
 
 ---
 
@@ -50,13 +52,12 @@
 ### 本机可跑（日常验证就是这些）
 
 ```bash
-.\mvnw.cmd -q verify                                          # 编译 + 单测 + ArchUnit
-.\mvnw.cmd -q test -DexcludedGroups=docker                    # 显式排除需要中间件的测试
-.\mvnw.cmd -q test -Dtest=MasteryCalculatorTest              # 单跑一个纯逻辑测试类
-cd annona-web; pnpm install; pnpm typecheck; pnpm build       # 前端类型与构建（P0-09 后可用）
+.\mvnw.cmd -B -q verify                                   # 编译 + 单测 + slice + ArchUnit（默认已排除 docker 组）
+.\mvnw.cmd -B -q test -Dtest=ArchitectureTest             # 单跑一个纯逻辑测试类
+cd annona-web; pnpm install; pnpm typecheck; pnpm build    # 前端（产物直接写入 annona-server 的 static/）
 ```
 
-> 当前仓库处于 P0 之前：上面四条里**只有 `mvn -q verify` 现在真能跑**（`-Dtest=` 的类名与 `annona-web` 目录都要等对应任务完成）。完整分区见 [AGENTS.md §8](./AGENTS.md)。
+> 上面三条**现在都能跑**（不依赖 Docker、PG、Redis）。完整分区见 [AGENTS.md §8](./AGENTS.md)。
 
 ### 本机不跑（CI / 部署环境执行）
 
@@ -71,7 +72,7 @@ cd annona-web; pnpm install; pnpm typecheck; pnpm build       # 前端类型与�
 
 1. 业务逻辑写成**纯逻辑单测可覆盖**的形态：算法、状态机、规则链、边界值都用 `unit` 测试断言，关键包配 golden 快照。
 2. 依赖中间件的代码通过 **SPI + Fake 实现**测试（`annona-spi` 的意义所在），不把 IO 混进算法。
-3. SQL 正确性风险靠三道防线补：Flyway 脚本评审 + CI 迁移演练 + `ddl-auto: validate` 启动校验。
+3. SQL 正确性风险靠两道防线补：Flyway 脚本评审（本机）+ **CI 上的真实空库迁移演练**；`ddl-auto: validate` 要等有 JPA Entity 之后才真正校验东西（现阶段无 Entity，它是空转的，不要当成保护）。
 4. 声明"验证通过"必须贴出**实际跑过的命令与输出**（`AGENTS.md` §0.8）。
 5. 本机跑不到中间件层，所以 **PR 必须等 CI 变绿才算完成**；`@Tag("docker")` 测试与 compose 冒烟的凭证可以是 CI 日志链接。
 

@@ -17,13 +17,13 @@
 | 阶段 | 状态 | 出口凭证 |
 |---|---|---|
 | 文档（设计/结构/计划/ADR）+ 入口（README/LICENSE/.env.example/SECURITY/CONTRIBUTING/CoC/.editorconfig） | ✅ done | 本仓 20+ 个文档文件；LICENSE 为 AGPL-3.0 FSF 原文（已校验） |
-| P0 骨架与门禁 | ✅ done(2026-09-25, PR #2/#3/#4/#5/#6) —— P0-01 至 P0-14 全部完成；P0-15 属 GitHub 网页操作不产文件；详见 [reports/P0-骨架-阶段总结.md](./reports/P0-骨架-阶段总结.md) | `mvn -B -q verify EXIT=0`（39 tests）+ B5 合并后 Actions 首跑链接（回填阶段总结 §3 出口 ②） |
-| P1a 数据与知识底座 | ⬜ todo | — |
+| P0 骨架与门禁 | 🔶 **评审后重开（doing）** —— B1–B5 已合并，但 2026-09-26 全量评审发现出口条件②从未被真实验证（集测 job 0 测试也报绿）、traceId 与 `MetaControllerTest` 的声称不成立、V1 的 direction 全局主键与若干约束错误。已修，待 CI 实跑证据 | `mvn -B -q verify` 本机绿 + **`docker-it` 日志里 `Tests run` 非零** + compose-smoke 真实探活日志（回填阶段总结 §3 出口②） |
+| P1a 数据与知识底座 | ⬜ todo（前置：P0 出口②证据回填） | — |
 | P1b 面试与评估 | ⬜ todo | — |
 | P1c 训练决策层 | ⬜ todo | — |
 | P2 / P3 / P4 / P5 | ⬜ todo | — |
 
-状态取值：`todo` / `doing` / `blocked(原因)` / `done(日期+凭证链接)`。**任务级**的逐项完成状态以对应 GitHub issue 的关闭为准，本表只跟到阶段级。
+状态取值：`todo` / `doing` / `blocked(原因)` / `done(日期+凭证链接)`。**阶段级状态看本表，任务级状态看本文各阶段任务表**（不建任务级 issue；阶段 issue 只作对外摘要）。
 
 ## 里程碑总览
 
@@ -78,7 +78,9 @@ P0 骨架        P1 闭环内核                    P2 体验留存   P3 语音 
 | P0-11 githooks | `🅖 .githooks/{commit-msg, README.md}` | Conventional Commits 正则骨架与 perl `\p{Han}` 检测工具 | **反向**：annona 要求"标题不含汉字"（AGENTS.md §5）；不强制 `- ` bullet body；pre-commit gitleaks 硬拒无跳过（🅖 无 pre-commit）；Windows 用户走 Git Bash；`make setup` 与直接 `git config core.hooksPath .githooks` 两条激活路径 |
 | P0-12 CI 矩阵 | `🅖 .github/workflows/ci.yml`, `🅢 .github/workflows/ci.yml` | concurrency + cancel-in-progress + permissions least-privilege + 单一 backend job 骨架 | 5 blocking jobs（🅖/🅢 都只有 1 个 job）；docker-it 用 `services:` 起 pgvector+redis 而非 compose（runner 托管比 compose 快 30-60s）；compose-smoke 独立 job 是 P0 出口 ② 的机器化；gitleaks 独立 blocking job；`-DexcludedGroups=` 显式清空 pom 默认排除；`mvnw` 用 `git update-index --chmod=+x` 补 exec bit |
 | P0-13 Makefile | 三仓都无 Makefile | 无 | 全新引入 8 个 target（`setup / up / dev / test / eval / logs / reset / quickstart`）；与 [AGENTS.md §8.2](../AGENTS.md) "make 目标保留但不作为本机默认入口" 一致；Windows 用户 README 明写走原生 PowerShell 命令 |
-| P0-14/15 门面与仓库设置 | 无（🅖/🅢 有 CODEOWNERS 但内容完全不同） | 无 | CODEOWNERS / dependabot / ISSUE/PR 模板 / FUNDING 全部自写；`ISSUE_TEMPLATE/feature_request.yml` 内嵌 AGENTS.md §1 九条 Non-goals 自查；`skill-proposal.yml` 对齐 §13.3 表格新增面试方向提案；P0-15 branch protection 属 GitHub 网页操作，不产文件（作者手工） |
+| P0-14/15 门面与仓库设置 | 无（🅖/🅢 有 CODEOWNERS 但内容完全不同） | 无 | CODEOWNERS / ISSUE/PR 模板 / FUNDING 全部自写（dependabot 已移出 P0，见 D16）；`ISSUE_TEMPLATE/feature_request.yml` 内嵌 AGENTS.md §1 九条 Non-goals 自查；`skill-proposal.yml` 对齐 §13.3 表格新增面试方向提案；P0-15 branch protection 属 GitHub 网页操作，不产文件（作者手工） |
+| P0-01/P0-12 两个 Boot/Maven 认知坑（本次评审实测） | 无（上游没踩到这一层） | 无 | ① **Maven POM 里显式写的 `<configuration>` 值优先于 `-D` 用户属性**：根 pom 直写 `<excludedGroups>docker</excludedGroups>` 会让 CI 的 `-DexcludedGroups=` 失效，集测 0 个测试仍报 BUILD SUCCESS（已用两次反向实验证实）→ 排除项必须走属性 `${annona.tests.excluded}`，且 CI 要断言 `Tests run` 非零。② **`@ConditionalOnBean` 只能用在自动配置类上**：普通 `@Configuration` 的求值早于 autoconfig 注册 bean 定义，条件永远为假（已导致 `FlywayExtensionGuard` 静默失效）→ 用 `@ConditionalOnProperty` + `ObjectProvider`。③ **surefire 默认不扫 `*IT.java`**，改用 `*IT` 命名集测时必须显式 `<includes>` | 见阶段总结 §5 D17–D21 |
+| P1a 各表引用 direction 的方式 | 无（上游无方向字典） | 无 | 业务表方向列一律 `direction_id` 外键到 `direction.id`；**不得存 `key` 字符串**（`key` 只在 owner 内唯一，存字符串无法定位归属）。见 `specs/2026-09-25-direction-master-data-adr.md` 修订记录 |
 | P1b-10 模型 Key 与额度 | `🅖 modules/llmprovider/service/{ApiKeyEncryptionService,LlmProviderConfigService,LlmProviderBootstrapService}.java`、`modules/llmprovider/dto/{ProviderDTO,AsrConfigDTO,TtsConfigDTO}.java`、`common/ai/{LlmProviderRegistry,ApiPathResolver,LlmEmbeddingConfig}.java`（+`common/config/LlmProviderProperties.java`）、`🅢 src/lib/{usage.ts,model-pool.ts,deepseek.ts}`、`prisma/schema.prisma::TokenUsage` | AES/GCM + nonce 结构、masked 字段形态、Provider 连通性测试、模型池 LOW 档降级思路 | **不抄 `DEV_FALLBACK_KEY`**（ADR 已定）；Key 改为五用途拆分；记账字段补 `prompt_hash/evaluator_version` |
 
 ### B. 后端·知识与面试链路（对应 P1a / P1b）
@@ -162,8 +164,8 @@ P0-15（仓库设置）不计批次，需你在 GitHub 网页操作。
 |---|---|---|---|---|
 | P0-01 | 根 pom 建立**依赖与插件治理**：`dependencyManagement`（`spring-ai-bom` 2.0.0）、`pluginManagement`（enforcer 版本）、enforcer 四条规则（JDK 21+、Maven 3.9+、`requireUpperBoundDeps`、**禁用 MySQL/Mongo/ES 依赖坐标**）、surefire 默认 `excludedGroups=docker` + `--enable-native-access`。**`packaging` 暂留 jar**：聚合器不能持有 `src/`，`packaging=pom` 与源码迁移必须同在 P0-02，否则中途断构 | ① `mvnw -B -q verify` `EXIT=0`；② 临时塞入 `com.mysql:mysql-connector-j` 后 `mvnw validate` **必须失败**（已实测 `EXIT=1`）；③ `dependency:get` 能解析 spring-ai 2.0.0（已实测，无需 milestone 仓库） | 1 | — |
 | P0-02 | 根 pom 改 `packaging=pom` + `<modules>`；建 `annona-common`、`annona-spi`、`annona-infrastructure`、`annona-server` 四模块，把现有 `src/` 迁入 `annona-server` | `mvn -q verify` 全绿，四个 jar 产出 | 1 | P0-01 |
-| P0-03 | `annona-common`：`Result<T>`、`ErrorCode`、`BusinessException`、全局异常处理器（HTTP 200 + `Result.error`）、枚举与常量基类 | `/api/meta/ping` 返回 `Result`；抛 `BusinessException` 返回结构正确，未知异常被兜底且不泄露栈 | 0.5 | P0-02 |
-| P0-04 | `annona-spi`：五个扩展点接口骨架（`IdentityProvider` `ModelProvider` `Retriever` `LearningSignalReader` `DecisionRule`）+ 跨模块契约 DTO，**零 Spring 依赖** | 模块 pom 无 spring-*；ArchUnit 规则通过 | 0.5 | P0-02 |
+| P0-03 | 统一响应与异常：`annona-common` 只放 `Result<T>`、`ErrorCode`、`BusinessException`（**零框架依赖**）；`GlobalExceptionHandler` 落在 `annona-server/config/web`。状态码策略：业务失败 HTTP 200 + `Result.error`，路由/传输层错误（404/405/400/500）返回真实状态码 + 同一 `Result` 体 | ① `/api/meta/ping` 返回带非空 `traceId` 的 `Result`；② 抛 `BusinessException` → 200 + code；③ 不存在的路径 → 404（不是 200）；④ `annona-common/pom.xml` 无 `org.springframework*` | 0.5 | P0-02 |
+| P0-04 | `annona-spi`：五个扩展点接口骨架（`IdentityProvider` `ModelProvider` `Retriever` `LearningSignalReader` `DecisionRule`）+ 跨模块契约 DTO，**零编译期依赖**（不依赖 common：spi 对 common 的 import 实测为 0） | ① 模块 pom 无任何 compile 依赖；② ArchUnit 规则通过；③ enforcer `bannedDependencies` 已接（挡住**传递**依赖，ArchUnit 只看得见 import）：`dependency:tree` 无 `org.springframework` | 0.5 | P0-02 |
 | P0-05 | `config/` 六包骨架（web/async/persistence/security/properties/observability）+ 四类线程池 + `@ConfigurationProperties` 分组（`annona.*`） | 启动日志打印四类池参数；`application.yml` 无散落业务配置 | 1 | P0-03 |
 | P0-06 | Flyway `V1__baseline.sql`：`CREATE EXTENSION vector/citext` + 身份 7 表（设计文档 §5.3）+ `direction` 主数据表 | 空库启动自动建表；二次启动 skip；`ddl-auto: validate` 下应用可启动 | 1 | P0-05 |
 | P0-07 | ArchUnit 七条结构规则（项目结构 §10），白名单机制 + `shared/` `modules/` 包骨架 + `package-info.java` | 故意让 `modules/*` import `infrastructure/*` → `mvn test` 失败 | 0.5 | P0-04 |
@@ -171,7 +173,7 @@ P0-15（仓库设置）不计批次，需你在 GitHub 网页操作。
 | P0-09 | `annona-web`：Vite + React + TS + Tailwind4 骨架、Axios 单实例、路由与四平级入口布局、构建产物拷贝进 server `static` | `pnpm build` 后访问 `localhost:8080` 出首页；OpenAPI 类型生成脚本可跑 | 1 | P0-03 |
 | P0-10 | `docker/`：多阶段 Dockerfile、`docker-compose.yml`（PG+Redis+MinIO+server+web）、`compose.dev.yml`、`postgres/init.sql` | **本机不跑**：文件写完即可，实际启动验证由 CI compose job 完成（全新机器一条命令到首页 200） | 1 | P0-06,P0-09 |
 | P0-11 | `.githooks/`：commit-msg（Conventional Commits + 英文校验）、pre-commit（gitleaks）；`core.hooksPath` 由 `make setup` 配置 | 中文 subject 与 `update` 类消息被拒；写一个假 Key 进文件被拦 | 0.5 | — |
-| P0-12 | `.github/`：`ci.yml`（unit+ArchUnit / `services:` 跑 pgvector+redis 集测 / compose 冒烟 / 前端 / gitleaks 五个 job）、`e2e.yml`（Playwright 容器 job）、`rag-eval.yml`、`release.yml`、`publish-spi.yml`、`stale.yml`、`dependabot.yml`、`CODEOWNERS`、ISSUE/PR 模板、FUNDING | 按 `specs/2026-09-25-dockerless-local-dev-adr.md` 的 **CI 执行矩阵**建 job；故意提交一个失败断言，确认集测 job 真能红并能拦合并 | 1.5 | P0-07,P0-11 |
+| P0-12 | `.github/`：`ci.yml`（unit+ArchUnit / `services:` 跑 pgvector+redis 集测 / compose 冒烟 / 前端 / gitleaks 五个 job + `gate` 汇总 job）、`e2e.yml`（Playwright 容器 job）、`rag-eval.yml`、`release.yml`、`publish-spi.yml`、`stale.yml`、`CODEOWNERS`、ISSUE/PR 模板、FUNDING（**dependabot 已移出 P0**，见阶段总结 D16） | 按 `specs/2026-09-25-dockerless-local-dev-adr.md` 的 **CI 执行矩阵**建 job；集测 job 必须带“Tests run 非零”断言（否则 0 测试会假绿）；故意提交一个失败断言确认能红 | 1.5 | P0-07,P0-11 |
 | P0-13 | `Makefile`：`setup / up / dev / test / eval / logs / reset / quickstart`；`quickstart` = 起中间件 → 迁移 → seed → 打印地址与演示账号 | **在 CI/容器环境验证**（本机无 Docker，只验 `make` 语法与目标存在） | 0.5 | P0-10 |
 | P0-14 | 仓库门面。**已完成**：`README.md`（含状态横幅）、`.env.example`、`LICENSE`（AGPL-3.0 FSF 原文逐字复制，已校验 661 行）、`SECURITY.md`、`CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`.editorconfig`。**剩余**：`.github/ISSUE_TEMPLATE` 与 PR 模板文案细化（属 P0-12 产出的一部分） | 新同事只读 README 能跑起来（真找一人验证） | 0.5 | P0-12 |
 | P0-15 | 仓库设置（需在 GitHub 网页/API 做，不产生文件）：branch protection 将集测与 compose job 设为**必需检查**、建 `good-first-issue`/`skill-proposal` 标签、填仓库描述与 topics。（~~开启 Dependabot alerts~~ 已推到 P1b-10，见阶段总结 §5 D16） | 未过 CI 的 PR 无法合并；`gh api` 或设置页截图存档到阶段总结 | 0.5 | P0-12 |

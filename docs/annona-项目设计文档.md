@@ -217,14 +217,22 @@
 
 ```text
 direction
-  key            PK   例 'java-concurrency' / 'kb-408-os'(知识库派生)
+  id           PK   代理键（gen_random_uuid）；业务表外键指向本列
+  key                例 'java-concurrency' / 'kb-408-os'(知识库派生)；owner 内唯一
   name                展示名
-  parent_key          层级（'java-backend' -> 'java-concurrency'）
+  parent_id           层级（'java-backend' -> 'java-concurrency'）
   origin        enum   SKILL_BUILTIN | KNOWLEDGE_BASE | USER_CUSTOM | JD_PARSED
   kb_doc_id           派生自哪个知识库（origin=KNOWLEDGE_BASE 时）
+  status        enum   ACTIVE | ARCHIVED
+  user_id               USER_CUSTOM 归属；内置与知识库派生为 NULL
   meta_json           难度分布、阶段模板、SKILL 摘要
 ```
 
+- **主键是代理键 `id`，`key` 只在 owner 内唯一**（`UNIQUE NULLS NOT DISTINCT (user_id, key)`，PG15+ 语法）：
+  两个用户都应该能建一个叫「刑法学」的 `USER_CUSTOM` 方向；内置方向（`user_id IS NULL`）之间仍靠
+  这一条约束保持 `key` 全局唯一。第一版把 `key` 当全局主键，本阶段已修正（见
+  `specs/2026-09-25-direction-master-data-adr.md` 的修订记录）。
+- 因此**所有业务表的方向列一律外键到 `direction.id`**（存 `key` 字符串无法定位 owner）。
 - 打卡/番茄钟结束时的科目 = **方向下拉 + 可即时新建**，新建即以 `USER_CUSTOM` 落字典，之后可一键升级为「绑定知识库」的方向。
 - 用户不可见的内置方向（JD 解析临时产生）30 天后回收。
 
@@ -232,18 +240,18 @@ direction
 
 | 表 | 作用 | 关键字段 |
 |---|---|---|
-| `app_user` | 账号 | id, email, password_hash, role, onboard_cursor |
-| `direction` | 方向字典（§5.1） | key, name, parent_key, origin, kb_doc_id |
-| `study_session` | 一次专注/学习会话 | user_id, **direction_key**, start_at, end_at, minutes, mode(POMODORO/IMMERSIVE/CHECKIN), quality |
+| `app_user` | 账号 | id, email(citext, **活跃用户内唯一**), password_hash, password_algo, role, created_at, deleted_at |
+| `direction` | 方向字典（§5.1） | id PK, key, name, parent_id, origin, status, kb_doc_id, user_id |
+| `study_session` | 一次专注/学习会话 | user_id, **direction_id**, start_at, end_at, minutes, mode(POMODORO/IMMERSIVE/CHECKIN), quality |
 | `study_event` | 会话内原子事件 | session_id, type(START/BLUR/FINISH/INTERRUPT), at, payload |
 | `checkin` | 每日打卡 | user_id, day, hours, mood, energy, note, snapshot_url |
-| `study_plan` / `plan_task` | 计划与任务 | plan_id, direction_key, title, day_number, status, source(用户/AI/决策层) |
+| `study_plan` / `plan_task` | 计划与任务 | plan_id, direction_id, title, day_number, status, source(用户/AI/决策层) |
 | `todo_item` | 今日待办 | user_id, day, title, done, origin |
-| `mastery` | 方向掌握度 | user_id, direction_key, mastery, confidence, last_practiced_at, sample_size, updated_at |
+| `mastery` | 方向掌握度 | user_id, **direction_id**, mastery, confidence, last_practiced_at, sample_size, updated_at |
 | `knowledge_doc` | 文档元数据 | user_id, title, source_type, s3_key, status, chunk_count, content_hash |
 | `doc_chunk` | 切片与向量 | doc_id, seq, text, token_len, embedding vector(1024), tsv tsvector |
-| `question_bank_item` | 题库 | direction_key, difficulty, stem, ref_answer, key_points, rubric, followups, source_chunk_id, status, hit_rate |
-| `interview_session` | 面试会话 | user_id, direction_key, stage_plan, status, total_score, **chat_model, evaluator_model, prompt_hash, evaluator_version** |
+| `question_bank_item` | 题库 | direction_id, difficulty, stem, ref_answer, key_points, rubric, followups, source_chunk_id, status, hit_rate |
+| `interview_session` | 面试会话 | user_id, direction_id, stage_plan, status, total_score, **chat_model, evaluator_model, prompt_hash, evaluator_version** |
 | `interview_message` | 问答流水 | session_id, role, content, question_id, turn_no, followup_depth |
 | `evaluation_result` | 评估结果 | session_id, question_id, score, weighted_score, dims_json, raw_json, fallback_used |
 | `decision_trace` | 决策留痕（可解释面板） | user_id, scene(MOCK_INTERVIEW/CRAM/PLAN), inputs_json, rules_hit_json, output_json, rejected_by, created_at |
@@ -273,7 +281,7 @@ direction
 identity 模块表清单：
 
 ```text
-app_user              身份主体。id(uuid), email(citext, UNIQUE), password_hash,
+app_user              身份主体。id(uuid), email(citext, 活跃行内唯一), password_hash,
                       password_algo('scrypt'), status(ACTIVE|PENDING_VERIFY|LOCKED|DELETED),
                       role(USER|ADMIN), created_at, deleted_at
 user_profile          可编辑资料，1:1 分开（更新频率与列宽差异大）。user_id, nickname,
@@ -281,10 +289,11 @@ user_profile          可编辑资料，1:1 分开（更新频率与列宽差异
                       onboard_cursor
 user_session          会话的审计投影（非活跃令牌）。id, user_id, device, ip,
                       ua_hash, created_at, last_seen_at, revoked_at
-auth_token            邮箱验证 / 密码重置 / 二次确认。user_id, purpose, token_hash,
-                      expires_at, consumed_at, ip
+auth_token            邮箱验证 / 密码重置 / 二次确认。PK(purpose, token_hash)，另给
+                      token_hash 与 user_id 建索引；expires_at, consumed_at, ip
 login_attempt         失败锁定与风控。key(email+ip), fail_count, locked_until, last_at
-avatar_change         头像历史，支持一键回滚。user_id, object_key, created_at
+avatar_change         头像历史，支持一键回滚。id PK（回滚会重复插入同一 object_key），
+                      user_id, object_key, created_at
 user_data_request     导出与硬删除请求。user_id, type(EXPORT|DELETE), status,
                       file_object_key, requested_at, scheduled_purge_at, done_at
 ```
@@ -293,7 +302,7 @@ user_data_request     导出与硬删除请求。user_id, type(EXPORT|DELETE), s
 
 1. **口令用 scrypt**（`spring-security-crypto` 的纯 Java 实现，N=2^15/r=8/p=1，每用户随机 salt）。选它不选 Argon2 的唯一理由：Argon2 需 native 库，Windows 与多样 JDK 环境下安装失败率高，而自部署产品经不起“clone 下来编译不过”。
 2. **活跃会话只进 Redis**（`ANNONA_SESSION` HttpOnly Cookie → `session:{token}`，7 天滑动 TTL）；`user_session` 表是**异步写的审计投影**，写失败不影响登录。这意味着 Redis 不是可选组件。
-3. **任何一次性 token 只存哈希**（`auth_token.token_hash`），密文也不能反查邮箱是否注册——枚举防护靠 `login_attempt` 的统一失败响应，不靠模糊文案。
+3. **任何一次性 token 只存哈希**（`auth_token.token_hash`），且**按 token 反查必须走索引**（PK 以 `purpose` 打头 + 单独 `(token_hash)` 索引；上一版 PK 以 `user_id` 打头，这类查询用不上任何索引）。枚举防护靠 `login_attempt` 的统一失败响应，不靠模糊文案。软删用户不得占住邮箱：`email` 唯一只对 `deleted_at IS NULL` 的行成立，否则 30 天宽限期内无法重新注册。
 4. **v1 不做邮箱强制验证与第三方登录**。自部署环境常常没有 SMTP，`annona.identity.require-email-verification=false` 默认关；GitHub/微信 OAuth 延后到托管版需要时再加（表结构预留 `auth_token.purpose` 扩展）。
 5. **删除是两段式**：`status=DELETED` 立即可见性归零，`user_data_request.scheduled_purge_at`（30 天宽限）到时才物理删。宽限期是为了给“误删 + 学习数据是用户资产”一个反悔窗口。
 6. **单机免登录模式不拆表**：`annona.identity.mode=none` 时启动bootstrap 一个 `id=local` 用户，所有表仍带 `user_id`。这样从单机升到多人**零迁移**——否则早期用户的打卡数据全部要回填归属。
@@ -472,7 +481,7 @@ Micrometer 埋点：ASR 首字、LLM 首 token、TTS 首包、端到端（用户
 | 新增 `qa` 模块 | 知识库写侧（ingest/chunk/embed）、读侧（retrieval）、交互侧（会话与流式）三者变更频率与资源模型完全不同 |
 | 新增 `resume`、`notify` | 各自有独立异步链路与生命周期（简历分析走 Redis Stream；通知有去重与定时推送） |
 
-**关键工程约束**：Controller 只做路由与校验；`@Transactional` 只在 Service 且范围最小；LLM / S3 / 外部 HTTP 调用**严禁**进入事务；业务异常统一 `BusinessException(ErrorCode.X, msg)`，全局处理器返回 HTTP 200 + `Result.error`；不返回 Entity 给前端（MapStruct 映射）；构造器注入 + `@RequiredArgsConstructor`；2 空格缩进、无通配符 import；SLF4J 占位符且异常作为最后参数。
+**关键工程约束**：Controller 只做路由与校验；`@Transactional` 只在 Service 且范围最小；LLM / S3 / 外部 HTTP 调用**严禁**进入事务；业务异常统一 `BusinessException(ErrorCode.X, msg)`；**异常出口分两类：业务失败返回 HTTP 200 + `Result.error(code, msg)`（前端靠 `code` 分流），而路由/传输层错误（404 / 405 / 400 / 500）返回真实 HTTP 状态码 + 同样的 `Result` 响应体**——全压成 200 会让监控看不到故障、还会把 SPA 未做 fallback 的 404 伪装成“成功但数据不对”；不返回 Entity 给前端（MapStruct 映射）；构造器注入 + `@RequiredArgsConstructor`；2 空格缩进、无通配符 import；SLF4J 占位符且异常作为最后参数。
 
 ---
 
@@ -554,6 +563,7 @@ Micrometer 埋点：ASR 首字、LLM 首 token、TTS 首包、端到端（用户
 6. **workspace / team / RBAC 多租户团队功能** —— `user_id` 隔离足够，团队方向是无底洞。
 7. **移动端原生 App** —— Web 响应式优先，3D 降级 2D。
 8. **自研模型 / 微调 / 向量模型训练** —— 只做编排与工程。
+9. **Elasticsearch 作为默认检索后端** —— 四中间件会毁掉“clone 下来能跑”；`EsRetriever` 仅作为可选实现存在（理由与重新评估触发条件见 `specs/2026-09-25-storage-single-postgres-adr.md`）。
 
 ---
 
