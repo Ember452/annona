@@ -43,3 +43,17 @@ annona 要同时支持三种运行形态：单机免登录（自部署个人用�
 
 - 出现真实的多身份源需求（学校统一认证、企业 SSO）→ 引入 `IdentityProvider` 的 OAuth/SAML 实现，而非在 `app_user` 上加分支字段；
 - 若合规要求明确到必须 Argon2 或 FIPS 认证算法 → 借 `password_algo` 的透明重哈希路径切换，不需要停机迁移。
+
+## 后续修订
+
+### 2026-09-26（P1a-01 落地时）
+
+1. **Redis 客户端定为 Redisson**（`org.redisson:redisson`，非 `spring-boot-starter-data-redis`）。
+   - 理由：Redis 在本项目不止存会话——后续限流令牌桶、`AbstractStreamProducer/Consumer` 的 Redis Stream 异步、P2 在线共学 ZSET、P3 语音临时态都用得上 Redisson 的分布式对象与 `RStream`/`RRateLimiter`/`RLock`。用单一客户端优于"spring-data-redis 起步、以后再加 Redisson"的两套并存。
+   - 会话读写用 `RBucket<String>` + `expire` 做 7 天滑动 TTL（命中即续期），键 `session:{token}`，语义与本 ADR §决策 §3 一致。
+   - 否决 spring-data-redis：简单 get/set 更轻，但逼着后续限流/Stream 各自引依赖或自写，反而更散。
+
+2. **非 SPI 的基础设施能力以「common 端口 + infra 实现」接入业务**（依赖倒置，首例）。
+   - `SessionStore` 接口放 `io.annona.common.session`（纯 JDK 签名，common 保持零框架）；`RedissonSessionStore`/`RedissonConfig` 放 `io.annona.infrastructure.cache`；`modules/identity` 只 `@Autowired SessionStore`。
+   - 约束来源：ArchUnit 规则 1 禁止 `modules..` import `infrastructure..`，且 annona-server 对 infra 是 runtime 依赖（编译期看不到 Redisson）。把端口放 common 是同时满足两者的唯一位置——这**不是新增第 6 个 SPI**（spi 只保留已定五个），common 端口仅供内部装配、不发 Maven Central。
+   - 后续 `file/S3`、`crypto` 等外部系统能力沿用同一范式，不再逐个临时发明接线方式。

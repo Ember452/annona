@@ -18,7 +18,7 @@
 |---|---|---|
 | 文档（设计/结构/计划/ADR）+ 入口（README/LICENSE/.env.example/SECURITY/CONTRIBUTING/CoC/.editorconfig） | ✅ done | 本仓 20+ 个文档文件；LICENSE 为 AGPL-3.0 FSF 原文（已校验） |
 | P0 骨架与门禁 | ✅ done(2026-09-26) —— 六条出口全部满足；② compose-smoke + docker-it 均已在真 PG/Redis 上实证（main run [#14](https://github.com/Ember452/annona/actions/runs/36220137784) 六 job 全绿） | `mvn -B -q verify` EXIT=0（48 tests）、6 个 workflow 解析通过、CI run #14 Success（含 gate）、本地与 `origin/main` 齐平；详见 [reports/P0-骨架-阶段总结.md](./reports/P0-骨架-阶段总结.md) §3 |
-| P1a 数据与知识底座 | ⬜ todo（**可开工：P0 入口条件已全满足**；开工前先建 P1a 阶段 issue（一阶段一个）并按借鉴地图逐任务扫描） | — |
+| P1a 数据与知识底座 | 🔶 doing —— P1a-01 identity 后端已实现（注册/登录/登出/Redisson 会话/锁定/scrypt+透明重哈希/改密），本机 `mvn -B -q verify` 绿（含 ArchUnit）；**docker 集测凭证待 CI，尚未提交** | — |
 | P1b 面试与评估 | ⬜ todo | — |
 | P1c 训练决策层 | ⬜ todo | — |
 | P2 / P3 / P4 / P5 | ⬜ todo | — |
