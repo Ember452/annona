@@ -14,19 +14,52 @@
     <description>扩展点契约层：五个 SPI 接口 + 跨模块契约 DTO + 领域事件定义。零 Spring / 零 Jakarta Persistence / 零 SDK。</description>
 
     <dependencies>
-        <!-- 只依赖 annona-common 的纯 Java 部分（Result/ErrorCode 等）；
-             io.annona.spi.. 类禁止 import org.springframework.* / jakarta.persistence.* / 任何 SDK
-             —— 由 annona-server 的 ArchUnit 规则强制。annona-common 的 pom 已声明的唯一 Spring 依赖
-             只通过类路径传递，不进入本模块的 <dependencies>。 -->
-        <dependency>
-            <groupId>io.annona</groupId>
-            <artifactId>annona-common</artifactId>
-        </dependency>
-
+        <!-- 零编译期依赖：本模块是全仓唯一对外发布的 artifact，第三方写 Retriever /
+             IdentityProvider 只需依赖它，不得被迫拖进 Spring / Persistence / SDK。
+             （已实测：本模块 21 个源文件对 io.annona.common / org.springframework / jakarta
+             的 import 为 0，故原先对 annona-common 的依赖是未使用的）
+             机控约束见下方 enforcer bannedDependencies（ArchUnit 只能看 import，看不到传递依赖）。 -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- 契约层的“零框架依赖”是对外承诺，必须编译期可验；
+                 违反时报错而不是靠 code review 兜。 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>enforce-spi-zero-framework-deps</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <fail>true</fail>
+                            <rules>
+                                <bannedDependencies>
+                                    <excludes>
+                                        <exclude>org.springframework:*</exclude>
+                                        <exclude>org.springframework.boot:*</exclude>
+                                        <exclude>org.springframework.ai:*</exclude>
+                                        <exclude>jakarta.persistence:jakarta.persistence-api</exclude>
+                                        <exclude>software.amazon.awssdk:*</exclude>
+                                        <exclude>org.apache.tika:*</exclude>
+                                        <exclude>org.redisson:*</exclude>
+                                    </excludes>
+                                    <searchTransitive>true</searchTransitive>
+                                </bannedDependencies>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>
