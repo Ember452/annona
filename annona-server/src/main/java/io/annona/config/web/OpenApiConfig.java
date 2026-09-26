@@ -30,7 +30,7 @@ public class OpenApiConfig {
     OpenAPI annonaOpenApi(@Value("${annona.info.version:0.0.1-SNAPSHOT}") String version) {
         return new OpenAPI().info(new Info()
             .title("annona · 年轮 API")
-            .description("学习行为驱动的备考与面试训练闭环。v1 前所有契约可能调整。")
+            .description("自习室 + AI 模拟面试：共享方向字典的双功能训练平台。v1 前所有契约可能调整。")
             .version(version));
     }
 

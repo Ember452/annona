@@ -1,6 +1,6 @@
 # AGENTS.md — annona · AI 协作行为规范
 
-**项目一句话**：年轮（annona）把「自习室采集的学习行为」变成「AI 面试官的出题依据」——一个学习行为驱动的备考与面试训练闭环。
+**项目一句话**：年轮（annona）是自习室 + AI 模拟面试的双功能训练平台——两个功能平级独立、共享方向字典与基础设施；面试决策以面试侧数据为主输入，学习信号在方向相交时作为增强（详见设计文档 §6.1 与 direction ADR 修订 3）。
 
 本文件是 AI 参与本项目开发时的**强制行为规范**。技术细节不在此重复，只在这里规定"怎么做、不能做什么、做完必须留下什么"。
 
@@ -22,7 +22,7 @@
 
 ## 1. 项目定位（判断功能该不该做）
 
-**主线**：`study / plan / checkin → shared.signal → planner（训练决策层） → interview → evaluation → decision_trace → 可解释面板 → 反哺 plan`。
+**主线（决策链，非产品绑定）**：`study / plan / checkin → shared.signal（按方向聚合，相交时参与） → planner（训练决策层） → interview → evaluation → decision_trace → 可解释面板 → 反哺 plan`。自习室与 AI 面试是两个平级功能，方向不相交时 planner 仅基于面试侧数据工作。
 
 三条设计主张，任何改动都要能对齐：
 

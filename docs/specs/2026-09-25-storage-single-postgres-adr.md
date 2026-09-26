@@ -14,7 +14,7 @@
 | interview-guide | PostgreSQL 16 + pgvector + Redis + RustFS/S3 |
 | summer-checkin | PostgreSQL + pgvector（Prisma，`migrate-to-pgvector.sql`） |
 
-annona 从 MockPilot 借鉴的是混合检索算法（RRF 融合、重排）与工程防护组件（SingleFlight、Resilience4j 分级熔断、多级线程池隔离），**不继承其存储架构**。同时产品主线要求"业务数据 + 向量 + 关键词检索"三者频繁联动：交卷后需原子地写评估结果、更新掌握度、落决策留痕。
+annona 从 MockPilot 借鉴的是混合检索算法（RRF 融合、重排）与工程防护组件（SingleFlight、Resilience4j 分级熔断、多级线程池隔离），**不继承其存储架构**。同时交卷链路要求"业务数据 + 向量 + 关键词检索"三者频繁联动：交卷后需原子地写评估结果、更新掌握度、落决策留痕。
 
 ## 决策
 
