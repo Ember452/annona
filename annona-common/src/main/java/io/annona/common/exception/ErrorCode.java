@@ -23,6 +23,7 @@ public enum ErrorCode {
     METHOD_NOT_ALLOWED(1003, "请求方法不支持"),
     UNAUTHORIZED(1004, "未授权"),
     FORBIDDEN(1005, "禁止访问"),
+    DATA_CONFLICT(1006, "数据冲突或重复提交，请刷新后重试"),
 
     // ========== AI 与模型 1100–1199 ==========
     AI_SERVICE_UNAVAILABLE(1100, "AI 服务暂时不可用，请稍后重试"),
@@ -37,7 +38,12 @@ public enum ErrorCode {
     EMAIL_ALREADY_REGISTERED(2001, "该邮箱已被注册"),
     INVALID_CREDENTIALS(2002, "邮箱或密码不正确"),
     ACCOUNT_LOCKED(2003, "登录失败次数过多，账号已临时锁定，请稍后再试"),
-    SESSION_EXPIRED(2004, "登录状态已失效，请重新登录");
+    SESSION_EXPIRED(2004, "登录状态已失效，请重新登录"),
+
+    // ========== direction 2100–2199（P1a-03，shared 主数据） ==========
+    DIRECTION_NOT_FOUND(2100, "方向不存在"),
+    DIRECTION_KEY_DUPLICATE(2101, "同名方向已存在"),
+    DIRECTION_LIMIT_REACHED(2102, "自定义方向已达上限（200），请先归档或合并");
 
     private final int code;
     private final String message;

@@ -6,6 +6,7 @@ import io.annona.common.result.Result;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -75,7 +76,20 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 未知异常兜底：HTTP 500 + 固定文案，完整栈只进日志不外泄。
+     * 数据库完整性冲突（唯一约束 / 外键等，典型：先查后插竞态、重复提交）：409 + 固定文案。
+     * 精确的业务文案（如 direction 2101）由 Service 预检查给出，本兑底只承接并发窗口内
+     * 穿过预检查的漏网请求（事务内 catch 不可行：Hibernate 异常后 session 必须回滚），
+     * 避免落进 {@link #handleUnknown} 变成 500。
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public Result<Void> handleDataIntegrity(DataIntegrityViolationException e) {
+        log.warn("数据完整性冲突: {}", e.getMessage());
+        return Result.error(ErrorCode.DATA_CONFLICT);
+    }
+
+    /**
+     * 未知异常兑底：HTTP 500 + 固定文案，完整栈只进日志不外泄。
      * 异常作为最后一个参数传给 SLF4J 以保留堆栈。
      */
     @ExceptionHandler(Throwable.class)
