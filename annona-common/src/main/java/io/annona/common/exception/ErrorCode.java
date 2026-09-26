@@ -31,7 +31,13 @@ public enum ErrorCode {
     AI_API_KEY_INVALID(1103, "AI 服务密钥无效"),
 
     // ========== 限流与配额 1200–1299 ==========
-    RATE_LIMIT_EXCEEDED(1200, "请求过于频繁，请稍后再试");
+    RATE_LIMIT_EXCEEDED(1200, "请求过于频繁，请稍后再试"),
+
+    // ========== identity 2000–2099（P1a-01） ==========
+    EMAIL_ALREADY_REGISTERED(2001, "该邮箱已被注册"),
+    INVALID_CREDENTIALS(2002, "邮箱或密码不正确"),
+    ACCOUNT_LOCKED(2003, "登录失败次数过多，账号已临时锁定，请稍后再试"),
+    SESSION_EXPIRED(2004, "登录状态已失效，请重新登录");
 
     private final int code;
     private final String message;

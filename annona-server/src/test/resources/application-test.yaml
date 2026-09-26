@@ -16,6 +16,10 @@ spring:
   jpa:
     hibernate:
       ddl-auto: none
+  # 无 DB 的 context 冒烟：仓库依赖型 @Service 延迟到首次请求才创建，
+  # 因此 test profile（排除 JPA）仍能加载 context。真实接线由 @Tag(docker) 集测在 CI 覆盖。
+  main:
+    lazy-initialization: true
 
 annona:
   startup:

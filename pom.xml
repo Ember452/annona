@@ -58,6 +58,11 @@
              Boot 4 分家管两个 Jackson BOM：jackson-2-bom.version = fasterxml（legacy Jackson 2），
              jackson-bom.version = tools.jackson（Jackson 3）。本 override 只针对 Jackson 2。 -->
         <jackson-2-bom.version>2.22.1</jackson-2-bom.version>
+        <!-- P1a-01：会话用 Redisson（单客户端覆盖 session/限流/Stream/在线共学），
+             Entity→DTO 映射用 MapStruct（AGENTS.md §4 全仓统一）。Boot BOM 不管这两个，需显式 pin。
+             scrypt 用 spring-security-crypto，其版本由 spring-boot-dependencies 管理，不写。 -->
+        <redisson.version>3.34.1</redisson.version>
+        <mapstruct.version>1.6.3</mapstruct.version>
 
         <!-- Mockito 在 JDK 21 上动态 attach 会告警，显式放行（surefire 与 CI 同一口径） -->
         <annona.test.jvmArgs>--enable-native-access=ALL-UNNAMED</annona.test.jvmArgs>
@@ -113,6 +118,23 @@
                 <groupId>org.springdoc</groupId>
                 <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
                 <version>${springdoc.version}</version>
+            </dependency>
+
+            <!-- P1a-01 会话存储（Redisson）与 MapStruct 映射；版本上收到此处，子模块不写 version。 -->
+            <dependency>
+                <groupId>org.redisson</groupId>
+                <artifactId>redisson</artifactId>
+                <version>${redisson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct</artifactId>
+                <version>${mapstruct.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct-processor</artifactId>
+                <version>${mapstruct.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

@@ -66,6 +66,31 @@
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
         </dependency>
 
+        <!-- P1a-01 identity：
+             - spring-security-crypto：scrypt 口令哈希（纯 Java，无 native，版本由 Boot 管理）
+             - mapstruct：Entity→DTO/Response 映射（AGENTS.md §4 全仓统一，禁止把 Entity 返回前端）
+             - mapstruct-processor：provided 作用域放在 classpath 即可被编译器自动发现，不动 Boot 父 pom 的 compiler 配置 -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+        <!-- spring-security-crypto 的 SCryptPasswordEncoder 运行期依赖 BouncyCastle（未传递）。
+             纯 Java、无 native，与 identity ADR “scrypt 而非 Argon2（避 native）” 一致。 -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>1.80</version>
+        </dependency>
+        <dependency>
+            <groupId>org.mapstruct</groupId>
+            <artifactId>mapstruct</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.mapstruct</groupId>
+            <artifactId>mapstruct-processor</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- runtime scope：驱动与 PG 方言（Boot 的 starter-flyway 不自带 postgres 方言） -->
         <dependency>
             <groupId>org.postgresql</groupId>

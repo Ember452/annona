@@ -15,6 +15,18 @@ spring:
 server:
   port: ${SERVER_PORT:8080}
 
+# P1a-01：Redis 会话与 session 策略。env 名与属性路径不同源，故在此显式映射
+# （REDIS_HOST 只能被 relaxed binding 映到 redis.host，映不到 annona.redis.host，见阶段总结 D14 同型坑）。
+annona:
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: ${REDIS_DATABASE:0}
+  session:
+    ttl: ${ANNONA_SESSION_TTL:7d}
+    cookie: ${ANNONA_SESSION_COOKIE:ANNONA_SESSION}
+
 management:
   endpoints:
     web:
