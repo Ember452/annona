@@ -32,6 +32,9 @@ build/
 ### VS Code ###
 .vscode/
 
+### Trae / 其它 AI IDE 工作区（临时计划草稿，正式文档走 docs/）###
+.trae/
+
 ### 密钥与环境变量（绝不提交）###
 .env
 .env.*
