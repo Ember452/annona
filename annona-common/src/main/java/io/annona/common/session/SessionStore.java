@@ -13,6 +13,7 @@ import java.util.Optional;
  * 编译期看不到 Redisson。详见该 ADR「后续修订」§2。
  *
  * <p>约定：所有方法<b>不抛业务异常</b>；Redis 不可用时由上层决定降级，实现类只透传底层运行时异常。
+ * {@code token} 由调用方保证非 null 非空白；唯一例外是 {@link #readUserId} 对 null 安全（返回 empty）。
  */
 public interface SessionStore {
 

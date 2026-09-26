@@ -97,7 +97,9 @@ CREATE INDEX idx_auth_token_expiry ON auth_token (expires_at);
 
 -- ========== 5. login_attempt：失败锁定与风控 ==========
 CREATE TABLE login_attempt (
-    key          VARCHAR(255) PRIMARY KEY,
+    -- 320 = email 上限 254（RFC 5321，入口校验见 Emails）+ 分隔符 1 + IPv6 地址 45；
+    -- 上一版 255 会让超长邮箱在登录失败路径撞列长、伪装成 500（加固批，见 identity ADR 后续修订）
+    key          VARCHAR(320) PRIMARY KEY,
     fail_count   INT          NOT NULL DEFAULT 0,
     locked_until TIMESTAMPTZ  NULL,
     last_at      TIMESTAMPTZ  NOT NULL DEFAULT now()

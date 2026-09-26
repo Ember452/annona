@@ -98,4 +98,11 @@ class FlywayBaselineSqlSyntaxTest {
         assertThat(sql).contains("WHERE deleted_at IS NULL");
         assertThat(sql).contains("WHERE type = 'DELETE' AND done_at IS NULL");
     }
+
+    @Test
+    @DisplayName("login_attempt.key 容得下 email(≤254) + 分隔符 + IPv6(≤45)，登录失败路径不撞列长")
+    void loginAttemptKeyFitsEmailPlusIpv6() throws IOException {
+        String sql = readV1();
+        assertThat(sql).containsPattern("(?i)key\\s+VARCHAR\\(320\\)\\s+PRIMARY\\s+KEY");
+    }
 }

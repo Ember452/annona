@@ -81,4 +81,38 @@ class IdentityLoginFlowIT {
             .extracting(e -> ((BusinessException) e).getCode())
             .isEqualTo(ErrorCode.ACCOUNT_LOCKED.getCode());
     }
+
+    @Test
+    @DisplayName("重复邮箱注册被拒（EMAIL_ALREADY_REGISTERED；大小写不同也命中 citext 唯一）")
+    void duplicateEmailRegistrationRejected() {
+        String email = uniqueEmail();
+        registrar.register(email, "GoodPass123");
+        assertThatThrownBy(() -> registrar.register(email.toUpperCase(), "OtherPass123"))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getCode())
+            .isEqualTo(ErrorCode.EMAIL_ALREADY_REGISTERED.getCode());
+    }
+
+    @Test
+    @DisplayName("不存在的邮箱登录 → INVALID_CREDENTIALS（dummyHash 等耗路径）")
+    void unknownEmailLoginRejected() {
+        assertThatThrownBy(() -> loginService.login(uniqueEmail(), "Whatever123", "10.0.0.9", null, "junit"))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getCode())
+            .isEqualTo(ErrorCode.INVALID_CREDENTIALS.getCode());
+    }
+
+    @Test
+    @DisplayName("超长邮箱在入口即被 BAD_REQUEST 拒绝（不再引发 login_attempt.key 溢出的 500）")
+    void overLengthEmailRejectedBeforeKeyOverflow() {
+        String longEmail = "a".repeat(300) + "@example.test";
+        assertThatThrownBy(() -> loginService.login(longEmail, "Whatever123", "10.0.0.9", null, "junit"))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getCode())
+            .isEqualTo(ErrorCode.BAD_REQUEST.getCode());
+        assertThatThrownBy(() -> registrar.register(longEmail, "Whatever123"))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getCode())
+            .isEqualTo(ErrorCode.BAD_REQUEST.getCode());
+    }
 }

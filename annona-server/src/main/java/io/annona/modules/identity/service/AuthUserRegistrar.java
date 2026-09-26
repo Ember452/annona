@@ -8,7 +8,6 @@ import io.annona.modules.identity.entity.UserProfileEntity;
 import io.annona.modules.identity.mapper.IdentityMapper;
 import io.annona.modules.identity.repository.AppUserRepository;
 import io.annona.modules.identity.repository.UserProfileRepository;
-import java.util.Locale;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -38,8 +37,8 @@ public class AuthUserRegistrar {
 
     @Transactional
     public AuthUserResponse register(String rawEmail, String rawPassword) {
-        String email = normalizeEmail(rawEmail);
-        if (!StringUtils.hasText(email) || !StringUtils.hasText(rawPassword)
+        String email = Emails.normalize(rawEmail);
+        if (!Emails.isValid(email) || !StringUtils.hasText(rawPassword)
             || rawPassword.length() < MIN_PASSWORD_LEN) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "邮箱格式不正确或密码少于 8 位");
         }
@@ -65,9 +64,5 @@ public class AuthUserRegistrar {
         profileRepository.save(profile);
 
         return mapper.toResponse(user);
-    }
-
-    static String normalizeEmail(String email) {
-        return email == null ? null : email.trim().toLowerCase(Locale.ROOT);
     }
 }

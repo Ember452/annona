@@ -6,6 +6,7 @@ import io.annona.modules.identity.dto.AuthUserResponse;
 import io.annona.modules.identity.entity.AppUserEntity;
 import io.annona.modules.identity.mapper.IdentityMapper;
 import io.annona.modules.identity.repository.AppUserRepository;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,11 +34,11 @@ public class UserQueryService {
         return mapper.toResponse(user);
     }
 
-    private static java.util.Optional<UUID> parseUuid(String s) {
+    private static Optional<UUID> parseUuid(String s) {
         try {
-            return java.util.Optional.of(UUID.fromString(s));
+            return Optional.of(UUID.fromString(s));
         } catch (IllegalArgumentException e) {
-            return java.util.Optional.empty();
+            return Optional.empty();
         }
     }
 }

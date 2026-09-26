@@ -7,7 +7,6 @@ import io.annona.modules.identity.entity.AppUserEntity;
 import io.annona.modules.identity.repository.AppUserRepository;
 import java.security.SecureRandom;
 import java.util.HexFormat;
-import java.util.Locale;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,7 +49,12 @@ public class LoginService {
     }
 
     public LoginOutcome login(String rawEmail, String rawPassword, String ip, String device, String userAgent) {
-        String email = rawEmail == null ? "" : rawEmail.trim().toLowerCase(Locale.ROOT);
+        String email = Emails.normalize(rawEmail);
+        if (!Emails.isValid(email)) {
+            // 格式/超长在入口拒绝：不让超长 email 拼进 login_attempt.key 撞列长伪装成 500；
+            // 格式信息不泄露账号存在性，与下面的等耗防护不冲突（identity ADR「后续修订」加固批）。
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "邮箱格式不正确");
+        }
         String key = email + "|" + (ip == null ? "" : ip);
         attemptStore.assertNotLocked(key);
 

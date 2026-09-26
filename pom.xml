@@ -63,6 +63,9 @@
              scrypt 用 spring-security-crypto，其版本由 spring-boot-dependencies 管理，不写。 -->
         <redisson.version>3.34.1</redisson.version>
         <mapstruct.version>1.6.3</mapstruct.version>
+        <!-- BouncyCastle：spring-security-crypto 的 SCryptPasswordEncoder 运行期依赖（未传递），
+             版本上收到根 pom 统一管理 -->
+        <bcprov.version>1.80</bcprov.version>
 
         <!-- Mockito 在 JDK 21 上动态 attach 会告警，显式放行（surefire 与 CI 同一口径） -->
         <annona.test.jvmArgs>--enable-native-access=ALL-UNNAMED</annona.test.jvmArgs>
@@ -135,6 +138,11 @@
                 <groupId>org.mapstruct</groupId>
                 <artifactId>mapstruct-processor</artifactId>
                 <version>${mapstruct.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bcprov.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

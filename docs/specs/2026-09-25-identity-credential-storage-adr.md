@@ -57,3 +57,8 @@ annona 要同时支持三种运行形态：单机免登录（自部署个人用�
    - `SessionStore` 接口放 `io.annona.common.session`（纯 JDK 签名，common 保持零框架）；`RedissonSessionStore`/`RedissonConfig` 放 `io.annona.infrastructure.cache`；`modules/identity` 只 `@Autowired SessionStore`。
    - 约束来源：ArchUnit 规则 1 禁止 `modules..` import `infrastructure..`，且 annona-server 对 infra 是 runtime 依赖（编译期看不到 Redisson）。把端口放 common 是同时满足两者的唯一位置——这**不是新增第 6 个 SPI**（spi 只保留已定五个），common 端口仅供内部装配、不发 Maven Central。
    - 后续 `file/S3`、`crypto` 等外部系统能力沿用同一范式，不再逐个临时发明接线方式。
+
+3. **P1a-01 加固批（复查发现的并发与输入缺陷）**
+   - `login_attempt` 失败计数原为非原子「findById→累加→save」，并发暴破会丢失更新、推迟达到 10 次锁定阈值。改为 **PG `INSERT … ON CONFLICT DO NOTHING` 幂等建行 + `SELECT … FOR UPDATE` 行锁串行化读-改-写**。否决备选：Redis INCR（把锁定真相搬进第二存储，与「审计在 PG」的决策冲突）；`@Version` 乐观锁（暴破场景只产生重试风暴）。
+   - 注册/登录入口补 email 校验（宽松格式 + 长度 ≤ RFC 254，`Emails` 统一口径）；`login_attempt.key` 由 `VARCHAR(255)` 拓宽为 `VARCHAR(320)`（email 254 + 分隔符 1 + IPv6 45），否则超长邮箱的登录失败会撞列长、伪装成 500 噪音。V1 尚未对外发布，按基线头注原地改。
+   - 会话自始是**不透明随机令牌**（§决策 §3 + 否决 JWT），不存在签名密钥；`.env.example` 的 `ANNONA_SESSION_SECRET` 为设计期残留，已删，并补上真实存在的行为开关 `ANNONA_SESSION_TTL` / `ANNONA_SESSION_COOKIE_SECURE`。

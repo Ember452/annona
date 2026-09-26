@@ -75,11 +75,11 @@
             <artifactId>spring-security-crypto</artifactId>
         </dependency>
         <!-- spring-security-crypto 的 SCryptPasswordEncoder 运行期依赖 BouncyCastle（未传递）。
-             纯 Java、无 native，与 identity ADR “scrypt 而非 Argon2（避 native）” 一致。 -->
+             纯 Java、无 native，与 identity ADR “scrypt 而非 Argon2（避 native）” 一致。
+             版本由根 pom dependencyManagement 统一管理。 -->
         <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcprov-jdk18on</artifactId>
-            <version>1.80</version>
         </dependency>
         <dependency>
             <groupId>org.mapstruct</groupId>

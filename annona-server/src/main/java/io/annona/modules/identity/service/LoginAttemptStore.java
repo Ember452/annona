@@ -32,13 +32,18 @@ public class LoginAttemptStore {
 
     @Transactional
     public void recordFailure(String key) {
-        LoginAttemptEntity entity = repository.findById(key).orElseGet(() -> {
+        // 并发安全：先幂等建行（并发首次失败不撞主键），再行锁读取后做读-改-写；
+        // 同 key 的失败在行锁上串行化，计数不丢。此前的「findById→累加→save」丢失更新
+        // 会让并发暴破拖慢甚至绕过 10 次锁定阈值（identity ADR「后续修订」加固批）。
+        Instant now = Instant.now();
+        repository.insertIfAbsent(key);
+        LoginAttemptEntity entity = repository.findByKey(key).orElseGet(() -> {
+            // 极端窗口：建行后到锁定读之间被并发 reset 删除 → 按全新行重新累加
             LoginAttemptEntity fresh = new LoginAttemptEntity();
             fresh.setKey(key);
             fresh.setFailCount(0);
             return fresh;
         });
-        Instant now = Instant.now();
         LoginAttemptPolicy.Outcome outcome = LoginAttemptPolicy.recordFailure(
             LoginAttemptPolicy.effectivePriorCount(entity.getFailCount(), entity.getLastAt(), now), now);
         entity.setFailCount(outcome.failCount());
