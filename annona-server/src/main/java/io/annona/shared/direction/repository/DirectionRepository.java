@@ -30,4 +30,12 @@ public interface DirectionRepository extends JpaRepository<DirectionEntity, UUID
 
     /** owner 范围内取方向：查不到即 2100，不泄露内置/他人方向的存在性。 */
     Optional<DirectionEntity> findByIdAndUserId(UUID id, UUID userId);
+
+    /**
+     * 可见性校验（P1a-04 起 study 等业务模块经 DirectionQueryService 使用）：
+     * ACTIVE 且（内置或本人）；本人半边命中 idx_direction_user partial index。
+     */
+    @Query("select (count(d) > 0) from DirectionEntity d where d.id = :id"
+        + " and d.status = 'ACTIVE' and (d.userId is null or d.userId = :userId)")
+    boolean existsVisible(@Param("id") UUID id, @Param("userId") UUID userId);
 }

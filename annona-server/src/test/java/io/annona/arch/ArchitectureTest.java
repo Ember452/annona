@@ -74,6 +74,17 @@ class ArchitectureTest {
                 .allowEmptyShould(true);
             rule.check(PRODUCTION_CLASSES);
         }
+
+        @Test
+        @DisplayName("modules/* 禁止直接依赖 shared.direction.repository（读方向只经 DirectionQueryService）")
+        void modulesShouldNotDependOnDirectionRepository() {
+            ArchRule rule = noClasses().that().resideInAPackage("io.annona.modules..")
+                .should().dependOnClassesThat().resideInAPackage("io.annona.shared.direction.repository..")
+                .because("direction ADR 修订 2 遗留义务：方向可见性口径（ACTIVE + 内置或本人）只在 "
+                    + "DirectionQueryService 维护，业务模块直接碰 repository 会绕过 owner 命名空间约定。")
+                .allowEmptyShould(true);
+            rule.check(PRODUCTION_CLASSES);
+        }
     }
 
     @Nested

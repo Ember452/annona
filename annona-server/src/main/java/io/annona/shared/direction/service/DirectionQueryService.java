@@ -27,4 +27,19 @@ public class DirectionQueryService {
         List<DirectionEntity> entities = repository.findVisibleActive(UUID.fromString(userId));
         return entities.stream().map(mapper::toResponse).toList();
     }
+
+    /**
+     * 方向可见性校验（业务模块写侧的前置闸门，direction ADR 修订 2 遗留义务）：
+     * ACTIVE 且（内置或本人）。不区分“不存在 / 已归档 / 他人方向”，统一 false——
+     * 调用方（study 等）据此抛 2100，不泄露他人方向的存在性。
+     */
+    public boolean existsVisibleTo(String userId, String directionId) {
+        UUID id;
+        try {
+            id = UUID.fromString(directionId);
+        } catch (IllegalArgumentException | NullPointerException e) {
+            return false;
+        }
+        return repository.existsVisible(id, UUID.fromString(userId));
+    }
 }

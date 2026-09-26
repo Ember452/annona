@@ -43,7 +43,12 @@ public enum ErrorCode {
     // ========== direction 2100–2199（P1a-03，shared 主数据） ==========
     DIRECTION_NOT_FOUND(2100, "方向不存在"),
     DIRECTION_KEY_DUPLICATE(2101, "同名方向已存在"),
-    DIRECTION_LIMIT_REACHED(2102, "自定义方向已达上限（200），请先归档或合并");
+    DIRECTION_LIMIT_REACHED(2102, "自定义方向已达上限（200），请先归档或合并"),
+
+    // ========== study 2200–2299（P1a-04，学习行为采集） ==========
+    STUDY_SESSION_NOT_FOUND(2200, "学习会话不存在"),
+    STUDY_SESSION_ALREADY_FINISHED(2201, "学习会话已结束"),
+    STUDY_SESSION_INVALID_RANGE(2202, "时间范围无效");
 
     private final int code;
     private final String message;

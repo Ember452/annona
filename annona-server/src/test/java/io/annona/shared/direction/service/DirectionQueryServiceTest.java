@@ -69,4 +69,20 @@ class DirectionQueryServiceTest {
 
         assertThat(service.listVisible(OWNER)).isEmpty();
     }
+
+    @Test
+    @DisplayName("existsVisibleTo：直接委托仓库布尔结果，内置或本人方向可见")
+    void delegatesExistenceToRepository() {
+        UUID directionId = UUID.randomUUID();
+        when(repository.existsVisible(directionId, UUID.fromString(OWNER))).thenReturn(true);
+
+        assertThat(service.existsVisibleTo(OWNER, directionId.toString())).isTrue();
+    }
+
+    @Test
+    @DisplayName("existsVisibleTo：非法 UUID 返回 false（不抛异常，调用方统一 2100）")
+    void malformedUuidIsInvisible() {
+        assertThat(service.existsVisibleTo(OWNER, "not-a-uuid")).isFalse();
+        assertThat(service.existsVisibleTo(OWNER, null)).isFalse();
+    }
 }
