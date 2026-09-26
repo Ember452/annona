@@ -134,10 +134,13 @@ jobs:
         # 下一步的断言保证“0 个测试”不可能再伪装成绿。
         run: ./mvnw -B verify -Dannona.tests.excluded= -Dgroups=docker | tee target/docker-it.log
       - name: Assert docker-tagged tests actually ran
-        run: grep -qE "Tests run: *[1-9][0-9]*, Failures: 0, Errors: 0" target/docker-it.log
+        # 块形 scalar：普通标量里出现“: ”会被 YAML 当映射分隔符解析失败
+        run: |
+          grep -qE 'Tests run: *[1-9][0-9]*, Failures: 0, Errors: 0' target/docker-it.log
       - name: Report how many ran
         if: always()
-        run: grep -E "Tests run:" target/docker-it.log | tail -5 || true
+        run: |
+          grep -E 'Tests run:' target/docker-it.log | tail -5 || true
 
   # ─────────────────────────────────────────────────────────────────────
   # 3) compose 冒烟（B4 交付物的端到端；P0 出口条件 ② 的落地）
