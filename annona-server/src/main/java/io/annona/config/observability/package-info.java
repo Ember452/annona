@@ -1,12 +1,13 @@
 /**
- * 可观测装配：Micrometer 指标、健康指示器、trace_id 过滤器。
+ * 可观测装配：trace_id 过滤器已落地，指标埋点按阶段逐个补。
  *
- * <p>P0-05 阶段本包<b>仅有 package-info</b>。P0-03 的 {@code Result<T>} 已经预留
- * {@code traceId} 字段（从 SLF4J MDC 读取），但注入 MDC 的 filter 与自定义
- * {@code HealthIndicator} 到真实需要时再落：
+ * <p>已有：{@link TraceIdFilter} 负责把 {@code traceId} 写入 SLF4J MDC 并回写
+ * {@code X-Trace-Id} 响应头；{@code logback-spring.xml} 用同一个键输出日志。
+ * 这三者对齐后，“用户反馈里的 traceId → 服务端日志行”才能真跑通
+ * （P0 曾出现过 filter 未实现但文档声称 traceId 非空的情况，见阶段总结 D17）。
+ *
+ * <p>待动（按阶段落，不提前造空类）：
  * <ul>
- *   <li>P0-12（B5）：CI 上线时增加 {@code TraceIdFilter}（servlet filter，写入 MDC）
- *       与 logback-spring.xml 的 {@code %X{traceId}} 转换符</li>
  *   <li>P1a-07：pgvector 检索延迟埋点（自定义 {@code Timer} + {@code @Timed}）</li>
  *   <li>P1b-10：token 用量 Counter（{@code annona.token.usage}，标签含 model / usage / provider）</li>
  *   <li>P3-06：语音端到端延迟预算表（P50/P95 Timer + Histogram）</li>

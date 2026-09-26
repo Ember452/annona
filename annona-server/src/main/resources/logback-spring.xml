@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    annona 日志配置（P0 可观测基线）。
+
+    两条硬要求：
+      1. `%X{traceId}` 必须由 io.annona.config.observability.TraceIdFilter 写入 MDC；
+         Result.traceId 与这里用的是同一个键，用户反馈里的 traceId 才能直接定位日志行。
+      2. 日志不得出现明文密钥。当前代码路径上没有任何一处 log 输出 API Key（见
+         docs/specs/2026-09-25-model-api-key-adr.md §3），这条要靠 review 与后续
+         密钥脱敏 converter 守住——新增 appender 前先把这条读一遍。
+
+    文件日志落在 logs/annona.log，与 .gitignore 的 logs/ 与 SECURITY.md 的表述一致。
+-->
+<configuration>
+
+    <property name="LOG_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] traceId=%X{traceId:-} %-5level %logger{36} - %msg%n"/>
+    <property name="LOG_DIR" value="${ANNONA_LOG_DIR:-logs}"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- 按天滚动 + 单文件大小上限；保留 14 天，足够覆盖一次用户反馈的排查窗口 -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/annona.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/annona.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>20MB</maxFileSize>
+            <maxHistory>14</maxHistory>
+            <totalSizeCap>500MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <logger name="io.annona" level="INFO"/>
+    <!-- Flyway 的迁移语句在 dev 下开 DEBUG，能让"哪条 SQL 建了哪张表"一眼可查 -->
+    <springProfile name="dev">
+        <logger name="org.flywaydb" level="DEBUG"/>
+    </springProfile>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </root>
+
+</configuration>
