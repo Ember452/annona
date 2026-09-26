@@ -67,12 +67,12 @@ if [ "$SUBJECT_LEN" -gt 72 ]; then
   fail "subject 长度 ${SUBJECT_LEN} 超过 72 字符"
 fi
 
-# 4) subject 不以句号结尾
-case "$SUBJECT" in
-  *. )
-    fail "subject 不以标点结尾（末尾的 . 是常见误写）"
-    ;;
-esac
+# 4) subject 不以句号结尾（git stripspace 已去掉尾随空白，所以不能靠匹配 "*. "——
+#    那个模式永远匹配不上，规则会变成装饰）
+LAST_CHAR=$(printf '%s' "$SUBJECT" | tail -c 1)
+if [ "$LAST_CHAR" = "." ]; then
+  fail "subject 不得以句号结尾（AGENTS.md §5）"
+fi
 
 # 5) body 分隔：第二行必须为空
 SECOND_LINE=$(printf '%s\n' "$MESSAGE" | sed -n '2p')
