@@ -61,6 +61,12 @@
 
         <!-- Mockito 在 JDK 21 上动态 attach 会告警，显式放行（surefire 与 CI 同一口径） -->
         <annona.test.jvmArgs>--enable-native-access=ALL-UNNAMED</annona.test.jvmArgs>
+
+        <!-- 本机无 Docker：默认排除需真实中间件的 docker 组测试。必须走属性而不是在
+             <configuration> 里直写 `docker`——Maven 的 POM 显式配置优先于 `-D` 用户属性，
+             直写会让 CI 的 `-DexcludedGroups=` 失效，导致集测 0 个测试仍然 BUILD SUCCESS。
+             （已实测：-Dgroups=docker → Tests run: 0 且绿；-DexcludedGroups= 仍不跑 *IT） -->
+        <annona.tests.excluded>docker</annona.tests.excluded>
     </properties>
 
     <dependencyManagement>
@@ -173,9 +179,10 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <!-- 本机无 Docker：默认排除需要真实中间件的测试，由 CI 以 -Dgroups=docker 专跑。
+                    <!-- 本机无 Docker：默认排除需要真实中间件的测试，由 CI 以
+                         `-Dannona.tests.excluded= -Dgroups=docker` 专跑该组。
                          见 docs/specs/2026-09-25-dockerless-local-dev-adr.md -->
-                    <excludedGroups>docker</excludedGroups>
+                    <excludedGroups>${annona.tests.excluded}</excludedGroups>
                     <argLine>${annona.test.jvmArgs}</argLine>
                     <!-- 把 *IT.java 也纳入 surefire（默认只扫 *Test.java）。
                          annona 约定：@Tag("docker") 的集成测试统一 *IT.java 后缀，与

@@ -2,8 +2,12 @@
 #
 # 分工依据：docs/specs/2026-09-25-dockerless-local-dev-adr.md §CI 执行矩阵。
 # 本机只跑 `mvn -q verify` 那一层（对应下面的 unit job），其余四层
-# （docker-it / compose-smoke / frontend / gitleaks）在 CI 上跑；
-# P0-15 里会把这 5 个 job 全部设为 branch protection 的必需检查。
+# （docker-it / compose-smoke / frontend / gitleaks）在 CI 上跑。
+#
+# branch protection（P0-15）只需把 **`gate` 一个 job 设为必需检查**：
+# 本 workflow 带 paths-ignore，纯文档 PR 不会触发上面五个 job；
+# 若把它们直接设为必需检查，docs-only PR 会永久停在 "Expected"。
+# gate 总是运行（if: always()）并汇总前面的结果，因此没有可被跳过的必需检查。
 name: CI
 
 on:
@@ -63,6 +67,20 @@ jobs:
     name: Integration tests on real PG + Redis (services:)
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # job 级 env：下面三步（mvn / 断言 / 汇报）都能着到底
+    env:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/annona
+      SPRING_DATASOURCE_USERNAME: annona
+      SPRING_DATASOURCE_PASSWORD: annona
+      REDIS_HOST: localhost
+      REDIS_PORT: '6379'
+      # docker 组的 IT 不真做加解密，只要 KEK 非空让 StartupValidator 通过
+      ANNONA_SECRET_KEY: ci-dummy-kek-not-used-anywhere-in-tests
+      # ExtensionMissingIT 用：vanilla postgres:16（无 pgvector）
+      BAD_DB_DATASOURCE_URL: jdbc:postgresql://localhost:15432/postgres
+      BAD_DB_USER: postgres
+      BAD_DB_PASSWORD: postgres
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -86,6 +104,22 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
+      # ExtensionMissingIT 需要一个**没有 pgvector**的 vanilla PG（与上面的
+      # pgvector 镜像形成对照）；该用例靠 BAD_DB_DATASOURCE_URL 连它。
+      # 两个 PG 容器并存，额外成本约 20s。
+      badpg:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - '15432:5432'
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -96,17 +130,14 @@ jobs:
       - name: chmod mvnw
         run: chmod +x mvnw
       - name: Flyway V1 + docker-tagged ITs
-        # 清空根 pom 的 excludedGroups=docker，再用 groups=docker 只跑该组
-        run: ./mvnw -B verify -Dgroups=docker -DexcludedGroups=
-        env:
-          SPRING_PROFILES_ACTIVE: docker
-          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/annona
-          SPRING_DATASOURCE_USERNAME: annona
-          SPRING_DATASOURCE_PASSWORD: annona
-          REDIS_HOST: localhost
-          REDIS_PORT: '6379'
-          # docker-tagged IT 不真加解密，只要 KEK 非空让 StartupValidator 通过
-          ANNONA_SECRET_KEY: ci-dummy-kek-not-used-anywhere-in-tests
+        # 必须同时清掉根 pom 的默认排除（现在走属性，能被覆盖）并指定 groups；
+        # 下一步的断言保证“0 个测试”不可能再伪装成绿。
+        run: ./mvnw -B verify -Dannona.tests.excluded= -Dgroups=docker | tee target/docker-it.log
+      - name: Assert docker-tagged tests actually ran
+        run: grep -qE "Tests run: *[1-9][0-9]*, Failures: 0, Errors: 0" target/docker-it.log
+      - name: Report how many ran
+        if: always()
+        run: grep -E "Tests run:" target/docker-it.log | tail -5 || true
 
   # ─────────────────────────────────────────────────────────────────────
   # 3) compose 冒烟（B4 交付物的端到端；P0 出口条件 ② 的落地）
@@ -187,6 +218,14 @@ jobs:
     name: Secret scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # fork 发来的 PR 拿不到仓库 secrets，强行跑只会红且没有诊断价值；
+    # 这类 PR 由同仓库分支上的 unit + docker-it 负责把关。
+    if: >
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      pull-requests: write   # gitleaks-action 需要回写 PR 评论
     steps:
       - uses: actions/checkout@v4
         with:
@@ -196,3 +235,29 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}  # 组织账号需要，个人仓库不填
+
+  # ─────────────────────────────────────────────────────────────────────
+  # 6) gate：唯一需要设进 branch protection 的必需检查
+  #    上面五个 job 带了 paths-ignore，纯文档 PR 会整体不触发；若把它们直接
+  #    设为必需检查，docs-only PR 会永久停在 "Expected"。
+  #    gate 自 if: always() 所以总会跑；skipped 视为通过，failure/cancelled/timed_out 不通过。
+  # ─────────────────────────────────────────────────────────────────────
+  gate:
+    name: CI gate
+    runs-on: ubuntu-latest
+    needs: [unit, docker-it, compose-smoke, frontend, gitleaks]
+    if: always()
+    permissions:
+      contents: read
+    steps:
+      - name: Aggregate upstream job results
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          printf '%s' "$NEEDS" > needs.json
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' needs.json
+          if jq -e '[.[].result] | map(select(. != "success" and . != "skipped")) | length > 0' needs.json > /dev/null; then
+            echo "::error::至少一个必需 job 未成功（非 success/skipped）"
+            exit 1
+          fi
+          echo "CI gate OK"
