@@ -2,6 +2,7 @@ package io.annona.config.web;
 
 import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
+import io.annona.common.session.CurrentPrincipal;
 import io.annona.modules.identity.dto.AuthUserResponse;
 import io.annona.modules.identity.service.UserQueryService;
 import io.annona.spi.dto.Principal;

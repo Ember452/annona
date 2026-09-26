@@ -1,7 +1,7 @@
 package io.annona.modules.identity.controller;
 
 import io.annona.common.result.Result;
-import io.annona.config.web.CurrentPrincipal;
+import io.annona.common.session.CurrentPrincipal;
 import io.annona.spi.dto.Principal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

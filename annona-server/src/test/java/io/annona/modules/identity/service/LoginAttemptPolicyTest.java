@@ -25,6 +25,14 @@ class LoginAttemptPolicyTest {
         assertThat(ten.lockedUntil()).isEqualTo(NOW.plus(Duration.ofMinutes(15)));
     }
 
+    @Test
+    @DisplayName("滑动窗口：距上次失败超 15 分钟则历史计数归零")
+    void decaysStaleWindow() {
+        assertThat(LoginAttemptPolicy.effectivePriorCount(7, NOW.minus(Duration.ofMinutes(1)), NOW)).isEqualTo(7);
+        assertThat(LoginAttemptPolicy.effectivePriorCount(7, NOW.minus(Duration.ofMinutes(16)), NOW)).isZero();
+        assertThat(LoginAttemptPolicy.effectivePriorCount(7, null, NOW)).isZero();
+    }
+
     @Nested
     @DisplayName("isLocked")
     class Locked {

@@ -26,6 +26,8 @@ annona:
   session:
     ttl: ${ANNONA_SESSION_TTL:7d}
     cookie: ${ANNONA_SESSION_COOKIE:ANNONA_SESSION}
+    # TLS 部署置 true；纯 http 自部署留 false（见 SessionProperties 注释）
+    cookie-secure: ${ANNONA_SESSION_COOKIE_SECURE:false}
 
 management:
   endpoints:

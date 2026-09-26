@@ -38,13 +38,14 @@ public class LoginAttemptStore {
             fresh.setFailCount(0);
             return fresh;
         });
-        LoginAttemptPolicy.Outcome outcome =
-            LoginAttemptPolicy.recordFailure(entity.getFailCount(), Instant.now());
+        Instant now = Instant.now();
+        LoginAttemptPolicy.Outcome outcome = LoginAttemptPolicy.recordFailure(
+            LoginAttemptPolicy.effectivePriorCount(entity.getFailCount(), entity.getLastAt(), now), now);
         entity.setFailCount(outcome.failCount());
         if (outcome.lockedUntil() != null) {
             entity.setLockedUntil(outcome.lockedUntil());
         }
-        entity.setLastAt(Instant.now());
+        entity.setLastAt(now);
         repository.save(entity);
     }
 

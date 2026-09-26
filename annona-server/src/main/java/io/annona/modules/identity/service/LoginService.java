@@ -31,6 +31,8 @@ public class LoginService {
     private final SessionStore sessionStore;
     private final SessionProjectionWriter projectionWriter;
     private final SessionProperties sessionProps;
+    /** 用于邮箱不存在时消耗等量 scrypt 时间，抵消用户枚举的时序侧信道（identity ADR §后果 §5）。 */
+    private final String dummyHash;
 
     public LoginService(AppUserRepository userRepository,
                         PasswordHasher hasher,
@@ -44,6 +46,7 @@ public class LoginService {
         this.sessionStore = sessionStore;
         this.projectionWriter = projectionWriter;
         this.sessionProps = sessionProps;
+        this.dummyHash = hasher.hash("annona-dummy-" + java.util.UUID.randomUUID());
     }
 
     public LoginOutcome login(String rawEmail, String rawPassword, String ip, String device, String userAgent) {
@@ -52,7 +55,13 @@ public class LoginService {
         attemptStore.assertNotLocked(key);
 
         Optional<AppUserEntity> found = userRepository.findActiveByEmail(email);
-        boolean ok = found.isPresent() && hasher.matches(rawPassword, found.get().getPasswordHash());
+        boolean ok;
+        if (found.isPresent()) {
+            ok = hasher.matches(rawPassword, found.get().getPasswordHash());
+        } else {
+            hasher.matches(rawPassword, dummyHash); // 不做真实校验，只消耗等量 CPU 时间
+            ok = false;
+        }
         if (!ok) {
             attemptStore.recordFailure(key);
             throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);

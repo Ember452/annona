@@ -1,7 +1,7 @@
 package io.annona.modules.identity.controller;
 
 import io.annona.common.result.Result;
-import io.annona.config.web.CurrentPrincipal;
+import io.annona.common.session.CurrentPrincipal;
 import io.annona.modules.identity.dto.AuthUserResponse;
 import io.annona.modules.identity.dto.ChangePasswordRequest;
 import io.annona.modules.identity.dto.LoginRequest;
@@ -60,6 +60,7 @@ public class AuthController {
         LoginOutcome outcome = loginService.login(request.email(), request.password(), ip, null, userAgent);
         ResponseCookie cookie = ResponseCookie.from(sessionProperties.getCookie(), outcome.token())
             .httpOnly(true)
+            .secure(sessionProperties.isCookieSecure())
             .path("/")
             .sameSite("Lax")
             .maxAge(sessionProperties.getTtl())
@@ -82,7 +83,7 @@ public class AuthController {
             sessionService.logout(token);
         }
         ResponseCookie cleared = ResponseCookie.from(sessionProperties.getCookie(), "")
-            .httpOnly(true).path("/").sameSite("Lax").maxAge(0).build();
+            .httpOnly(true).secure(sessionProperties.isCookieSecure()).path("/").sameSite("Lax").maxAge(0).build();
         servletResponse.addHeader(HttpHeaders.SET_COOKIE, cleared.toString());
         return Result.success();
     }

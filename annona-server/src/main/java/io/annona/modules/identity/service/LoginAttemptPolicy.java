@@ -32,6 +32,17 @@ public final class LoginAttemptPolicy {
     }
 
     /**
+     * 参与本次累加的“历史计数”：距上次失败超过 {@code COUNT_TTL} 窗口则归零（滑动窗口），
+     * 避免旧计数永久累积、过锁后一次错误即重锁。
+     */
+    public static int effectivePriorCount(int storedCount, Instant lastAt, Instant now) {
+        if (lastAt == null) {
+            return 0;
+        }
+        return now.isAfter(lastAt.plus(COUNT_TTL)) ? 0 : storedCount;
+    }
+
+    /**
      * @param failCount   失败后的计数
      * @param lockedUntil 锁定期终点（未锁为 null）
      */

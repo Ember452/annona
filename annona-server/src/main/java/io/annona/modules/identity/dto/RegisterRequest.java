@@ -8,4 +8,9 @@ package io.annona.modules.identity.dto;
  * @param password 明文口令（仅内存中哈希，绝不落库/落日志）
  */
 public record RegisterRequest(String email, String password) {
+
+    @Override
+    public String toString() {
+        return "RegisterRequest[email=" + email + ", password=<redacted>]";
+    }
 }

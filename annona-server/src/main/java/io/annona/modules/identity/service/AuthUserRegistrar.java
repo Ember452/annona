@@ -10,6 +10,7 @@ import io.annona.modules.identity.repository.AppUserRepository;
 import io.annona.modules.identity.repository.UserProfileRepository;
 import java.util.Locale;
 import java.util.UUID;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -52,7 +53,12 @@ public class AuthUserRegistrar {
         user.setPasswordAlgo(hasher.currentAlgo());
         user.setStatus("ACTIVE");
         user.setRole("USER");
-        userRepository.save(user);
+        try {
+            // saveAndFlush 强制本行立即落库，并发同邮箱时唯一索引冲突能在此捕获（否则延到提交外抛，漏过 catch）
+            userRepository.saveAndFlush(user);
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException(ErrorCode.EMAIL_ALREADY_REGISTERED);
+        }
 
         UserProfileEntity profile = new UserProfileEntity();
         profile.setUserId(user.getId());
