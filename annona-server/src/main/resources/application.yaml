@@ -28,6 +28,12 @@ annona:
     cookie: ${ANNONA_SESSION_COOKIE:ANNONA_SESSION}
     # TLS 部署置 true；纯 http 自部署留 false（见 SessionProperties 注释）
     cookie-secure: ${ANNONA_SESSION_COOKIE_SECURE:false}
+  # P1a-02：身份模式择一装配 IdentityProvider（local/platform/none），见
+  # docs/specs/2026-09-26-identity-provider-modes-adr.md。env 名与属性路径不同源，故显式映射。
+  identity:
+    mode: ${ANNONA_IDENTITY_MODE:local}
+    # platform 模式的受信反代头；反代必须剥离客户端同名头、实例不得被直连（信任边界）
+    platform-header: ${ANNONA_IDENTITY_PLATFORM_HEADER:X-Auth-Request-Email}
 
 management:
   endpoints:
