@@ -1,7 +1,16 @@
-# annona-spi 是唯一发到 Maven Central 的 artifact（结构 §13.3；docs/specs/
-# 2026-09-25-module-granularity-adr.md 讲清了为什么只发一个）。
+# annona-spi 是对外契约 artifact（结构 §13.3；docs/specs/2026-09-25-module-granularity-adr.md
+# 讲清了为什么只契约层对外）。
 # 触发：v* tag；且 secrets.OSSRH_USERNAME 已配（未配的 fork PR / 首次未 setup 时跳过）。
-# GPG 私钥用于签名，Central 强制要求。
+#
+# TODO(P5-05): 本 workflow 现在是“结构就位、真跑必失败”的状态，首次发布前需补三件：
+#   1) 根 pom 无 distributionManagement / 也未接入 central-publishing-maven-plugin，
+#      裸 `mvn deploy` 会直接报“repository element was not specified”。
+#   2) Central 强制要求 -sources.jar / -javadoc.jar / GPG 签名；仓库里未配置
+#      maven-source-plugin / maven-javadoc-plugin / maven-gpg-plugin。setup-java 的
+#      gpg-private-key 只导入密钥，不会自动签名产物。
+#   3) `-am` 会连带部署 parent pom（必需，否则第三方无法解析 annona-spi 的 parent），
+#      故文档不得写“只上传一个 jar”；server/common/infrastructure 应用 maven.deploy.skip 排除。
+# 详见阶段总结 §5 D11 与 D9。
 name: Publish SPI
 
 on:

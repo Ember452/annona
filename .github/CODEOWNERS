@@ -6,7 +6,8 @@
 # 具体强审范围：
 #   - annona-server/src/main/java/io/annona/modules/planner/**
 #   - annona-server/src/main/java/io/annona/shared/direction/**
-#   - annona-spi/**（唯一发布到 Central 的 artifact，API 变更成本高）
+#   - annona-spi/**（对外契约：它是唯一对外发布的 artifact，发布时会连带 parent pom
+#     与它自己的依赖，但第三方只需依赖 spi 即可写实现；API 变更成本最高）
 #   - docs/specs/**（ADR 是决策真相源，改动即改决策）
 #   - .github/**（workflow / hooks 影响门禁本身）
 
