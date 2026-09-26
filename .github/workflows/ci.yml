@@ -168,7 +168,7 @@ jobs:
           sed -i 's|^S3_SECRET_KEY=.*|S3_SECRET_KEY=ci-minio-sk|' .env
       - name: Bring up the full stack
         run: docker compose --env-file .env -f docker/docker-compose.yml up -d --wait
-      - name: Probe /actuator/health + home page
+      - name: Probe /actuator/health + home page + SPA deep link
         run: |
           for i in $(seq 1 30); do
             if curl -fsS http://localhost/actuator/health | grep -q '"status":"UP"'; then
@@ -178,6 +178,10 @@ jobs:
           done
           curl -fsS http://localhost/actuator/health | grep '"status":"UP"'
           curl -fsS http://localhost/ | grep -qi 'annona'
+          # D1 SPA fallback：非根 deep link 必须回前端 shell（index.html），而不是 404
+          curl -fsS http://localhost/study | grep -qi 'annona'
+          # D1 回退不得吞掉未映射 API 的真实 404（守 D19 边界）
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/api/definitely-not-a-route)" = "404"
       - name: Dump server logs on failure
         if: failure()
         run: docker compose --env-file .env -f docker/docker-compose.yml logs --tail=200
