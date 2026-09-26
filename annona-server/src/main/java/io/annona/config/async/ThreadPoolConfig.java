@@ -32,7 +32,13 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
  *       {@code DataSourceHealthIndicator} 等指标风格一致（AGENTS.md 借鉴地图 A 表 P0-01/P1 行
  *       "必改：池名与 Micrometer 指标绑定"）。</li>
  *   <li>拒绝策略差异化：AI-IO 池 {@code AbortPolicy}（上游 LLM 慢或挂时快速失败，
- *       避免调用方线程被拖垮引发雪崩）；其余 3 池 {@code CallerRunsPolicy}（背压）。</li>
+ *       避免调用方线程被拖垮引发雪崩）；其余 3 池 {@code CallerRunsPolicy}（背压）。
+ *       <b>注</b>：“调用方线程被拉去跑任务”对 {@code cpuExecutor} 在高分块并发时可能
+ *       反过来拖住请求线程；因为没有真实提交方，这个取舍现在无法用数据定，
+ *       已记入阶段总结技术债 D21（触发条件：P1a-04 心跳/ETL 有真实提交方并压测）。</li>
+ *   <li>关闭：三个原生池的 {@code destroyMethod} 置空，统一由
+ *       {@link AnnonaExecutorShutdown} 做 shutdown + awaitTermination，
+ *       否则在飞任务会被静默丢弃。</li>
  * </ol>
  *
  * <p>本类<b>不</b>搬 MockPilot 的 {@code Threads.printException} 工具类——它内部有
@@ -77,7 +83,7 @@ public class ThreadPoolConfig {
     }
 
     /** AI-IO 池：LLM HTTP 调用。AbortPolicy 快速拒绝上游慢的场景。 */
-    @Bean(name = "aiIoExecutor", destroyMethod = "shutdown")
+    @Bean(name = "aiIoExecutor", destroyMethod = "")
     public ExecutorService aiIoExecutor() {
         Pool pool = props.getAiIo();
         logPool("ai-io", pool, "AbortPolicy");
@@ -85,7 +91,7 @@ public class ThreadPoolConfig {
     }
 
     /** CPU 池：分块 / 加密 / 结构化输出解析等纯计算。 */
-    @Bean(name = "cpuExecutor", destroyMethod = "shutdown")
+    @Bean(name = "cpuExecutor", destroyMethod = "")
     public ExecutorService cpuExecutor() {
         Pool pool = props.getCpu();
         logPool("cpu", pool, "CallerRunsPolicy");
@@ -93,7 +99,7 @@ public class ThreadPoolConfig {
     }
 
     /** 查询池：只读聚合（热力图、趋势、决策面板数据）。 */
-    @Bean(name = "queryExecutor", destroyMethod = "shutdown")
+    @Bean(name = "queryExecutor", destroyMethod = "")
     public ExecutorService queryExecutor() {
         Pool pool = props.getQuery();
         logPool("query", pool, "CallerRunsPolicy");
