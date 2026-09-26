@@ -119,9 +119,10 @@ io.annona
 │   ├── properties/                    #   @ConfigurationProperties 类（每域一个，禁止散落 @Value）
 │   └── observability/                 #   Micrometer 指标、健康指示器、trace_id 过滤器
 │
-├── shared/                            # 【跨模块共享的内核物】不放业务规则，只放契约与读模型
+├── shared/                            # 【跨模块共享的内核物】不放业务特性，只放契约、读模型与跨模块主数据（direction）
 │   ├── domain/                        #   领域事件定义（StudySessionClosed、InterviewEvaluated…）
-│   ├── direction/                     #   方向字典只读访问（被 6 个模块消费，故独立于 identity/study）
+│   ├── direction/                     #   方向主数据属主（P1a-03）：字典管理 API（建/档/绑）+ 对消费
+│   │                                  #   模块的只读访问（被 6 个模块消费，故独立于 identity/study）
 │   ├── signal/                        #   LearningSignalReader 的门面与信号快照模型
 │   ├── idempotent/                    #   幂等键生成与消费模板（交卷、回写、异步任务）
 │   └── meta/                          #   非业务的运维探针端点（/api/meta/ping 等，P0-03 引入）；
@@ -441,7 +442,7 @@ Maven Central 的对外契约）。两边分工写清，免得后人误以为 Ar
 | Flyway | `V<n>__<snake_case>.sql` | `V7__add_decision_trace.sql` |
 | Prompt | `<用途>-<动作>.st` | `interview-question.st` |
 | SKILL | `skills/<方向key>/SKILL.md` | `skills/java-concurrency/SKILL.md` |
-| 表 / 列 | snake_case，业务表必含 `user_id` | `study_session.direction_key` |
+| 表 / 列 | snake_case，业务表必含 `user_id` | `study_session.direction_id` |
 | 测试类 | `被测类 + Test`（单测）/ `+IT`（集成） | `MasteryCalculatorTest` |
 | Git 分支/提交 | `feat\|fix\|docs\|refactor\|test\|chore: <描述>`（commit-msg hook 校验，**P0-11 落地前靠自觉**） | — |
 

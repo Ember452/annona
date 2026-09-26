@@ -58,7 +58,7 @@
 
 ## 4. 功能全景
 
-标记：`G`=参考 interview-guide　`M`=参考 MockPilot　`S`=参考 summer-checkin　`新`=本项目独有。均为**能力与设计借鉴，不搬运代码**。
+标记：`G`=参考 interview-guide　`M`=参考 MockPilot　`S`=参考 summer-checkin　`新`=本项目独有。借鉴方式为**改造复用**（三仓均为本人自有项目，见开发计划 §借鉴地图使用方式）；**前端视觉与交互基准 = summer-checkin（大幅借鉴），summer 没有的功能页面借 interview-guide**。
 
 ### A. 自习室与学习行为采集
 
@@ -224,7 +224,7 @@ direction
   origin        enum   SKILL_BUILTIN | KNOWLEDGE_BASE | USER_CUSTOM | JD_PARSED
   kb_doc_id           派生自哪个知识库（origin=KNOWLEDGE_BASE 时）
   status        enum   ACTIVE | ARCHIVED
-  user_id               USER_CUSTOM 归属；内置与知识库派生为 NULL
+  user_id               OWNER：USER_CUSTOM / KNOWLEDGE_BASE（由 USER_CUSTOM 升级）为本人；内置为 NULL
   meta_json           难度分布、阶段模板、SKILL 摘要
 ```
 

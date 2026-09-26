@@ -10,7 +10,7 @@
 | 实现深度 | **结构性决策一步到位，反馈依赖项等反馈再做**。前者（事后返工代价指数级）：数据模型与迁移、模块边界、门禁与 CI、测试分层、密钥处理；后者（没有真实使用数据就做等于猜）：检索参数调优、性能目标校准、体验打磨——v1 一律用可工作的最简起点与借鉴参数，调优等真实反馈 |
 | **验证环境** | **本机无 Docker**：开发期只跑代码正确性校验（`mvn verify` + 前端构建），容器与集成测试全部由 CI 执行（见 `specs/2026-09-25-dockerless-local-dev-adr.md`） |
 | 任务编号 | `P<阶段><子阶段>-<序号>`，例 `P1a-07`；任务清单与进度**以本文任务表为唯一真相源**。对外另维**一个阶段一个 issue**（阶段开工前建，正文引用本阶段任务表），commit 正文写 `Task: P0-01`；`Refs: #<n>` 只用于关联 bug / 提案类 issue |
-| 总规模 | 约 **88.5 人日**（P0 10.5 · P1 36 · P2 12 · P3 12 · P4 10 · P5 8） |
+| 总规模 | 约 **89.5 人日**（P0 10.5 · P1 37 · P2 12 · P3 12 · P4 10 · P5 8） |
 | 硬规则 | **上一阶段出口条件未全部满足 + 阶段总结未写，不得开始下一阶段**（AGENTS.md §7） |
 
 ## 当前进度（唯一状态源）
@@ -19,7 +19,7 @@
 |---|---|---|
 | 文档（设计/结构/计划/ADR）+ 入口（README/LICENSE/.env.example/SECURITY/CONTRIBUTING/CoC/.editorconfig） | ✅ done | 本仓 20+ 个文档文件；LICENSE 为 AGPL-3.0 FSF 原文（已校验） |
 | P0 骨架与门禁 | ✅ done(2026-09-26) —— 六条出口全部满足；② compose-smoke + docker-it 均已在真 PG/Redis 上实证（main run [#14](https://github.com/Ember452/annona/actions/runs/36220137784) 六 job 全绿） | `mvn -B -q verify` EXIT=0（48 tests）、6 个 workflow 解析通过、CI run #14 Success（含 gate）、本地与 `origin/main` 齐平；详见 [reports/P0-骨架-阶段总结.md](./reports/P0-骨架-阶段总结.md) §3 |
-| P1a 数据与知识底座 | 🔶 doing —— P1a-01 identity 后端已完成并入 main（a356cb7 feat → 0484f5c docs → 9730074 加固批）；CI run #15/#16 六 job 全绿，含真实 PG+Redis 集测（登录闭环 / 会话 CRUD / schema validate）与 compose 冒烟（[run #16](https://github.com/Ember452/annona/actions/runs/36226190524)）。P1a-02 三 provider 已实现、本机 `mvn verify` 82 tests 全绿（含 4 个新增测试类 + ArchUnit），**待 CI 的 `@Tag("docker")` 集测（none bootstrap / platform JIT）确认**；下一任务 P1a-03 | — |
+| P1a 数据与知识底座 | 🔶 doing —— P1a-01 identity 后端已完成并入 main（a356cb7 feat → 0484f5c docs → 9730074 加固批）；CI run #15/#16 六 job 全绿，含真实 PG+Redis 集测（登录闭环 / 会话 CRUD / schema validate）与 compose 冒烟（[run #16](https://github.com/Ember452/annona/actions/runs/36226190524)）。P1a-02 三 provider 已并入 main（136bc70 feat → e4a8d06 ADR），本机 `mvn verify` 82 tests 全绿；`@Tag("docker")` 集测（none bootstrap / platform JIT）已由 [run #20](https://github.com/Ember452/annona/actions/runs/36236993728) 六 job 全绿坐实（随批推送的 cafe1bc 那次红仅 compose-smoke 探活断言写法问题、业务 job 全绿，已由 31d2d67 修复）；下一任务 P1a-00（设计基座，随后 P1a-03） | — |
 | P1b 面试与评估 | ⬜ todo | — |
 | P1c 训练决策层 | ⬜ todo | — |
 | P2 / P3 / P4 / P5 | ⬜ todo | — |
@@ -31,7 +31,7 @@
 ```text
 P0 骨架        P1 闭环内核                    P2 体验留存   P3 语音    P4 编排     P5 打磨发布
 ───────────  ────────────────────────────  ───────────  ────────  ─────────  ──────────
-10.5d        36d = 12 + 14 + 10             12d          12d       10d        8d
+10.5d        37d = 13 + 14 + 10             12d          12d       10d        8d
              P1a 数据与知识底座
              P1b 面试与评估
              P1c 训练决策层
@@ -51,7 +51,7 @@ P0 骨架        P1 闭环内核                    P2 体验留存   P3 语音 
 
 1. 任务开工前，先扫描该任务在下表中的路径（批量读文件或派 Explore subagent），产出一段**借鉴说明**写在该任务的 commit 正文（或关联的 bug/提案 issue）：读过哪些文件 → 借鉴哪个机制 → 必须改掉的不适配点及理由 → 上游根本没有的部分。
 2. **未扫描 = 任务未开始**；阶段 issue 与阶段总结的第 8 节汇总本阶段实际借鉴了什么。
-3. 借鉴 = **参考机制、结构、参数取值与测试用例清单**，不是复制代码（见 `specs/2026-09-25-zero-migration-adr.md`）。若确实搬了代码：文件头保留 AGPL 来源注释并在 issue 记录；跨文件成片搬运才需先征得用户同意。
+3. 借鉴 = **参考机制、结构、参数取值与测试用例清单**；确需搬代码时直接改造复用（上游三仓 🅖/🅜/🅢 均为本人自有项目，**不受许可约束、无需保留来源声明**，见 `specs/2026-09-25-zero-migration-adr.md`）；跨文件成片搬运才需先征得用户同意。
 4. 路径均为 2026-09-25 实测存在，**相对各自仓库根**。上游重构后先改本表再开工。
 
 上游仓库根路径：
@@ -82,6 +82,7 @@ P0 骨架        P1 闭环内核                    P2 体验留存   P3 语音 
 | P0-14/15 门面与仓库设置 | 无（🅖/🅢 有 CODEOWNERS 但内容完全不同） | 无 | CODEOWNERS / ISSUE/PR 模板 / FUNDING 全部自写（dependabot 已移出 P0，见 D16）；`ISSUE_TEMPLATE/feature_request.yml` 内嵌 AGENTS.md §1 九条 Non-goals 自查；`skill-proposal.yml` 对齐 §13.3 表格新增面试方向提案；P0-15 branch protection 属 GitHub 网页操作，不产文件（作者手工） |
 | P0-01/P0-12 两个 Boot/Maven 认知坑（本次评审实测） | 无（上游没踩到这一层） | 无 | ① **Maven POM 里显式写的 `<configuration>` 值优先于 `-D` 用户属性**：根 pom 直写 `<excludedGroups>docker</excludedGroups>` 会让 CI 的 `-DexcludedGroups=` 失效，集测 0 个测试仍报 BUILD SUCCESS（已用两次反向实验证实）→ 排除项必须走属性 `${annona.tests.excluded}`，且 CI 要断言 `Tests run` 非零。② **`@ConditionalOnBean` 只能用在自动配置类上**：普通 `@Configuration` 的求值早于 autoconfig 注册 bean 定义，条件永远为假（已导致 `FlywayExtensionGuard` 静默失效）→ 用 `@ConditionalOnProperty` + `Optional<DataSource>`（不选 ObjectProvider：它不是函数接口，测试里无法 lambda 造桩）。③ **surefire 默认不扫 `*IT.java`**，改用 `*IT` 命名集测时必须显式 `<includes>`。④ **GitHub 对无法解析的 workflow 文件是“静默不运行”**：不报错、不产生 check run，只在 Actions 页留一行提示（曾让一整批 CI 改动实际零执行，而 branch protection 显示 expected）→ 改 `.github/workflows/**` 必跑 `python scripts/ci/validate-workflows.py`（已挂进 pre-commit）。YAML 普通标量里出现 `: ` 就是语法错。⑤ **预启动（pre-flight）检查不能假设环境已初始化**：`FlywayExtensionGuard` 查 `pg_extension`（已安装）而非 `pg_available_extensions`（可用），而 V1 迁移本身就是装扩展的地方 → 空库上应用拒绝启动。compose 路径因 `init.sql` 预装了扩展而“绿”，CI 的 `services:` 没有 initdb 脚本 → **同一份代码在两种部署路径下结论相反，集成测试必须走没有 initdb hack 的那条**。另：`pg_available_extensions` 列名是 `name`，`pg_extension` 是 `extname`。⑥ **MinIO 镜像可得性已解决（2026-09-26）**：D13 选型落 [specs/2026-09-26-s3-storage-silo-adr.md](./specs/2026-09-26-s3-storage-silo-adr.md)（PGSTY Silo，`MINIO_*` env 与 `/minio/*` 路由兼容契约保留），compose `storage.image` 已 pin；profile 门控与两项 CI 实测（匿名 pull、`MINIO_DEFAULT_BUCKETS` 生效性）留在 P1a-05 | 见阶段总结 §5 D17–D23 |
 | P1a 各表引用 direction 的方式 | 无（上游无方向字典） | 无 | 业务表方向列一律 `direction_id` 外键到 `direction.id`；**不得存 `key` 字符串**（`key` 只在 owner 内唯一，存字符串无法定位归属）。见 `specs/2026-09-25-direction-master-data-adr.md` 修订记录 |
+| P1a-03 direction 字典与选择器 | 无（🅢 `StudyRecord.subject`/`Checkin.subject` 是 nullable 自由文本，反例见 ADR §背景；`🅖` 的 skillKey 机制归 P1b-01 行管） | 无（借“自由文本无法对齐学习侧与面试侧”的反例直觉） | 字典形状按 [direction ADR 修订版](./specs/2026-09-25-direction-master-data-adr.md)；key 生成（ASCII slug / 中文 custom- 前缀）、owner 命名空间唯一、name 维度判重、200 上限、只归档不物理删、选择器交互（下拉 + 即建 + 绑定 + 归档）均上游没有，全自写 |
 | D1 SPA fallback（Spring 侧，2026-09-26） | `🅖 frontend/nginx.conf` 的 `try_files $uri $uri/ /index.html`、`🅖 common/exception/GlobalExceptionHandler.java`（NoResourceFoundException） | 「非资源路径→index.html、API/资源保持 404」这条边界直觉 | **不照搬 nginx 层**：annona 静态打进 jar、nginx 仅 `proxy_pass`（拓扑不同）→ 改 Spring 侧 `config/web/SpaWebMvcConfig` + `SpaFallbackPolicy`（`PathResourceResolver`）；回退绝不吞 `/api`、带扩展名资源（守 D19），本机纯单测锁真值表 |
 | P1b-10 模型 Key 与额度 | `🅖 modules/llmprovider/service/{ApiKeyEncryptionService,LlmProviderConfigService,LlmProviderBootstrapService}.java`、`modules/llmprovider/dto/{ProviderDTO,AsrConfigDTO,TtsConfigDTO}.java`、`common/ai/{LlmProviderRegistry,ApiPathResolver,LlmEmbeddingConfig}.java`（+`common/config/LlmProviderProperties.java`）、`🅢 src/lib/{usage.ts,model-pool.ts,deepseek.ts}`、`prisma/schema.prisma::TokenUsage` | AES/GCM + nonce 结构、masked 字段形态、Provider 连通性测试、模型池 LOW 档降级思路 | **不抄 `DEV_FALLBACK_KEY`**（ADR 已定）；Key 改为五用途拆分；记账字段补 `prompt_hash/evaluator_version` |
 
@@ -112,7 +113,9 @@ P0 骨架        P1 闭环内核                    P2 体验留存   P3 语音 
 
 ### D. 前端 UI（**重点：设计、交互与组件结构全部从这里借**）
 
-| 面板/组件 | 扫描路径 | 借鉴什么 | 迁移注意（Next → Vite） |
+**设计基准与借鉴方式（对本表全部行生效，覆盖 §使用方式 3 的默认口径）**：视觉与交互基准 = 🅢 summer-checkin（**大幅借鉴**，含首页等页面的布局与动效）；🅢 没有的功能页面借 🅖 interview-guide；两者皆无才自写（§E）。视觉裁决 🅢 优先，两仓比对只用于实现细节择优，禁止逐页混搭两种风格。借鉴方式 = **改造复用**：每行第一列即 annona 对应页面/组件，开工前同时读本行 🅢 与 🅖 参考代码——UI 层（JSX 结构、Tailwind 类名、CSS 动效、交互状态机）直接搬改；Next 专属层（`'use client'`、Server Actions、App Router、`next-themes`）必须改写为 Vite + React Router + REST 等价物；上游测试清单作为改造后的行为规格；高信息密度页（面试、可解释面板）布局按 annona 信息结构适配，可用性优先于好看。
+
+| annona 页面/组件 | 扫描路径 | 借鉴什么 | 迁移注意（Next → Vite） |
 |---|---|---|---|
 | 全局风格与基础件 | `🅢 src/components/ui/*`（button/card/dialog/sheet/tabs/sonner/badge…）、`src/app/globals.css`、`src/styles/{markdown,onboarding,studio,studio-theme,accordion-gallery,bg-accordion}.css`、`components.json`、`src/components/theme-provider.tsx`、`src/styles/ui/variable-proximity.{css,tsx}` | shadcn 基座与主题变量、**鼠标邻近动效**、markdown 样式表 | 组件基本可直接重写；`next-themes` 换本地 `useTheme`（参考 `🅖 frontend/src/hooks/useTheme.ts`） |
 | 3D 学习小岛 | `🅢 src/components/landing/learning-island.tsx`（**已实测使用 `@react-three/fiber` + `drei` 的 Canvas/useFrame/MathUtils**）、`landing/learning-island-dynamic.tsx`（懒加载包装）、`island/scene-selector.tsx`、`src/lib/scene-meta.ts`、`package.json`（`three@^0.185.1`/`@react-three/fiber@^9.7.0`/`drei@^10.7.7`） | 场景搭建与相机控制、生长动画驱动变量、**懒加载与降级写法**、场景元数据结构（方向→植物映射） | `next/dynamic` → `React.lazy`；去 `'use client'`；资源改 `public/models/`；移动端 2D 降级需自写 |
@@ -184,16 +187,17 @@ P0-15（仓库设置）不计批次，需你在 GitHub 网页操作。
 
 ---
 
-## P1a 数据与知识底座（12 人日）
+## P1a 数据与知识底座（13 人日）
 
 **目标**：学习行为开始被采集（带质量分级），知识文档能入库、能被检索、能流式问答。
 **前置**：P0 出口全部满足。
 
 | ID | 任务 | 验收 | 人日 | 依赖 |
 |---|---|---|---|---|
+| P1a-00 | `annona-web` 设计基座：引入 shadcn/ui 基础件与主题变量（改造 🅢 `components/ui/*`、`globals.css`、`components.json`），`AppLayout`/全局壳按 🅢 视觉基准重做（侧边栏交互、配色/圆角/间距 token 化；场景主题 token 仍归 P2-04） | 打开任意页面可见 🅢 风格的壳与基础件；P1a 后续页面零迁移地使用 shadcn 组件 | 1 | P0-09 |
 | P1a-01 | `identity` 模块：注册/登录/登出/会话、Redis 会话（7 天滑动）、`user_profile`、`login_attempt` 锁定、scrypt 编码器与透明重哈希 | 注册→登录→改密→旧口令失效；10 次失败登录被锁；`user_session` 写失败不影响登录 | 2（实测含两轮加固 ≈3，加固系数标定点） | P0-06 |
-| P1a-02 | 🔶 `IdentityProvider` 三实现：`local`（会话 Cookie）/ `platform`（受信反代头 + JIT 建号）/ `none`（固定 UUID `00000000-0000-0000-0000-000000000001` 启动 bootstrap）；`/api/**` 强制鉴权 + 白名单（见 [specs/2026-09-26-identity-provider-modes-adr.md](./specs/2026-09-26-identity-provider-modes-adr.md)） | 三种 mode 下同一套业务代码都能跑；none 模式无登录页直达首页 | 1 | P1a-01 |
-| P1a-03 | `direction` 字典服务 + 方向选择器组件（下拉 + 即时新建 + 升级为绑定知识库） | 新建方向即落库；`USER_CUSTOM` 可绑 `kb_doc_id`；有历史数据的方向只能归档不能删 | 1.5 | P0-06 |
+| P1a-02 | `IdentityProvider` 三实现：`local`（会话 Cookie）/ `platform`（受信反代头 + JIT 建号）/ `none`（固定 UUID `00000000-0000-0000-0000-000000000001` 启动 bootstrap）；`/api/**` 强制鉴权 + 白名单（见 [specs/2026-09-26-identity-provider-modes-adr.md](./specs/2026-09-26-identity-provider-modes-adr.md)） | 三种 mode 下同一套业务代码都能跑；none 模式无登录页直达首页 | 1 | P1a-01 |
+| P1a-03 | 🔶 `direction` 字典服务 + 方向选择器组件（下拉 + 即时新建 + 升级为绑定知识库） | 新建方向即落库；`USER_CUSTOM` 可绑 `kb_doc_id`；有历史数据的方向只能归档不能删 | 1.5 | P0-06 |
 | P1a-04 | `study` 采集：打卡、番茄钟、`study_session` + `study_event`、服务端心跳与质量分级（VERIFIED/PARTIAL/SELF_REPORTED） | 挂机 30 分钟无心跳 → 标 PARTIAL；手动补录 → SELF_REPORTED 且不进决策计算（有测试） | 2 | P1a-03 |
 | P1a-05 | `knowledge` 写侧：上传→S3→Tika 解析→结构感知分块→内容 hash 幂等→Embedding 批处理→状态机 + 进度 SSE | 上传 PDF 与 DOCX 各一篇，READY 后能看到分块；重复上传零 token 消耗 | 2.5 | P1a-01 |
 | P1a-06 | 分块器纯逻辑实现 + 单测（死循环兜底、段落边界、重叠滑窗、上限保护） | `chunk` 包覆盖率 ≥85%，golden 快照入库 | 1 | P1a-05 |
