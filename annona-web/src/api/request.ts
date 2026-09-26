@@ -4,9 +4,15 @@ import type { Result } from '../types/api'
 /**
  * annona 前端所有 HTTP 请求的<b>唯一</b>入口。
  *
- * <p>约定：后端一律返回 HTTP 200 + {@link Result}；业务成功 = `code === 0`（对齐
- * `annona-common/Result.SUCCESS_CODE`），其他 code 视为业务失败并由本拦截器转成 rejected
- * Promise。这样调用侧只需要 `.then(data)` / `.catch(err)`，不必各自拆 `Result`。
+ * <p>约定（与 {@code io.annona.config.web.GlobalExceptionHandler} 对齐）：
+ * <ul>
+ *   <li><b>业务失败</b>：HTTP 200 + {@link Result}，失败靠 {@code code !== 0} 判定
+ *       （{@code SUCCESS_CODE = 0} 对齐 {@code Result.SUCCESS_CODE}），本拦截器把它
+ *       转成 rejected Promise，调用侧只需 {@code .then(data)} / {@code .catch(err)}。</li>
+ *   <li><b>传输与路由层失败</b>（404 / 405 / 400 / 500）：<b>真实 HTTP 状态码</b> +
+ *       同样的 {@code Result} 响应体，因此走下面的 error 分支。两类失败都保留
+ *       {@code Result} 形状，所以文案仍可从 {@code message} 取。</li>
+ * </ul>
  *
  * <p>页面与组件禁止 import 原生 `axios`；只用本文件的 `request.get/post/put/patch/delete`。
  *
@@ -46,11 +52,14 @@ instance.interceptors.response.use(
     return response
   },
   (error) => {
-    // 到这里是 HTTP 层失败（后端未响应或非 2xx），后端约定的 Result 路径不会走到这里
+    // 到这里是 HTTP 层失败（404/405/400/500 或后端未响应）。
+    // 后端仍会返 Result 体，优先用它的 message，退回到状态码文案。
     const status: number | undefined = error.response?.status
-    const message = status
-      ? `请求失败（HTTP ${status}），请稍后重试`
-      : '网络连接失败，请检查后端服务是否启动'
+    const fromBody = (error.response?.data as { message?: string } | undefined)?.message
+    const message = fromBody
+      ?? (status
+        ? `请求失败（HTTP ${status}），请稍后重试`
+        : '网络连接失败，请检查后端服务是否启动')
     return Promise.reject(new Error(message))
   },
 )
