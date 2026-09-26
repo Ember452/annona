@@ -22,7 +22,10 @@ import org.springframework.boot.flyway.autoconfigure.FlywayMigrationStrategy;
 
 /**
  * Mockito slice 测试（P0-08）：{@link FlywayExtensionGuard} 的 {@code FlywayMigrationStrategy}
- * 在扩展齐全 / 缺失 / 无 DataSource / DB 不可达四种情境下的行为。不依赖真 PG 与 Docker。
+ * 在扩展可用 / 不可用 / 无 DataSource / DB 不可达四种情境下的行为。不依赖真 PG 与 Docker。
+ *
+ * <p>注意语义是<b>“本服务器可用”</b>而不是“已安装”：空库上扩展本该由 V1 自己创建，
+ * 若查已安装集合会误拒启动（阶段总结 D23）。
  *
  * <p>注意 {@code check-pg-extensions=false} 不再由策略内部判断，而是类上的
  * {@code @ConditionalOnProperty} 决定整个守卫是否装配——那部分由
@@ -32,8 +35,8 @@ import org.springframework.boot.flyway.autoconfigure.FlywayMigrationStrategy;
 class FlywayExtensionGuardTest {
 
     @Test
-    @DisplayName("vector + citext 均已安装 → 不抛，flyway.migrate() 被调")
-    void allExtensionsInstalledProceeds() throws SQLException {
+    @DisplayName("vector + citext 均可用 → 不抛，flyway.migrate() 被调")
+    void allExtensionsAvailableProceeds() throws SQLException {
         DataSource ds = mockDataSourceWithExtensions("vector", "citext");
         Flyway flyway = mock(Flyway.class);
 
@@ -43,7 +46,7 @@ class FlywayExtensionGuardTest {
     }
 
     @Test
-    @DisplayName("缺 vector → 抛错，migrate 从不被调用；消息含 pgvector/pgvector:pg16 可执行提示")
+    @DisplayName("本服务器没有 vector → 抛错，migrate 从不被调用；消息含 pgvector/pgvector:pg16 可执行提示")
     void missingVectorThrows() throws SQLException {
         DataSource ds = mockDataSourceWithExtensions("citext"); // 缺 vector
         Flyway flyway = mock(Flyway.class);
@@ -75,7 +78,7 @@ class FlywayExtensionGuardTest {
 
         assertThatThrownBy(() -> strategy(ds).migrate(flyway))
             .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("pg_extension cannot be read")
+            .hasMessageContaining("pg_available_extensions cannot be read")
             .hasCauseInstanceOf(SQLException.class);
         verify(flyway, never()).migrate();
     }
@@ -89,10 +92,10 @@ class FlywayExtensionGuardTest {
     }
 
     /**
-     * 造一个 mock DataSource：连接上执行任意 SQL 都返回给定 {@code installed} 数组作 ResultSet。
+     * 造一个 mock DataSource：连接上执行任意 SQL 都返回给定 {@code available} 数组作 ResultSet。
      * 每次调用创建独立游标（{@link AtomicInteger}），互不污染。
      */
-    private static DataSource mockDataSourceWithExtensions(String... installed) throws SQLException {
+    private static DataSource mockDataSourceWithExtensions(String... available) throws SQLException {
         DataSource ds = mock(DataSource.class);
         Connection conn = mock(Connection.class);
         PreparedStatement ps = mock(PreparedStatement.class);
@@ -101,8 +104,8 @@ class FlywayExtensionGuardTest {
         when(ds.getConnection()).thenReturn(conn);
         when(conn.prepareStatement(anyString())).thenReturn(ps);
         when(ps.executeQuery()).thenReturn(rs);
-        when(rs.next()).thenAnswer(inv -> cursor.incrementAndGet() < installed.length);
-        when(rs.getString(1)).thenAnswer(inv -> installed[cursor.get()]);
+        when(rs.next()).thenAnswer(inv -> cursor.incrementAndGet() < available.length);
+        when(rs.getString(1)).thenAnswer(inv -> available[cursor.get()]);
         return ds;
     }
 }

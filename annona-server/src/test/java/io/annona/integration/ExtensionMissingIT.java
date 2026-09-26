@@ -7,6 +7,7 @@ import io.annona.AnnonaApplication;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 
@@ -51,8 +52,12 @@ class ExtensionMissingIT {
                 "spring.main.banner-mode=off",
                 "logging.level.root=OFF")
             .run())
-            .isInstanceOf(IllegalStateException.class)
+            // 守卫的 IllegalStateException 发生在 bean 创建阶段，Spring 会把它包成
+            // BeanCreationException（不同于 StartupValidator：后者在 context refresh 前抛，
+            // 所以 ProdProfileWithoutKekIT 断言的就是裸 IllegalStateException）。
+            .isInstanceOf(BeanCreationException.class)
             .hasMessageContaining("Missing required PostgreSQL extensions")
-            .hasMessageContaining("pgvector/pgvector:pg16");
+            .hasMessageContaining("pgvector/pgvector:pg16")
+            .hasRootCauseInstanceOf(IllegalStateException.class);
     }
 }

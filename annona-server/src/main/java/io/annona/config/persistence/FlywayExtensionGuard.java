@@ -30,6 +30,12 @@ import org.springframework.context.annotation.Configuration;
  *       {@code ApplicationEnvironmentPreparedEvent}，此时 DataSource 还没装配；</li>
  *   <li>迁移前的语义与 Flyway 天然耦合（V1 里就有 {@code CREATE EXTENSION vector}），
  *       把可读错误放在这个时机最合适；</li>
+ *   <li><b>检查的是“可用”，不是“已安装”</b>：空库上首次启动时，扩展本来就该由 V1 自己建；
+ *       若查 {@code pg_extension}（已安装集合），它一定为空，应用会<b>在自己的首次迁移前拒绝启动</b>。
+ *       CI 的 {@code services:} 没有 initdb 脚本，因此这个错会在 CI 里爆；而 compose 预挂了
+ *       {@code docker/postgres/init.sql} 先装好扩展，所以它反而看不出来（阶段总结 D23）。因此改查
+ *       {@code pg_available_extensions}：它回答的是“这台服务器到底装得了 pgvector 吗”，
+ *       也正好是运维需要知道的那件事；</li>
  *   <li><b>为什么不用 {@code @ConditionalOnBean(DataSource.class)}</b>：该条件只应用于
  *       自动配置类；普通 {@code @Configuration} 的求值早于 {@code DataSourceAutoConfiguration}
  *       注册 bean 定义，结果会是“条件永远为假 → 守卫永远不装配”，而且单测直测
@@ -38,7 +44,7 @@ import org.springframework.context.annotation.Configuration;
  *       无 DataSource 时守卫仍装配，但跳过检查（本机 test profile 排除 DB autoconfig）。</li>
  * </ul>
  *
- * <p>错误消息给出<b>可执行动作</b>（P0-08 验收："缺 pgvector/citext 扩展时给出可执行提示"），
+ * 错误消息给出<b>可执行动作</b>（P0-08 验收：“缺 pgvector/citext 扩展时给出可执行提示”），
  * 而不是 {@code CREATE EXTENSION} SQL 抛的 "extension 'vector' is not available"——用户
  * 看到那句往往不知道该换镜像还是装扩展。
  */
@@ -66,38 +72,42 @@ public class FlywayExtensionGuard {
     }
 
     /**
-     * 用一次预编译 {@code SELECT ... WHERE extname IN (?, ?)} 拿到已安装扩展集合，
-     * 缺失即抛错（不循环查库，AGENTS.md §Never Do "不要循环调用 DB"）。
+     * 用一次预编译 {@code SELECT ... WHERE name IN (?, ?)} 拿到<b>本服务器可用</b>的扩展集合，
+     * 缺失即抛错（不循环查库，AGENTS.md §Never Do “不要循环调用 DB”）。
+     *
+     * <p>注意列名差异：{@code pg_available_extensions} 用 {@code name}，
+     * {@code pg_extension} 用 {@code extname}。本方法要的是前者。
      */
     private static void requireExtensions(DataSource ds) {
-        Set<String> installed = new HashSet<>();
-        String sql = "SELECT extname FROM pg_extension WHERE extname IN (?, ?)";
+        Set<String> available = new HashSet<>();
+        String sql = "SELECT name FROM pg_available_extensions WHERE name IN (?, ?)";
         try (Connection c = ds.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setString(1, REQUIRED_EXTENSIONS.get(0));
             ps.setString(2, REQUIRED_EXTENSIONS.get(1));
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    installed.add(rs.getString(1));
+                    available.add(rs.getString(1));
                 }
             }
         } catch (SQLException e) {
             throw new IllegalStateException(
-                "annona requires PostgreSQL 16 with pgvector + citext, but pg_extension cannot be read.\n"
-                    + "Confirm the datasource is a PostgreSQL instance and the account has SELECT on pg_extension.\n"
+                "annona requires PostgreSQL 16 with pgvector + citext, but pg_available_extensions cannot be read.\n"
+                    + "Confirm the datasource is a PostgreSQL instance and the account has SELECT on pg_available_extensions.\n"
                     + "Root cause: " + e.getMessage(), e);
         }
         List<String> missing = new ArrayList<>(REQUIRED_EXTENSIONS);
-        missing.removeAll(installed);
+        missing.removeAll(available);
         if (!missing.isEmpty()) {
             throw new IllegalStateException(
-                "Missing required PostgreSQL extensions: " + missing + ".\n"
+                "Missing required PostgreSQL extensions: " + missing
+                    + " (not available on this server; they are not merely uninstalled).\n"
                     + "annona requires PostgreSQL 16 with pgvector. Options:\n"
                     + "  (a) Docker: use image pgvector/pgvector:pg16 (NOT postgres:16)\n"
                     + "  (b) Native: install postgresql-16-pgvector + postgresql-contrib\n"
                     + "  (c) Managed cloud: enable pgvector via the provider's extension console\n"
                     + "See README §Prerequisites.");
         }
-        log.info("PG extension check passed: installed={}", installed);
+        log.info("PG extension availability check passed: available={}", available);
     }
 }
