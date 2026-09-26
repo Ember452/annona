@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { directionApi } from '../api/direction'
-import type { CreateDirectionInput, Direction } from '../types/direction'
+import { directionApi } from '@/api/direction'
+import type { CreateDirectionInput, Direction } from '@/types/direction'
 
 /**
  * direction 字典的取数与变更（P1a-03）。

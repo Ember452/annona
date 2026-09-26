@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios'
-import type { Result } from '../types/api'
+import type { Result } from '@/types/api'
 
 /**
  * annona 前端所有 HTTP 请求的<b>唯一</b>入口。

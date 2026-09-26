@@ -1,5 +1,5 @@
-import { request } from './request'
-import type { BindKbDocInput, CreateDirectionInput, Direction } from '../types/direction'
+import { request } from '@/api/request'
+import type { BindKbDocInput, CreateDirectionInput, Direction } from '@/types/direction'
 
 /**
  * direction 字典（P1a-03）四端点封装。

@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv } from 'vite'
+import { fileURLToPath, URL } from 'node:url'
 import react from '@vitejs/plugin-react'
 
 // annona-web 与 annona-server 的耦合只在两处：
@@ -11,6 +12,12 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    resolve: {
+      // shadcn 生态约定的 @/ 别名（components.json aliases 与 tsconfig paths 对齐）
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
+      },
+    },
     build: {
       // Spring Boot 默认把 classpath:/static/ 下的资源作为根路径静态资源服务
       // （ResourceHttpRequestHandler）；因此 pnpm build 之后 jar 里的 index.html

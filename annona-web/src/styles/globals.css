@@ -1,1 +1,288 @@
+/*
+ * 全局样式基座（设计令牌层）。
+ *
+ * 采用 Tailwind 4 CSS-first 配置，三层结构：
+ *   1. shadcn 语义变量（--background 等）→ 经 var(--theme-*, fallback) 间接引用场景变量；
+ *   2. [data-scene="rain"] 场景块 → 提供场景语义变量（--theme-*）与玻璃面板层（--surface-*）；
+ *   3. @theme inline → 把语义变量暴露为 Tailwind 工具类（bg-background、text-primary…）。
+ *
+ * 场景扩展点（P2-04）：新增场景只需再加一个 [data-scene="xxx"] 块并调整根元素属性，
+ * shadcn 映射层与工具类零改动。当前 data-scene="rain" 静态挂载在 index.html <html> 上。
+ */
+
 @import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ───────────────────────────────────────────────────────────────
+   通用 / 非颜色变量（所有场景共享）
+   ─────────────────────────────────────────────────────────────── */
+:root {
+  --app-font-sans: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif;
+  --app-font-mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  --radius: 0.75rem;
+}
+
+/* ───────────────────────────────────────────────────────────────
+   Shadcn 主题色映射
+   通过 var() 引用下方场景语义变量；fallback 值与雨林默认场景保持一致，
+   保证 data-scene 缺失时样式不退化。
+   ─────────────────────────────────────────────────────────────── */
+:root {
+  --background: var(--theme-background, #0c1f19);
+  --foreground: var(--theme-foreground, #f2f8f4);
+  --card: var(--theme-card, rgba(255, 255, 255, 0.12));
+  --card-foreground: var(--theme-card-foreground, #f2f8f4);
+  --popover: var(--theme-popover, rgba(255, 255, 255, 0.16));
+  --popover-foreground: var(--theme-popover-foreground, #f2f8f4);
+  --primary: var(--theme-primary, #d7ef83);
+  --primary-foreground: var(--theme-primary-foreground, #051612);
+  --secondary: var(--theme-secondary, rgba(255, 255, 255, 0.1));
+  --secondary-foreground: var(--theme-secondary-foreground, #dceddf);
+  --muted: var(--theme-muted, rgba(255, 255, 255, 0.08));
+  --muted-foreground: var(--theme-muted-foreground, #a0bdb2);
+  --accent: var(--theme-accent, rgba(180, 210, 190, 0.18));
+  --accent-foreground: var(--theme-accent-foreground, #d0ede0);
+  --destructive: #e85555;
+  --destructive-foreground: #ffffff;
+  --border: var(--theme-border, rgba(255, 255, 255, 0.14));
+  --input: var(--theme-input, rgba(255, 255, 255, 0.12));
+  --ring: var(--theme-ring, #d7ef83);
+  --chart-1: var(--theme-chart-1, #d7ef83);
+  --chart-2: var(--theme-chart-2, #c8b45a);
+  --chart-3: var(--theme-chart-3, #d7ef83);
+  --chart-4: var(--theme-chart-4, #e0886a);
+  --chart-5: var(--theme-chart-5, #88b85a);
+  --sidebar-background: var(--theme-sidebar-background, rgba(12, 31, 25, 0.9));
+  --sidebar-foreground: var(--theme-sidebar-foreground, #f2f8f4);
+  --sidebar-primary: var(--theme-sidebar-primary, #d7ef83);
+  --sidebar-primary-foreground: var(--theme-sidebar-primary-foreground, #051612);
+  --sidebar-accent: var(--theme-sidebar-accent, rgba(180, 210, 190, 0.16));
+  --sidebar-accent-foreground: var(--theme-sidebar-accent-foreground, #d0ede0);
+  --sidebar-border: var(--theme-sidebar-border, rgba(255, 255, 255, 0.12));
+  --sidebar-ring: var(--theme-sidebar-ring, #d7ef83);
+  --sidebar: var(--theme-sidebar, rgba(12, 31, 25, 0.9));
+}
+
+/* ───────────────────────────────────────────────────────────────
+   场景专属：语义层 + 玻璃面板层
+   新增场景只需要在下面再加一个 [data-scene="xxx"] 块。
+   ─────────────────────────────────────────────────────────────── */
+
+/* —— 雨林（墨绿暖绿，默认） —— */
+[data-scene="rain"] {
+  /* Shadcn 色 */
+  --theme-background: #0c1f19;
+  --theme-foreground: #f2f8f4;
+  --theme-card: rgba(255, 255, 255, 0.12);
+  --theme-card-foreground: #f2f8f4;
+  --theme-popover: rgba(255, 255, 255, 0.16);
+  --theme-popover-foreground: #f2f8f4;
+  --theme-primary: #d7ef83;
+  --theme-primary-foreground: #051612;
+  --theme-secondary: rgba(255, 255, 255, 0.1);
+  --theme-secondary-foreground: #dceddf;
+  --theme-muted: rgba(255, 255, 255, 0.08);
+  --theme-muted-foreground: #a0bdb2;
+  --theme-accent: rgba(180, 210, 190, 0.18);
+  --theme-accent-foreground: #d0ede0;
+  --theme-border: rgba(255, 255, 255, 0.14);
+  --theme-input: rgba(255, 255, 255, 0.12);
+  --theme-ring: #d7ef83;
+  --theme-chart-1: #d7ef83;
+  --theme-chart-2: #c8b45a;
+  --theme-chart-3: #d7ef83;
+  --theme-chart-4: #e0886a;
+  --theme-chart-5: #88b85a;
+  --theme-sidebar-background: rgba(12, 31, 25, 0.9);
+  --theme-sidebar-foreground: #f2f8f4;
+  --theme-sidebar-primary: #d7ef83;
+  --theme-sidebar-primary-foreground: #051612;
+  --theme-sidebar-accent: rgba(180, 210, 190, 0.16);
+  --theme-sidebar-accent-foreground: #d0ede0;
+  --theme-sidebar-border: rgba(255, 255, 255, 0.12);
+  --theme-sidebar-ring: #d7ef83;
+  --theme-sidebar: rgba(12, 31, 25, 0.9);
+
+  /* 玻璃 / 面板背景层（通用面板；营销页 product、统计页 metric 等专用面层随对应任务再补） */
+  --surface-card-bg: rgba(12, 31, 25, 0.55);
+  --surface-card-border: rgba(255, 255, 255, 0.1);
+  --surface-card-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  --surface-input-bg: rgba(255, 255, 255, 0.06);
+  --surface-input-border: rgba(255, 255, 255, 0.1);
+  --surface-glass-bg: rgba(12, 31, 25, 0.5);
+  --surface-glass-border: rgba(255, 255, 255, 0.1);
+  --surface-glass-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  --surface-glass-strong-bg: rgba(8, 20, 16, 0.7);
+  --surface-glass-strong-border: rgba(255, 255, 255, 0.12);
+  --surface-glass-strong-shadow: 0 16px 48px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --surface-page-bg: rgba(12, 31, 25, 0.45);
+  --surface-page-border: rgba(255, 255, 255, 0.08);
+  --surface-page-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
+  --surface-darkglass-bg: rgba(8, 20, 16, 0.65);
+  --surface-darkglass-border: rgba(255, 255, 255, 0.1);
+  --surface-darkglass-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  --surface-panel-bg: rgba(6, 23, 17, 0.54);
+  --surface-panel-border: rgba(255, 255, 255, 0.09);
+  --surface-panel-shadow: 0 18px 46px rgba(0, 0, 0, 0.12);
+  --surface-row-hover-bg: rgba(13, 42, 32, 0.72);
+  --surface-row-hover-border: rgba(215, 239, 131, 0.2);
+
+  /* 导航玻璃 */
+  --surface-nav-bg: rgba(7, 23, 17, 0.66);
+  --surface-nav-hover-bg: rgba(7, 23, 17, 0.82);
+  --surface-nav-hover-border: rgba(215, 239, 131, 0.22);
+
+  /* 文字强调色 / 眉标 */
+  --text-eyebrow: #d7ef83;
+  --text-title: #f5faf6;
+  --text-subtitle: rgba(232, 246, 237, 0.5);
+  --text-heading: rgba(245, 250, 246, 0.86);
+  --text-heading-muted: rgba(232, 246, 237, 0.36);
+  --text-field-label: rgba(232, 246, 237, 0.58);
+}
+
+[data-scene="rain"].dark {
+  --theme-background: #081713;
+  --theme-card: rgba(255, 255, 255, 0.1);
+  --theme-popover: rgba(255, 255, 255, 0.14);
+  --theme-secondary: rgba(255, 255, 255, 0.08);
+  --theme-secondary-foreground: #dceddf;
+  --theme-muted: rgba(255, 255, 255, 0.06);
+  --theme-muted-foreground: #8ca89c;
+  --theme-accent: rgba(180, 210, 190, 0.14);
+  --theme-accent-foreground: #cbe8d9;
+  --theme-border: rgba(255, 255, 255, 0.1);
+  --theme-input: rgba(255, 255, 255, 0.08);
+  --theme-sidebar-background: rgba(8, 23, 19, 0.9);
+  --theme-sidebar-accent: rgba(180, 210, 190, 0.12);
+  --theme-sidebar-accent-foreground: #cbe8d9;
+  --theme-sidebar-border: rgba(255, 255, 255, 0.1);
+  --theme-sidebar: rgba(8, 23, 19, 0.9);
+}
+
+/* ───────────────────────────────────────────────────────────────
+   Tailwind 绑定
+   ─────────────────────────────────────────────────────────────── */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar-background: var(--sidebar-background);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar: var(--sidebar);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --font-sans: var(--app-font-sans);
+  --font-mono: var(--app-font-mono);
+  --font-heading: var(--font-sans);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply font-sans;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    min-height: 100dvh;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    @apply bg-primary/30 text-foreground;
+  }
+}
+
+@layer components {
+  /* ── 玻璃卡片：与 ui/card 的 ring 描边叠加成毛玻璃质感 ── */
+  [data-slot="card"] {
+    background: var(--surface-card-bg);
+    border: 1px solid var(--surface-card-border);
+    box-shadow: var(--surface-card-shadow);
+    backdrop-filter: blur(24px) saturate(130%);
+  }
+
+  [data-slot="input"],
+  [data-slot="textarea"],
+  [data-slot="select-trigger"] {
+    background: var(--surface-input-bg);
+    border-color: var(--surface-input-border);
+    backdrop-filter: blur(16px);
+    color: var(--foreground);
+  }
+
+  [data-slot="input"]::placeholder,
+  [data-slot="textarea"]::placeholder {
+    color: var(--muted-foreground);
+  }
+
+  /* ── 通用玻璃面板 ── */
+  .glass-panel {
+    background: var(--surface-glass-bg);
+    border: 1px solid var(--surface-glass-border);
+    box-shadow: var(--surface-glass-shadow);
+    backdrop-filter: blur(28px) saturate(130%);
+  }
+
+  .glass-panel-strong {
+    background: var(--surface-glass-strong-bg);
+    border: 1px solid var(--surface-glass-strong-border);
+    box-shadow: var(--surface-glass-strong-shadow);
+    backdrop-filter: blur(32px) saturate(140%);
+  }
+
+  .page-surface {
+    background: var(--surface-page-bg);
+    border: 1px solid var(--surface-page-border);
+    box-shadow: var(--surface-page-shadow);
+    backdrop-filter: blur(28px) saturate(130%);
+  }
+
+  /* ── 半透明深色面板 ── */
+  .dark-glass {
+    background: var(--surface-darkglass-bg);
+    border: 1px solid var(--surface-darkglass-border);
+    box-shadow: var(--surface-darkglass-shadow);
+    backdrop-filter: blur(28px) saturate(130%);
+  }
+}

@@ -1,7 +1,7 @@
 import { lazy } from 'react'
 import { createBrowserRouter } from 'react-router-dom'
-import AppLayout from '../layouts/AppLayout'
-import { CHILD_PATHS, ROUTES } from '../constants/routes'
+import AppLayout from '@/layouts/AppLayout'
+import { CHILD_PATHS, ROUTES } from '@/constants/routes'
 
 /**
  * 路由集中表。<b>入口平级</b>是本项目三条设计主张之一（见
