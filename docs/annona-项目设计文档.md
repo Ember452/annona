@@ -305,7 +305,7 @@ user_data_request     导出与硬删除请求。user_id, type(EXPORT|DELETE), s
 3. **任何一次性 token 只存哈希**（`auth_token.token_hash`），且**按 token 反查必须走索引**（PK 以 `purpose` 打头 + 单独 `(token_hash)` 索引；上一版 PK 以 `user_id` 打头，这类查询用不上任何索引）。枚举防护靠 `login_attempt` 的统一失败响应，不靠模糊文案。软删用户不得占住邮箱：`email` 唯一只对 `deleted_at IS NULL` 的行成立，否则 30 天宽限期内无法重新注册。
 4. **v1 不做邮箱强制验证与第三方登录**。自部署环境常常没有 SMTP，`annona.identity.require-email-verification=false` 默认关；GitHub/微信 OAuth 延后到托管版需要时再加（表结构预留 `auth_token.purpose` 扩展）。
 5. **删除是两段式**：`status=DELETED` 立即可见性归零，`user_data_request.scheduled_purge_at`（30 天宽限）到时才物理删。宽限期是为了给“误删 + 学习数据是用户资产”一个反悔窗口。
-6. **单机免登录模式不拆表**：`annona.identity.mode=none` 时启动bootstrap 一个 `id=local` 用户，所有表仍带 `user_id`。这样从单机升到多人**零迁移**——否则早期用户的打卡数据全部要回填归属。
+6. **单机免登录模式不拆表**：`annona.identity.mode=none` 时启动 bootstrap 一个固定 UUID（`00000000-0000-0000-0000-000000000001`，邮箱 `local@annona.local`）的本地用户，所有表仍带 `user_id`。这样从单机升到多人**零迁移**——否则早期用户的打卡数据全部要回填归属。`platform` 模式的凭据来源是受信反向代理请求头（默认 `X-Auth-Request-Email`），按 `app_user.email` 匹配、首次访问 JIT 建号；三种模式的凭据来源与信任边界见 `specs/2026-09-26-identity-provider-modes-adr.md`。
 7. **模型 Key 不在 identity 表组**，在 `model_provider` / `model_key`（§12.1），`scope=SYSTEM` 时属平台所有，用户侧永不可读明文。
 
 v1 **不存**的内容：真实姓名、手机号、身份证、学校/公司身份认证信息。产品不需要它们就能完成闭环，多存一类敏感信息就多一类泄露与合规义务。

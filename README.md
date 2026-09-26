@@ -16,7 +16,7 @@
 
 | 项 | 状态 |
 |---|---|
-| 设计 / 结构 / 开发计划 / 8 条 ADR | ✅ 已定稿，在 [`docs/`](./docs/README.md) |
+| 设计 / 结构 / 开发计划 / 10 条 ADR | ✅ 已定稿，在 [`docs/`](./docs/README.md) |
 | AI 协作规范 | ✅ [`AGENTS.md`](./AGENTS.md) |
 | 仓库入口文件 | ✅ `README` / `LICENSE`(AGPL-3.0 全文) / `SECURITY` / `CONTRIBUTING` / `CODE_OF_CONDUCT` / `.editorconfig` / `.env.example` |
 | **Maven 结构** | ✅ 已拆为 4 个 Java 模块（`annona-common` / `annona-spi` / `annona-infrastructure` / `annona-server`）+ 聚合根 pom；`annona-web` 为 Vite 子项目 |

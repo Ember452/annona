@@ -19,7 +19,7 @@
 |---|---|---|
 | 文档（设计/结构/计划/ADR）+ 入口（README/LICENSE/.env.example/SECURITY/CONTRIBUTING/CoC/.editorconfig） | ✅ done | 本仓 20+ 个文档文件；LICENSE 为 AGPL-3.0 FSF 原文（已校验） |
 | P0 骨架与门禁 | ✅ done(2026-09-26) —— 六条出口全部满足；② compose-smoke + docker-it 均已在真 PG/Redis 上实证（main run [#14](https://github.com/Ember452/annona/actions/runs/36220137784) 六 job 全绿） | `mvn -B -q verify` EXIT=0（48 tests）、6 个 workflow 解析通过、CI run #14 Success（含 gate）、本地与 `origin/main` 齐平；详见 [reports/P0-骨架-阶段总结.md](./reports/P0-骨架-阶段总结.md) §3 |
-| P1a 数据与知识底座 | 🔶 doing —— P1a-01 identity 后端已完成并入 main（a356cb7 feat → 0484f5c docs → 9730074 加固批）；CI run #15/#16 六 job 全绿，含真实 PG+Redis 集测（登录闭环 / 会话 CRUD / schema validate）与 compose 冒烟（[run #16](https://github.com/Ember452/annona/actions/runs/36226190524)）；下一任务 P1a-02 | — |
+| P1a 数据与知识底座 | 🔶 doing —— P1a-01 identity 后端已完成并入 main（a356cb7 feat → 0484f5c docs → 9730074 加固批）；CI run #15/#16 六 job 全绿，含真实 PG+Redis 集测（登录闭环 / 会话 CRUD / schema validate）与 compose 冒烟（[run #16](https://github.com/Ember452/annona/actions/runs/36226190524)）。P1a-02 三 provider 已实现、本机 `mvn verify` 82 tests 全绿（含 4 个新增测试类 + ArchUnit），**待 CI 的 `@Tag("docker")` 集测（none bootstrap / platform JIT）确认**；下一任务 P1a-03 | — |
 | P1b 面试与评估 | ⬜ todo | — |
 | P1c 训练决策层 | ⬜ todo | — |
 | P2 / P3 / P4 / P5 | ⬜ todo | — |
@@ -192,7 +192,7 @@ P0-15（仓库设置）不计批次，需你在 GitHub 网页操作。
 | ID | 任务 | 验收 | 人日 | 依赖 |
 |---|---|---|---|---|
 | P1a-01 | `identity` 模块：注册/登录/登出/会话、Redis 会话（7 天滑动）、`user_profile`、`login_attempt` 锁定、scrypt 编码器与透明重哈希 | 注册→登录→改密→旧口令失效；10 次失败登录被锁；`user_session` 写失败不影响登录 | 2（实测含两轮加固 ≈3，加固系数标定点） | P0-06 |
-| P1a-02 | `IdentityProvider` 三实现：`local` / `platform` / `none`（单机 bootstrap `id=local`） | 三种 mode 下同一套业务代码都能跑；none 模式无登录页直达首页 | 1 | P1a-01 |
+| P1a-02 | 🔶 `IdentityProvider` 三实现：`local`（会话 Cookie）/ `platform`（受信反代头 + JIT 建号）/ `none`（固定 UUID `00000000-0000-0000-0000-000000000001` 启动 bootstrap）；`/api/**` 强制鉴权 + 白名单（见 [specs/2026-09-26-identity-provider-modes-adr.md](./specs/2026-09-26-identity-provider-modes-adr.md)） | 三种 mode 下同一套业务代码都能跑；none 模式无登录页直达首页 | 1 | P1a-01 |
 | P1a-03 | `direction` 字典服务 + 方向选择器组件（下拉 + 即时新建 + 升级为绑定知识库） | 新建方向即落库；`USER_CUSTOM` 可绑 `kb_doc_id`；有历史数据的方向只能归档不能删 | 1.5 | P0-06 |
 | P1a-04 | `study` 采集：打卡、番茄钟、`study_session` + `study_event`、服务端心跳与质量分级（VERIFIED/PARTIAL/SELF_REPORTED） | 挂机 30 分钟无心跳 → 标 PARTIAL；手动补录 → SELF_REPORTED 且不进决策计算（有测试） | 2 | P1a-03 |
 | P1a-05 | `knowledge` 写侧：上传→S3→Tika 解析→结构感知分块→内容 hash 幂等→Embedding 批处理→状态机 + 进度 SSE | 上传 PDF 与 DOCX 各一篇，READY 后能看到分块；重复上传零 token 消耗 | 2.5 | P1a-01 |
