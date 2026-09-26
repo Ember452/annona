@@ -174,7 +174,7 @@ P0-15（仓库设置）不计批次，需你在 GitHub 网页操作。
 | P0-12 | `.github/`：`ci.yml`（unit+ArchUnit / `services:` 跑 pgvector+redis 集测 / compose 冒烟 / 前端 / gitleaks 五个 job）、`e2e.yml`（Playwright 容器 job）、`rag-eval.yml`、`release.yml`、`publish-spi.yml`、`stale.yml`、`dependabot.yml`、`CODEOWNERS`、ISSUE/PR 模板、FUNDING | 按 `specs/2026-09-25-dockerless-local-dev-adr.md` 的 **CI 执行矩阵**建 job；故意提交一个失败断言，确认集测 job 真能红并能拦合并 | 1.5 | P0-07,P0-11 |
 | P0-13 | `Makefile`：`setup / up / dev / test / eval / logs / reset / quickstart`；`quickstart` = 起中间件 → 迁移 → seed → 打印地址与演示账号 | **在 CI/容器环境验证**（本机无 Docker，只验 `make` 语法与目标存在） | 0.5 | P0-10 |
 | P0-14 | 仓库门面。**已完成**：`README.md`（含状态横幅）、`.env.example`、`LICENSE`（AGPL-3.0 FSF 原文逐字复制，已校验 661 行）、`SECURITY.md`、`CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`.editorconfig`。**剩余**：`.github/ISSUE_TEMPLATE` 与 PR 模板文案细化（属 P0-12 产出的一部分） | 新同事只读 README 能跑起来（真找一人验证） | 0.5 | P0-12 |
-| P0-15 | 仓库设置（需在 GitHub 网页/API 做，不产生文件）：branch protection 将集测与 compose job 设为**必需检查**、开启 Dependabot alerts、建 `good-first-issue`/`skill-proposal` 标签、填仓库描述与 topics | 未过 CI 的 PR 无法合并；`gh api` 或设置页截图存档到阶段总结 | 0.5 | P0-12 |
+| P0-15 | 仓库设置（需在 GitHub 网页/API 做，不产生文件）：branch protection 将集测与 compose job 设为**必需检查**、建 `good-first-issue`/`skill-proposal` 标签、填仓库描述与 topics。（~~开启 Dependabot alerts~~ 已推到 P1b-10，见阶段总结 §5 D16） | 未过 CI 的 PR 无法合并；`gh api` 或设置页截图存档到阶段总结 | 0.5 | P0-12 |
 
 **出口条件**：① `mvn -q verify` 绿且 ArchUnit 七条生效（**本机验证到此为止**）；② 全新机器 `docker compose up -d` + `make quickstart` 到首页 200（**由 CI 验证并留存日志链接**，本机无 Docker 不跑）；③ 五个 SPI 有骨架与 Fake 实现；④ hook 与 CI 能拦截违规提交；⑤ `/api/meta/ping` 与一次模型连通性测试通过（可在 CI 或本机自备的 PG/Redis 环境）；⑥ `docs/reports/P0-骨架-阶段总结.md` 已写。
 
