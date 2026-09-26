@@ -1,5 +1,6 @@
 package io.annona.integration;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.annona.AnnonaApplication;
@@ -33,6 +34,12 @@ class ExtensionMissingIT {
     @DisplayName("连到 vanilla postgres:16 时启动抛错，消息含 pgvector/pgvector:pg16")
     void vanillaPostgresWithoutPgvectorFailsBoot() {
         String badUrl = System.getenv("BAD_DB_DATASOURCE_URL");
+        // 故意不用 assumeTrue 跳过：缺少环境就是接线错误，必须响而不是静默过关。
+        // 该 env 由 ci.yml 的 docker-it job 的 badpg service（vanilla postgres:16）提供。
+        assertThat(badUrl)
+            .as("BAD_DB_DATASOURCE_URL 只在 CI 提供；本机不应跑 docker 组测试")
+            .isNotBlank();
+
         assertThatThrownBy(() -> new SpringApplicationBuilder(AnnonaApplication.class)
             .web(WebApplicationType.NONE)
             .properties(

@@ -8,11 +8,11 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.annona.config.properties.AnnonaStartupProperties;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
@@ -22,7 +22,11 @@ import org.springframework.boot.flyway.autoconfigure.FlywayMigrationStrategy;
 
 /**
  * Mockito slice 测试（P0-08）：{@link FlywayExtensionGuard} 的 {@code FlywayMigrationStrategy}
- * 在扩展齐全 / 缺失 / 检查关闭 / DB 不可达四种情境下的行为。不依赖真 PG 与 Docker。
+ * 在扩展齐全 / 缺失 / 无 DataSource / DB 不可达四种情境下的行为。不依赖真 PG 与 Docker。
+ *
+ * <p>注意 {@code check-pg-extensions=false} 不再由策略内部判断，而是类上的
+ * {@code @ConditionalOnProperty} 决定整个守卫是否装配——那部分由
+ * {@code FlywayExtensionGuardWiringIT}（CI 的 docker 组）覆盖，本类只测策略行为本身。
  */
 @DisplayName("FlywayExtensionGuard 迁移前扩展检查（P0-08）")
 class FlywayExtensionGuardTest {
@@ -32,23 +36,19 @@ class FlywayExtensionGuardTest {
     void allExtensionsInstalledProceeds() throws SQLException {
         DataSource ds = mockDataSourceWithExtensions("vector", "citext");
         Flyway flyway = mock(Flyway.class);
-        FlywayMigrationStrategy strategy = new FlywayExtensionGuard()
-            .flywayExtensionGuardStrategy(ds, props(true, true));
 
-        strategy.migrate(flyway);
+        strategy(ds).migrate(flyway);
 
         verify(flyway, times(1)).migrate();
     }
 
     @Test
-    @DisplayName("缺 vector → 抛错，flyway.migrate() 从不被调用；消息含 pgvector/pgvector:pg16 可执行提示")
+    @DisplayName("缺 vector → 抛错，migrate 从不被调用；消息含 pgvector/pgvector:pg16 可执行提示")
     void missingVectorThrows() throws SQLException {
         DataSource ds = mockDataSourceWithExtensions("citext"); // 缺 vector
         Flyway flyway = mock(Flyway.class);
-        FlywayMigrationStrategy strategy = new FlywayExtensionGuard()
-            .flywayExtensionGuardStrategy(ds, props(true, true));
 
-        assertThatThrownBy(() -> strategy.migrate(flyway))
+        assertThatThrownBy(() -> strategy(ds).migrate(flyway))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("Missing required PostgreSQL extensions")
             .hasMessageContaining("vector")
@@ -57,16 +57,12 @@ class FlywayExtensionGuardTest {
     }
 
     @Test
-    @DisplayName("check-pg-extensions=false → 完全跳过查询，直接 migrate（本机 dev/test 场景）")
-    void checkDisabledSkipsQuery() throws SQLException {
-        DataSource ds = mock(DataSource.class);
+    @DisplayName("无 DataSource（test profile 排除 DB autoconfig）→ 跳过检查，直接 migrate")
+    void absentDataSourceSkipsCheck() {
         Flyway flyway = mock(Flyway.class);
-        FlywayMigrationStrategy strategy = new FlywayExtensionGuard()
-            .flywayExtensionGuardStrategy(ds, props(true, false));
 
-        strategy.migrate(flyway);
+        strategy(null).migrate(flyway);
 
-        verify(ds, never()).getConnection();
         verify(flyway, times(1)).migrate();
     }
 
@@ -76,21 +72,20 @@ class FlywayExtensionGuardTest {
         DataSource ds = mock(DataSource.class);
         when(ds.getConnection()).thenThrow(new SQLException("not a postgres"));
         Flyway flyway = mock(Flyway.class);
-        FlywayMigrationStrategy strategy = new FlywayExtensionGuard()
-            .flywayExtensionGuardStrategy(ds, props(true, true));
 
-        assertThatThrownBy(() -> strategy.migrate(flyway))
+        assertThatThrownBy(() -> strategy(ds).migrate(flyway))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("pg_extension cannot be read")
             .hasCauseInstanceOf(SQLException.class);
         verify(flyway, never()).migrate();
     }
 
-    private static AnnonaStartupProperties props(boolean requireKek, boolean checkPgExtensions) {
-        AnnonaStartupProperties p = new AnnonaStartupProperties();
-        p.setRequireKek(requireKek);
-        p.setCheckPgExtensions(checkPgExtensions);
-        return p;
+    /**
+     * 包装成守卫所需的 {@code Optional}；传 null 表示容器里没有 DataSource（空 Optional）。
+     */
+    private static FlywayMigrationStrategy strategy(DataSource ds) {
+        return new FlywayExtensionGuard()
+            .flywayExtensionGuardStrategy(Optional.ofNullable(ds));
     }
 
     /**

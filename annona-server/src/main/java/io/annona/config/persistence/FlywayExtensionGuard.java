@@ -8,11 +8,14 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.flyway.autoconfigure.FlywayMigrationStrategy;
 import org.springframework.context.annotation.Bean;
@@ -27,27 +30,36 @@ import org.springframework.context.annotation.Configuration;
  *       {@code ApplicationEnvironmentPreparedEvent}，此时 DataSource 还没装配；</li>
  *   <li>迁移前的语义与 Flyway 天然耦合（V1 里就有 {@code CREATE EXTENSION vector}），
  *       把可读错误放在这个时机最合适；</li>
- *   <li>{@code @ConditionalOnBean(DataSource.class)}：本机 test profile 排除 DataSource
- *       autoconfig 时本 Bean 不装配，避免"没数据库连不上"的失败噪音。</li>
+ *   <li><b>为什么不用 {@code @ConditionalOnBean(DataSource.class)}</b>：该条件只应用于
+ *       自动配置类；普通 {@code @Configuration} 的求值早于 {@code DataSourceAutoConfiguration}
+ *       注册 bean 定义，结果会是“条件永远为假 → 守卫永远不装配”，而且单测直测
+ *       静态方法看不出这个失效（已踩过，见阶段总结 D18 同族问题）。改用
+ *       {@code @ConditionalOnClass} + {@code @ConditionalOnProperty} + {@code Optional<DataSource>}：
+ *       无 DataSource 时守卫仍装配，但跳过检查（本机 test profile 排除 DB autoconfig）。</li>
  * </ul>
  *
  * <p>错误消息给出<b>可执行动作</b>（P0-08 验收："缺 pgvector/citext 扩展时给出可执行提示"），
  * 而不是 {@code CREATE EXTENSION} SQL 抛的 "extension 'vector' is not available"——用户
  * 看到那句往往不知道该换镜像还是装扩展。
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(AnnonaStartupProperties.class)
-@ConditionalOnBean(DataSource.class)
+@ConditionalOnClass(Flyway.class)
+@ConditionalOnProperty(prefix = "annona.startup", name = "check-pg-extensions", havingValue = "true", matchIfMissing = true)
 public class FlywayExtensionGuard {
 
     private static final Logger log = LoggerFactory.getLogger(FlywayExtensionGuard.class);
     private static final List<String> REQUIRED_EXTENSIONS = List.of("vector", "citext");
 
     @Bean
-    FlywayMigrationStrategy flywayExtensionGuardStrategy(DataSource ds, AnnonaStartupProperties props) {
+    FlywayMigrationStrategy flywayExtensionGuardStrategy(Optional<DataSource> dataSource) {
         return flyway -> {
-            if (props.isCheckPgExtensions()) {
-                requireExtensions(ds);
+            // 用 Optional 而非 ObjectProvider（后者不是函数接口，测试里造桩要写一堆方法）：
+            // 在没有 DataSource 的 profile（如 test）下为空，不能强行创建连接
+            if (dataSource.isPresent()) {
+                requireExtensions(dataSource.get());
+            } else {
+                log.debug("No DataSource available - PG extension check skipped");
             }
             flyway.migrate();
         };

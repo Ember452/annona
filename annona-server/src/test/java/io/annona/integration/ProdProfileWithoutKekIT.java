@@ -18,10 +18,11 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
  * 的语法，走完整的 {@code SpringApplication.run()} 生命周期，验证
  * {@code META-INF/spring.factories} 里的 listener 注册也确实被 Boot 加载。
  *
- * <p>{@code spring.profiles.active=prod} 但 {@code annona.startup.require-kek=true} 且 KEK
- * 属性未注入（{@code application-prod.yaml} 里 KEK 只从 {@code ${ANNONA_SECRET_KEY:}} 读，
- * CI 也不设这个 env）→ StartupValidator 应该抛。DataSource / Flyway 的 autoconfig 都还
- * 没轮到初始化，所以本测试不需要真 PG。
+ * <p>{@code spring.profiles.active=prod} 下 {@code annona.startup.require-kek=true}，而本用例
+ * 用命令行参数把 {@code annona.kek.secret} 显式置空（命令行优先级最高），因此
+ * 不依赖开发者或 CI 机器上是否恰好没导出 {@code ANNONA_SECRET_KEY}。
+ * StartupValidator 在 ApplicationEnvironmentPreparedEvent 上抛，早于 DataSource，
+ * 所以本测试不需要真 PG。
  */
 @DisplayName("prod profile 缺 KEK 应拒绝启动（P0-08 场景 1）")
 class ProdProfileWithoutKekIT {
@@ -37,6 +38,9 @@ class ProdProfileWithoutKekIT {
             .web(WebApplicationType.NONE)
             .run(
                 "--spring.profiles.active=prod",
+                // 显式传空 KEK，不依赖“进程环境里恰好没有 ANNONA_SECRET_KEY”——
+                // 命令行参数优先级高于 profile yaml 与环境变量，任何机器上结果一致
+                "--annona.kek.secret=",
                 "--spring.main.banner-mode=off",
                 "--logging.level.root=OFF"))
             .isInstanceOf(IllegalStateException.class)

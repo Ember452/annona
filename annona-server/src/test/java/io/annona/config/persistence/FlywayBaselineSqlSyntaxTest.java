@@ -54,11 +54,24 @@ class FlywayBaselineSqlSyntaxTest {
     }
 
     @Test
-    @DisplayName("email 使用 CITEXT 类型（依赖 citext 扩展实现大小写不敏感唯一）")
-    void emailColumnUsesCitext() throws IOException {
+    @DisplayName("email 用 CITEXT 且只对活跃用户唯一（软删后允许重新注册）")
+    void emailColumnUsesCitextAndPartialUniqueIndex() throws IOException {
         String sql = readV1();
-        // 匹配 "email CITEXT NOT NULL UNIQUE"（允许任意空白）
-        assertThat(sql).containsPattern("(?i)email\\s+CITEXT\\s+NOT\\s+NULL\\s+UNIQUE");
+        // 列本身不再带全局 UNIQUE（否则两段式删除的 30 天宽限期内无法用同一邮箱重注册）
+        assertThat(sql).containsPattern("(?i)email\\s+CITEXT\\s+NOT\\s+NULL");
+        // 唯一性由部分索引保证，且必须限定在 deleted_at IS NULL
+        assertThat(sql).containsPattern("(?i)CREATE\\s+UNIQUE\\s+INDEX\\s+uq_app_user_email[^;]*WHERE\\s+deleted_at\\s+IS\\s+NULL");
+    }
+
+    @Test
+    @DisplayName("direction 以 owner 为命名空间（多用户可同名方向）且带枚举 CHECK")
+    void directionIsScopedPerOwner() throws IOException {
+        String sql = readV1();
+        assertThat(sql).contains("UNIQUE NULLS NOT DISTINCT (user_id, key)");
+        assertThat(sql).contains("chk_direction_origin");
+        assertThat(sql).contains("REFERENCES app_user (id) ON DELETE CASCADE");
+        // 不允许回到“key 当全局主键”的旧形状
+        assertThat(sql).doesNotContainPattern("(?i)key\\s+VARCHAR\\(64\\)\\s+PRIMARY KEY");
     }
 
     @Test
