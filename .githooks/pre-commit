@@ -11,6 +11,18 @@
 
 set -eu
 
+# 第一道：workflow YAML 自检。GitHub 对无效 workflow 是**静默不运行**（不报错、
+# 不产生 check run），靠 CI 自己查 CI 配置文件是鸡生蛋问题，所以必须本地拦。
+# python/PyYAML 缺失时报错而不是静默跳过（与 gitleaks 同一口径）。
+if git diff --cached --name-only | grep -qE '^\.github/workflows/.*\.ya?ml$'; then
+  if ! command -v python >/dev/null 2>&1; then
+    printf '%s\n' "pre-commit: 本次改了 .github/workflows，需要 python 来跑 YAML 校验。" >&2
+    printf '%s\n' "安装 Python 并 pip install pyyaml 后重新提交。" >&2
+    exit 1
+  fi
+  python scripts/ci/validate-workflows.py || exit 1
+fi
+
 if ! command -v gitleaks >/dev/null 2>&1; then
   cat >&2 <<'MSG'
 pre-commit hook: 未找到 gitleaks。annona 要求本地也跑密钥扫描，
