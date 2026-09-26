@@ -132,7 +132,9 @@ jobs:
       - name: Flyway V1 + docker-tagged ITs
         # 必须同时清掉根 pom 的默认排除（现在走属性，能被覆盖）并指定 groups；
         # 下一步的断言保证“0 个测试”不可能再伪装成绿。
-        run: ./mvnw -B verify -Dannona.tests.excluded= -Dgroups=docker | tee target/docker-it.log
+        run: |
+          mkdir -p target
+          ./mvnw -B verify -Dannona.tests.excluded= -Dgroups=docker | tee target/docker-it.log
       - name: Assert docker-tagged tests actually ran
         # 块形 scalar：普通标量里出现“: ”会被 YAML 当映射分隔符解析失败
         run: |
