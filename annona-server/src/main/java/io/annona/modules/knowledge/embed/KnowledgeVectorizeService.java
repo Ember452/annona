@@ -16,6 +16,7 @@ import io.annona.modules.knowledge.ingest.ContentHashes;
 import io.annona.modules.knowledge.progress.KnowledgeProgressHub;
 import io.annona.modules.knowledge.repository.KbDocChunkRepository;
 import io.annona.modules.knowledge.repository.KbDocRepository;
+import io.annona.spi.model.EmbeddingProvider;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -23,6 +24,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -46,6 +49,9 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
     /** 重试上限（借 🅖 MAX_RETRY_COUNT；重投由端口承担 retryCount 计数）。 */
     public static final int MAX_RETRY = 3;
 
+    /** 进度推进粒度（每批一条 SSE + 一次 DB 进度写）；与 provider 内部的分批上限无关。 */
+    private static final int PROGRESS_BATCH_SIZE = 10;
+
     /** 心跳节流（借 🅖 heartbeatThrottle=30s：批与批之间最多 30s 写一次库）。 */
     private static final long HEARTBEAT_THROTTLE_MILLIS = 30_000;
 
@@ -57,21 +63,30 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
     private final KbDocChunkRepository chunkRepository;
     private final Optional<ObjectStorage> objectStorage;
     private final DocumentParser documentParser;
-    private final Optional<io.annona.spi.model.EmbeddingProvider> embeddingProvider;
+    private final Optional<EmbeddingProvider> embeddingProvider;
     private final KnowledgeProgressHub progressHub;
+    /**
+     * 条件 UPDATE 的事务来源：每个状态迁移经 {@link TransactionTemplate} 自成一个短事务
+     * （LoginAttemptStore 先例）。@Modifying 查询没有调用方事务时 Hibernate 会抛
+     * TransactionRequiredException，而后台消费线程没有任何现成事务上下文——切片测试
+     * mock 掉仓储探不到，只有真库能暴露（P1a-05 CI 实测教训）。
+     */
+    private final TransactionTemplate tx;
 
     public KnowledgeVectorizeService(KbDocRepository docRepository,
         KbDocChunkRepository chunkRepository,
         Optional<ObjectStorage> objectStorage,
         DocumentParser documentParser,
-        Optional<io.annona.spi.model.EmbeddingProvider> embeddingProvider,
-        KnowledgeProgressHub progressHub) {
+        Optional<EmbeddingProvider> embeddingProvider,
+        KnowledgeProgressHub progressHub,
+        PlatformTransactionManager transactionManager) {
         this.docRepository = docRepository;
         this.chunkRepository = chunkRepository;
         this.objectStorage = objectStorage;
         this.documentParser = documentParser;
         this.embeddingProvider = embeddingProvider;
         this.progressHub = progressHub;
+        this.tx = new TransactionTemplate(transactionManager);
     }
 
     @Override
@@ -97,7 +112,8 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
 
         String attemptId = UUID.randomUUID().toString();
         Instant now = Instant.now();
-        if (docRepository.tryMarkParsing(docId, attemptId, now) == 0) {
+        Integer claimed = tx.execute(status -> docRepository.tryMarkParsing(docId, attemptId, now));
+        if (claimed == null || claimed == 0) {
             return TaskStreamPort.Outcome.ACK; // 条件领取失败：其他实例已接手（借 🅖 tryMarkVectorProcessing）
         }
         try {
@@ -125,7 +141,7 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
         }
 
         beat(docId, attemptId, lastHeartbeat);
-        if (docRepository.tryMarkChunking(docId, attemptId, Instant.now()) == 0) {
+        if (tx.execute(s -> docRepository.tryMarkChunking(docId, attemptId, Instant.now())) == 0) {
             throw new AttemptLostException();
         }
         progressHub.publish(docId, new ProgressEvent(KbDocEntity.STATUS_CHUNKING, "分块中", 0, 0, ""));
@@ -139,34 +155,43 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
             chunkIdByIndex.put(row.getChunkIndex(), row.getId());
         }
 
-        if (docRepository.tryMarkEmbedding(docId, attemptId, chunks.size(), Instant.now()) == 0) {
+        if (tx.execute(s -> docRepository.tryMarkEmbedding(docId, attemptId, chunks.size(),
+            Instant.now())) == 0) {
             throw new AttemptLostException();
         }
-        io.annona.spi.model.EmbeddingProvider provider = embeddingProvider
+        EmbeddingProvider provider = embeddingProvider
             .orElseThrow(() -> new BusinessException(ErrorCode.KB_EMBEDDING_NOT_CONFIGURED));
         progressHub.publish(docId, new ProgressEvent(KbDocEntity.STATUS_EMBEDDING, "向量化中",
             0, chunks.size(), ""));
 
         int processed = 0;
-        int batchSize = Math.max(1, 10); // 嵌入批量口径与 provider 内部分批一致（DashScope 上限，借 🅖）
-        for (int from = 0; from < chunks.size(); from += batchSize) {
+        // 进度推进粒度（每批发一条 SSE + 一次 DB 进度写），与 provider 内部的分批上限无关
+        for (int from = 0; from < chunks.size(); from += PROGRESS_BATCH_SIZE) {
             beat(docId, attemptId, lastHeartbeat);
-            List<KnowledgeChunk> batch = chunks.subList(from, Math.min(from + batchSize, chunks.size()));
+            List<KnowledgeChunk> batch = chunks.subList(from,
+                Math.min(from + PROGRESS_BATCH_SIZE, chunks.size()));
             List<float[]> vectors = provider.embed(batch.stream().map(KnowledgeChunk::text).toList());
             for (int i = 0; i < batch.size(); i++) {
                 UUID chunkId = chunkIdByIndex.get(batch.get(i).index());
                 if (chunkId == null) {
-                    throw new IllegalStateException("分块行缺失 docId=" + docId + " index=" + batch.get(i).index());
+                    throw new BusinessException(ErrorCode.INTERNAL_ERROR,
+                        "分块行缺失 docId=" + docId + " index=" + batch.get(i).index());
                 }
-                chunkRepository.updateEmbedding(chunkId, vectorLiteral(vectors.get(i)));
+                final UUID chunkIdFinal = chunkId;
+                final float[] vector = vectors.get(i);
+                tx.executeWithoutResult(s ->
+                    chunkRepository.updateEmbedding(chunkIdFinal, vectorLiteral(vector)));
             }
             processed += batch.size();
-            docRepository.markProgress(docId, attemptId, processed, Instant.now());
+            int processedNow = processed;
+            tx.executeWithoutResult(s ->
+                docRepository.markProgress(docId, attemptId, processedNow, Instant.now()));
             progressHub.publish(docId, new ProgressEvent(KbDocEntity.STATUS_EMBEDDING, "向量化中",
                 processed, chunks.size(), ""));
         }
 
-        if (docRepository.markReady(docId, attemptId, chunks.size(), provider.name(), Instant.now()) == 0) {
+        if (tx.execute(s -> docRepository.markReady(docId, attemptId, chunks.size(),
+            provider.name(), Instant.now())) == 0) {
             throw new AttemptLostException();
         }
         progressHub.publish(docId, new ProgressEvent(KbDocEntity.STATUS_READY, "就绪",
@@ -174,29 +199,32 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
     }
 
     /**
-     * 分块落库（重建式：先清掉旧分块再写新分块，ADR §决策 7）。
-     *
-     * <p>刻意不加 @Transactional：embedding 调用必须留在事务外（铁律），而 delete 与
-     * saveAll 各自依托 Spring Data 的方法级事务——delete 成功后 save 失败会留下"无分块"
-     * 的中间态，由重试路径的 deleteByDocId 幂等重建兜住；自调用 @Transactional 本就不生效
-     * （代理陷阱），与其写一个骗人的注解不如明说依赖幂等重跑。
+     * 分块落库（重建式：先清掉旧分块再写新分块，ADR §决策 7）。delete 与 saveAll 在
+     * 同一个短事务里原子完成（原来分成两个方法级事务、靠幂等重跑兜底——有了
+     * TransactionTemplate 就不必再留中间态）。embedding 调用保持在事务外（铁律）。
+     * heading_path 落库前截断到列宽（畸形多级长标题 otherwise 撑爆 VARCHAR(512)，
+     * 文档会以一个难懂的 DB 错误 FAILED）。
      */
     private void persistChunks(UUID docId, List<KnowledgeChunk> chunks) {
-        chunkRepository.deleteByDocId(docId);
         List<KbDocChunkEntity> rows = new ArrayList<>(chunks.size());
         for (KnowledgeChunk chunk : chunks) {
             KbDocChunkEntity row = new KbDocChunkEntity();
             row.setId(UUID.randomUUID());
             row.setDocId(docId);
             row.setChunkIndex(chunk.index());
-            row.setHeadingPath(chunk.headingPath());
+            row.setHeadingPath(chunk.headingPath().length() > 512
+                ? chunk.headingPath().substring(0, 512)
+                : chunk.headingPath());
             row.setCharStart(chunk.charStart());
             row.setCharEnd(chunk.charEnd());
             row.setContent(chunk.text());
             row.setContentHash(ContentHashes.sha256Hex(chunk.text()));
             rows.add(row);
         }
-        chunkRepository.saveAll(rows);
+        tx.executeWithoutResult(status -> {
+            chunkRepository.deleteByDocId(docId);
+            chunkRepository.saveAll(rows);
+        });
     }
 
     /** 可重试失败：条件重置回 PENDING 后重投；达上限或重置失败（代次易主）→ 判死。 */
@@ -204,11 +232,11 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
         String message, Instant now) {
         progressHub.publish(docId, new ProgressEvent(KbDocEntity.STATUS_FAILED, "失败",
             0, 0, message));
-        int reset = docRepository.resetStaleToPending(docId, attemptId, now);
-        if (reset == 1 && retryCount < MAX_RETRY) {
+        Integer reset = tx.execute(s -> docRepository.resetStaleToPending(docId, attemptId, now));
+        if (reset != null && reset == 1 && retryCount < MAX_RETRY) {
             return TaskStreamPort.Outcome.RETRY;
         }
-        docRepository.markFailedIfPending(docId, message, now);
+        tx.executeWithoutResult(s -> docRepository.markFailedIfPending(docId, message, now));
         return TaskStreamPort.Outcome.DEAD;
     }
 
@@ -218,7 +246,8 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
         if (now - lastHeartbeat[0] < HEARTBEAT_THROTTLE_MILLIS) {
             return;
         }
-        if (docRepository.heartbeat(docId, attemptId, Instant.now()) == 0) {
+        Integer alive = tx.execute(s -> docRepository.heartbeat(docId, attemptId, Instant.now()));
+        if (alive == null || alive == 0) {
             throw new AttemptLostException();
         }
         lastHeartbeat[0] = now;

@@ -25,6 +25,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 /**
  * 上传编排单测——场景移植 🅖 KnowledgeBaseUploadServiceTest（请求线程不解析正文 /
@@ -33,6 +37,23 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("KnowledgeUploadService：上传七步编排")
 @ExtendWith(MockitoExtension.class)
 class KnowledgeUploadServiceTest {
+
+    /** 测试用 no-op 事务管理器：TransactionTemplate 只需要 getTransaction/commit 可调，回调照常执行。 */
+    private static final PlatformTransactionManager TX_MGR = new PlatformTransactionManager() {
+        @Override
+        public TransactionStatus getTransaction(TransactionDefinition definition) {
+            return new SimpleTransactionStatus();
+        }
+
+        @Override
+        public void commit(TransactionStatus status) {
+        }
+
+        @Override
+        public void rollback(TransactionStatus status) {
+        }
+    };
+
 
     @Mock
     private KbDocRepository docRepository;
@@ -52,7 +73,8 @@ class KnowledgeUploadServiceTest {
     @BeforeEach
     void setUp() {
         service = new KnowledgeUploadService(docRepository, Optional.of(objectStorage),
-            vectorizeStream, directionQueryService);
+            vectorizeStream, directionQueryService,
+            TX_MGR);
         content = "讲义内容".getBytes();
     }
 
@@ -161,7 +183,7 @@ class KnowledgeUploadServiceTest {
         @DisplayName("对象存储未配置 → 2306（错误后移到使用点，启动不拦）")
         void storageNotConfigured() {
             KnowledgeUploadService withoutStorage = new KnowledgeUploadService(docRepository,
-                Optional.empty(), vectorizeStream, directionQueryService);
+                Optional.empty(), vectorizeStream, directionQueryService, TX_MGR);
             when(directionQueryService.existsVisibleTo(anyString(), anyString())).thenReturn(true);
 
             assertThatThrownBy(() -> withoutStorage.upload(userId, content, "a.md", directionId))

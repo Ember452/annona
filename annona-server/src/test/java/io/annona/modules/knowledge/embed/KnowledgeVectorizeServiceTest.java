@@ -32,6 +32,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * 向量化消费单测——场景移植 🅖 VectorizeStreamConsumerTest 的条件领取/跳过/重试语义
@@ -40,6 +45,23 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("KnowledgeVectorizeService：向量化消费")
 @ExtendWith(MockitoExtension.class)
 class KnowledgeVectorizeServiceTest {
+
+    /** 测试用 no-op 事务管理器：TransactionTemplate 只需要 getTransaction/commit 可调，回调照常执行。 */
+    private static final PlatformTransactionManager TX_MGR = new PlatformTransactionManager() {
+        @Override
+        public TransactionStatus getTransaction(TransactionDefinition definition) {
+            return new SimpleTransactionStatus();
+        }
+
+        @Override
+        public void commit(TransactionStatus status) {
+        }
+
+        @Override
+        public void rollback(TransactionStatus status) {
+        }
+    };
+
 
     @Mock
     private KbDocRepository docRepository;
@@ -62,7 +84,8 @@ class KnowledgeVectorizeServiceTest {
     @BeforeEach
     void setUp() {
         service = new KnowledgeVectorizeService(docRepository, chunkRepository,
-            Optional.of(objectStorage), documentParser, Optional.of(embeddingProvider), progressHub);
+            Optional.of(objectStorage), documentParser, Optional.of(embeddingProvider), progressHub,
+            TX_MGR);
         doc = new KbDocEntity();
         doc.setId(docId);
         doc.setStatus(KbDocEntity.STATUS_PENDING);

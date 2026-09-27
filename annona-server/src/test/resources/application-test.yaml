@@ -25,7 +25,10 @@ annona:
   startup:
     require-kek: false
     check-pg-extensions: false
-  # 无 JPA 的冒烟上下文：恢复调度器被 @Scheduled 强制提前实例化，test profile 显式关闭
+  # 无 JPA 的冒烟上下文：恢复调度器（@Scheduled）与任务流（SmartLifecycle）都会被
+  # 强制提前实例化，test profile 显式关闭整条 knowledge 后台机器
   knowledge:
     recovery:
+      enabled: false
+    ingest:
       enabled: false

@@ -8,12 +8,16 @@ import io.annona.modules.knowledge.dto.UploadResponse;
 import io.annona.modules.knowledge.entity.KbDocEntity;
 import io.annona.modules.knowledge.listener.KnowledgeVectorizeStream;
 import io.annona.modules.knowledge.repository.KbDocRepository;
+import io.annona.shared.direction.service.DirectionQueryService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 上传编排（knowledge-ingestion-adr §决策 3/7；七步形状借 🅖 KnowledgeBaseUploadService）：
@@ -38,16 +42,20 @@ public class KnowledgeUploadService {
     private final KbDocRepository docRepository;
     private final Optional<ObjectStorage> objectStorage;
     private final KnowledgeVectorizeStream vectorizeStream;
-    private final io.annona.shared.direction.service.DirectionQueryService directionQueryService;
+    private final DirectionQueryService directionQueryService;
+    /** 投递失败兜底判死用的短事务（@Modifying 无调用方事务在真库上必抛）。 */
+    private final TransactionTemplate tx;
 
     public KnowledgeUploadService(KbDocRepository docRepository,
         Optional<ObjectStorage> objectStorage,
         KnowledgeVectorizeStream vectorizeStream,
-        io.annona.shared.direction.service.DirectionQueryService directionQueryService) {
+        DirectionQueryService directionQueryService,
+        PlatformTransactionManager transactionManager) {
         this.docRepository = docRepository;
         this.objectStorage = objectStorage;
         this.vectorizeStream = vectorizeStream;
         this.directionQueryService = directionQueryService;
+        this.tx = new TransactionTemplate(transactionManager);
     }
 
     /**
@@ -104,14 +112,24 @@ public class KnowledgeUploadService {
         doc.setUpdatedAt(Instant.now());
         try {
             docRepository.save(doc);
+        } catch (DataIntegrityViolationException e) {
+            // 并发同内容上传撞 (user_id, file_hash) 唯一键：按幂等处理而非 409——
+            // 谁先落库谁赢，后到者拿同一行返回 duplicate（与预检查同语义，免竞态误差）
+            KbDocEntity winner = docRepository.findByUserIdAndFileHash(user, fileHash).orElse(null);
+            if (winner != null) {
+                objectStorage.get().delete(storageKey); // 后到者自删孤儿对象
+                return new UploadResponse(winner.getId(), true, winner.getStatus(),
+                    "已在库中，本次未产生任何解析与向量消耗");
+            }
+            throw e;
         } catch (RuntimeException e) {
             storage.delete(storageKey); // 补偿：不留 S3 孤儿对象；补偿失败不掩盖原异常（借 🅖）
             throw e;
         }
 
         if (!vectorizeStream.send(doc.getId())) {
-            docRepository.markFailedIfPending(doc.getId(), "处理任务投递失败，请在文档列表中重试处理",
-                Instant.now());
+            tx.executeWithoutResult(s -> docRepository.markFailedIfPending(doc.getId(),
+                "处理任务投递失败，请在文档列表中重试处理", Instant.now()));
             throw new BusinessException(ErrorCode.KB_DOC_ENQUEUE_FAILED);
         }
         return new UploadResponse(doc.getId(), false, KbDocEntity.STATUS_PENDING, "已上传，解析与向量化进行中");
