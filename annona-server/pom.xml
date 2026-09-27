@@ -127,6 +127,36 @@
                     <mainClass>io.annona.AnnonaApplication</mainClass>
                 </configuration>
             </plugin>
+
+            <!-- 覆盖率门槛机检（AGENTS §4「其余 60%」）：BUNDLE 行覆盖 < 60% 直接构建失败。
+                 实测基线（2026-09-27，unit+slice 口径）68.0%。AGENTS 承诺的关键纯逻辑包 85%
+                 （planner/mastery、planner/guard、evaluation/structured、knowledge/chunk、
+                 infrastructure 分词与向量序列化）在各自包首个落地时（P1a-06 起）在此追加
+                 带 <includes> 的专用 check execution——现在没有的包不预置规则（YAGNI）。 -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>coverage-check</id>
+                        <goals><goal>check</goal></goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.60</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 </project>

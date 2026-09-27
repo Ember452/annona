@@ -70,6 +70,12 @@
         <!-- Mockito 在 JDK 21 上动态 attach 会告警，显式放行（surefire 与 CI 同一口径） -->
         <annona.test.jvmArgs>--enable-native-access=ALL-UNNAMED</annona.test.jvmArgs>
 
+        <!-- JaCoCo 覆盖率（P1a 起兑现 AGENTS §4 的阈值承诺：其余 60%、关键纯逻辑包 85%）。
+             jacoco.argLine 默认留空：surefire 的 argLine 拼接它，prepare-agent 未跑时也不至于
+             把字面量 ${jacoco.argLine} 喂给 JVM。接入记录见 2026-09-27 加固批。 -->
+        <jacoco.version>0.8.12</jacoco.version>
+        <jacoco.argLine></jacoco.argLine>
+
         <!-- 本机无 Docker：默认排除需真实中间件的 docker 组测试。必须走属性而不是在
              <configuration> 里直写 `docker`——Maven 的 POM 显式配置优先于 `-D` 用户属性，
              直写会让 CI 的 `-DexcludedGroups=` 失效，导致集测 0 个测试仍然 BUILD SUCCESS。
@@ -97,7 +103,10 @@
             </dependency>
 
             <!-- spring-boot-starter-parent 已管理 Boot 生态版本；这里只补 AI 侧的 BOM。
-                 2.0.0 已确认可从 Maven Central 直接解析，不需要 repo.spring.io/milestone。 -->
+                 2.0.0 已确认可从 Maven Central 直接解析，不需要 repo.spring.io/milestone。
+                 注意：截至 P1a 四个模块尚无任何 spring-ai 依赖（零引用），本 BOM 是为
+                 P1b-02/06 的模型接入预置的版本钉——首个真实依赖进来时复核版本仍受支持，
+                 若届时 P1b 改用自研 ModelProvider 网关则移除本条。 -->
             <dependency>
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-bom</artifactId>
@@ -206,6 +215,29 @@
             </plugin>
 
             <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <!-- 所有模块继承：agent 挂到 surefire；check（阈值门槛）只在需要它的
+                         模块 pom 里单独声明（annona-server），避免 spi/common 这类
+                         "自身模块内测试覆盖不了被 server 消费的代码"的模块被误伤 -->
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals><goal>prepare-agent</goal></goals>
+                        <configuration>
+                            <propertyName>jacoco.argLine</propertyName>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals><goal>report</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
@@ -213,7 +245,10 @@
                          `-Dannona.tests.excluded= -Dgroups=docker` 专跑该组。
                          见 docs/specs/2026-09-25-dockerless-local-dev-adr.md -->
                     <excludedGroups>${annona.tests.excluded}</excludedGroups>
-                    <argLine>${annona.test.jvmArgs}</argLine>
+                    <!-- jacoco.argLine 由根 build 的 prepare-agent 注入；必须用 @{...} 运行期求值——
+                         ${...} 会在模型构建期被 properties 里的空默认值替换，agent 根本挂不上
+                         （实测：报告提示 missing execution data file 且 0 覆盖） -->
+                    <argLine>@{jacoco.argLine} ${annona.test.jvmArgs}</argLine>
                     <!-- 把 *IT.java 也纳入 surefire（默认只扫 *Test.java）。
                          annona 约定：@Tag("docker") 的集成测试统一 *IT.java 后缀，与
                          纯单测 *Test.java 区分；CI 靠 groups 参数筛，不靠文件名。
