@@ -49,9 +49,11 @@ class DirectionOwnerScopeIT {
         UUID ownerB = insertUser();
 
         DirectionEntity first = direction(ownerA, "shared-key", "用户A的方向");
-        directionRepository.saveAndFlush(first);
         // created_at 是 insertable=false + DB DEFAULT now()：flush 后 refresh 回读，
-        // 保证 POST 响应与 GET 同形（createdAt 非 null）——真 PG 上坐实契约
+        // 保证 POST 响应与 GET 同形（createdAt 非 null）——真 PG 上坐实契约。
+        // 预置主键实体的 save() 走 merge：必须接住返回的受管副本再 refresh，
+        // refresh 游离原引用必抛 DetachedObjectException（CI 真 PG 实测）。
+        first = directionRepository.saveAndFlush(first);
         entityManager.refresh(first);
         assertThat(first.getCreatedAt()).isNotNull();
 
