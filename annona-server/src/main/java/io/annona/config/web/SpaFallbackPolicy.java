@@ -27,6 +27,12 @@ public final class SpaFallbackPolicy {
         "api/", "actuator/", "v3/", "swagger-ui", "swagger-resources", "webjars/", "ws/",
     };
 
+    /**
+     * 裸路径（无尾斜杠）同样不回退：前缀表带斜杠匹配不到 {@code "api"} 本身，
+     * 而它末段无点会被当路由回退成 200 HTML——污染监控探活与故障定位（2026-09-27 补）。
+     */
+    private static final String[] RESERVED_EXACT = {"api", "actuator", "v3", "webjars", "ws"};
+
     private SpaFallbackPolicy() {
     }
 
@@ -46,6 +52,11 @@ public final class SpaFallbackPolicy {
             return false;
         }
         String normalized = path.toLowerCase(Locale.ROOT);
+        for (String exact : RESERVED_EXACT) {
+            if (normalized.equals(exact)) {
+                return false;
+            }
+        }
         for (String reserved : RESERVED_PREFIXES) {
             if (normalized.startsWith(reserved)) {
                 return false;

@@ -46,6 +46,17 @@ class SpaFallbackPolicyTest {
             assertThat(SpaFallbackPolicy.shouldFallbackToIndex("swagger-ui/index")).isFalse();
             assertThat(SpaFallbackPolicy.shouldFallbackToIndex("ws/voice")).isFalse();
         }
+
+        @Test
+        @DisplayName("裸路径（无尾斜杠）同样不回退：/api 返 404 而非 index.html 外壳")
+        void reservedExactNames() {
+            // 修复前：/api 不命中 "api/" 前缀、末段无点 → 回退成 200 HTML，污染探活判定
+            assertThat(SpaFallbackPolicy.shouldFallbackToIndex("api")).isFalse();
+            assertThat(SpaFallbackPolicy.shouldFallbackToIndex("actuator")).isFalse();
+            assertThat(SpaFallbackPolicy.shouldFallbackToIndex("v3")).isFalse();
+            assertThat(SpaFallbackPolicy.shouldFallbackToIndex("ws")).isFalse();
+            assertThat(SpaFallbackPolicy.shouldFallbackToIndex("webjars")).isFalse();
+        }
     }
 
     @Nested
