@@ -130,6 +130,8 @@
 - 新增业务模块 = 在 `annona-server` 加包 + 更新 ArchUnit 白名单，**不动 pom**；出现第二个可部署产物才新建 Maven 模块。
 - **改 `.github/workflows/**` 后必跑** `python scripts/ci/validate-workflows.py`：GitHub 对无效 workflow 是**静默不运行**（不报错、不产生 check run），跟假绿一样隐蔽；让 CI 自校 CI 配置是鸡生蛋问题，以本地钩子为唯一防线。YAML 普通标量里不能出现 `: `（冒号+空格），含它的 `run:` 一律用块形 scalar。
 - 基础设施能力放 `annona-infrastructure` 或 `common`，禁止散落到业务 Service。
+- **预置主键实体的 save/merge 语义（全仓约定）**：实体 id 由应用侧 `UUID.randomUUID()` 赋值（不用 `@GeneratedValue`），`save()` 因此走 `merge()` 分支——**返回值才是受管副本，原引用仍是游离态**。需要回读 DB-default 列（`created_at` 等 `insertable=false` 列）时必须接住返回值再 `refresh`；直接 refresh 原引用抛 `DetachedObjectException`，用原引用映射响应拿到 null。slice 测试的 mock EM 探不到此错，只在真 PG 集测暴露（P1a-04 加固批实测）。
+- **依赖 web 专属 bean 的组件必须 `@ConditionalOnWebApplication(SERVLET)`**：`handlerExceptionResolver` 等 MVC bean 只在 servlet 语境存在，无条件装配会让 docker 组 IT 的 NONE 上下文连坐失败（先例：`SessionAuthFilter` 及其注册契约测试）。
 - `io.annona.modules.<name>` 顶层包与 `io.annona.shared.*` 必须有 `package-info.java` 声明职责与允许依赖（子包不强制，避免堆无用文件）。
 
 **借鉴扫描义务（写任何一块前先做）**
