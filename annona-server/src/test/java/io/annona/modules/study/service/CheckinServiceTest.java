@@ -182,6 +182,8 @@ class CheckinServiceTest {
             when(directions.existsVisibleTo(OWNER, DIRECTION_ID)).thenReturn(true);
             when(checkinRepository.findByUserIdAndDay(UUID.fromString(OWNER), LocalDate.now(ZONE)))
                 .thenReturn(Optional.of(existing));
+            // 生产代码接住 saveAndFlush 的受管返回值再 refresh；桩返回入参模拟该语义
+            when(checkinRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
             when(sessionRepository.findByCheckinId(existing.getId())).thenReturn(Optional.of(linked));
 
             service.upsertToday(OWNER,

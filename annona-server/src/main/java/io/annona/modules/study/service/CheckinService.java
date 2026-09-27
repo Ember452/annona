@@ -94,7 +94,10 @@ public class CheckinService {
         entity.setSnapshotUrl(request.snapshotUrl());
         // created_at 是 insertable=false + DB DEFAULT：save 后 flush + refresh 回读，
         // 令 POST 与 GET 同形（P1a-03 DirectionCommandService 同款修法，评审 A1）。
-        checkinRepository.saveAndFlush(entity);
+        // 预置主键实体的 save() 走 merge，返回的才是受管副本——必须接住返回值再 refresh；
+        // 直接 refresh 原引用必抛 DetachedObjectException（CI 真 PG 集测实测，slice 测的
+        // mock EM 探不到）。
+        entity = checkinRepository.saveAndFlush(entity);
         entityManager.refresh(entity);
 
         syncLinkedSession(entity);
