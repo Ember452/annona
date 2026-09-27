@@ -130,10 +130,13 @@ jobs:
         # 下一步的断言保证“0 个测试”不可能再伪装成绿。
         # pipefail 必须显式打开：默认 bash -e 不管道错误，曾经 mvn 失败而 tee 返回 0，
         # 15 个上下文启动错误被吞成"绿"（667cacb 复盘）。
+        # jacoco.skip：覆盖率 60% 门槛的主场是 unit job（全量单测+slice）；本 job 只跑
+        # docker 组 IT，its-only 覆盖率随模块增长自然稀释（knowledge 无外部依赖路径
+        # 可被 IT 覆盖），拿它过 BUNDLE 检查会把门槛变成随机数（P1a-05 实测 0.46 假红）。
         run: |
           mkdir -p target
           set -o pipefail
-          ./mvnw -B verify -Dannona.tests.excluded= -Dgroups=docker | tee target/docker-it.log
+          ./mvnw -B verify -Dannona.tests.excluded= -Dgroups=docker -Djacoco.skip=true | tee target/docker-it.log
       - name: Assert docker-tagged tests actually ran
         # 只认 surefire 的总 summary 行（无 Time elapsed / 无 "-- in 类名" 后缀）：
         # 旧断言匹配任何单类干净行，FlywayBaselineIT 一行干净就掩护了其余类全部报错（假绿复盘）。
