@@ -29,6 +29,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <b>finish 刻意无 @Transactional</b>——Redis 时间线读取在事务外，先落会话终态再落事件
  * （事件是审计留痕、无消费方，写失败只损一条留痕，不影响 minutes/quality 正确性），
  * 两写不强行同事务以守住"事务范围最小"（AGENTS §4）。
+ * 重新评估触发：study_event 出现首个读侧消费方时（ADR §决策 3 下 P1c 只读
+ * study_session，今日为无），两写并入同一事务并把 evict 挪到 afterCommit。
  *
  * <p>归属校验口径与 direction 一致：非本人会话按不存在处理（2200），不泄露存在性。
  */
