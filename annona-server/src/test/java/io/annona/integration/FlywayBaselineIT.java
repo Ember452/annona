@@ -51,7 +51,7 @@ class FlywayBaselineIT {
     }
 
     @Test
-    @DisplayName("public schema 下 11 张业务表齐全（V1 基线八张 + V2 采集三张）")
+    @DisplayName("public schema 下 13 张业务表齐全（V1 基线八张 + V2 采集三张 + V4 知识库两张）")
     void allBaselineTablesExist() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         List<String> tables = jdbc.queryForList(
@@ -59,12 +59,13 @@ class FlywayBaselineIT {
                 + "WHERE table_schema = 'public' AND table_name <> 'flyway_schema_history'",
             String.class);
         // 期望清单必须随每个新迁移同步扩充：containsExactlyInAnyOrder 兼职守卫
-        // "没有迁移外的游离表"，漏登记新表会让本测试假红（V2 上线时踩过一次）。
+        // "没有迁移外的游离表"，漏登记新表会让本测试假红（V2、V4 两次踩过）。
         assertThat(tables)
             .containsExactlyInAnyOrder(
                 "app_user", "user_profile", "user_session", "auth_token",
                 "login_attempt", "avatar_change", "user_data_request", "direction",
-                "checkin", "study_session", "study_event");
+                "checkin", "study_session", "study_event",
+                "kb_doc", "kb_doc_chunk");
     }
 
     @Test
