@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import { LOGIN_PATH, PLATEAUS, ROUTES, type RouteKey } from '@/constants/routes'
 import { useAuth } from '@/stores/auth'
 
@@ -30,11 +31,13 @@ const PLATEAU_ICONS: Record<RouteKey, LucideIcon> = {
  * P2-04 增加新场景时本文件零改动。入口元数据统一取自 constants/routes，
  * 这里只负责「怎么展示」，不关心「有哪些入口」。
  *
- * <p>守卫（登录 UI 落地批）：探测期显示加载，未登录重定向到 /login 并记录来源页
- * （登录后回跳，不打断手头操作）。none 模式 `/api/me` 恒成功，守卫天然直通。
+ * <p>守卫（登录 UI 落地批）：探测期显示加载；探测失败时按 AuthContext 的归因分流——
+ * 未登录（业务码 1004/2004）重定向到 /login 并记录来源页（登录后回跳，不打断手头
+ * 操作）；不可达（网络断/后端未启动）渲染"无法连接后端"面板并给重试入口，不再让
+ * 用户对连不上的后端输密码。none 模式 `/api/me` 恒成功，守卫天然直通。
  */
 export default function AppLayout() {
-  const { user, loading, logout } = useAuth()
+  const { user, loading, unreachable, retry, logout } = useAuth()
   const location = useLocation()
 
   if (loading) {
@@ -42,6 +45,23 @@ export default function AppLayout() {
       <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-background text-muted-foreground">
         <LoaderCircleIcon className="size-5 animate-spin text-primary" />
         <span className="text-sm">加载中…</span>
+      </div>
+    )
+  }
+  if (unreachable) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-background p-6 text-center">
+        <h1 className="font-heading text-xl font-semibold tracking-tight">无法连接后端</h1>
+        <p className="max-w-md text-sm text-muted-foreground">
+          页面已加载，但 API 服务没有响应。请确认后端已启动（默认
+          <code className="mx-1 rounded bg-muted px-1 py-0.5 text-xs">localhost:8080</code>
+          ）；纯前端调样式可在
+          <code className="mx-1 rounded bg-muted px-1 py-0.5 text-xs">annona-web/.env.local</code>
+          设 <code className="mx-1 rounded bg-muted px-1 py-0.5 text-xs">VITE_MOCK_BACKEND=1</code>。
+        </p>
+        <Button variant="outline" onClick={() => void retry()}>
+          重试连接
+        </Button>
       </div>
     )
   }

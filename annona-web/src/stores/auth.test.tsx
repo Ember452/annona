@@ -2,7 +2,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { authApi, type AuthUser } from '@/api/auth'
-import { SESSION_LOST_EVENT } from '@/api/request'
+import { ApiError, SESSION_LOST_EVENT } from '@/api/request'
 import { AuthProvider, useAuth } from './auth'
 
 vi.mock('@/api/auth', () => ({
@@ -92,6 +92,42 @@ describe('useAuth：会话探测、失效清态与登出', () => {
     await act(async () => {
       await result.current.logout()
     })
+    expect(result.current.user).toEqual(USER)
+  })
+
+  it('探测遇网络错误（无业务码）→ unreachable=true：守卫显示不可达面板而非登录页', async () => {
+    vi.mocked(authApi.me).mockRejectedValue(new ApiError('网络连接失败'))
+    const { result } = renderAuth()
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.user).toBeNull()
+    expect(result.current.unreachable).toBe(true)
+  })
+
+  it('探测遇后端业务错误（1004/2004）→ unreachable=false：守卫正常跳登录页', async () => {
+    vi.mocked(authApi.me)
+      .mockRejectedValueOnce(new ApiError('未授权', 1004, 't-1'))
+      .mockRejectedValueOnce(new ApiError('登录状态已失效', 2004, 't-2'))
+    const first = renderAuth()
+    await waitFor(() => expect(first.result.current.loading).toBe(false))
+    expect(first.result.current.unreachable).toBe(false)
+    first.unmount()
+
+    const second = renderAuth()
+    await waitFor(() => expect(second.result.current.loading).toBe(false))
+    expect(second.result.current.unreachable).toBe(false)
+  })
+
+  it('retry：不可达状态下重探，成功即恢复登录态并清掉 unreachable', async () => {
+    vi.mocked(authApi.me)
+      .mockRejectedValueOnce(new ApiError('网络连接失败'))
+      .mockResolvedValueOnce(USER)
+    const { result } = renderAuth()
+    await waitFor(() => expect(result.current.unreachable).toBe(true))
+
+    await act(async () => {
+      await result.current.retry()
+    })
+    expect(result.current.unreachable).toBe(false)
     expect(result.current.user).toEqual(USER)
   })
 })

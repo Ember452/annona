@@ -27,9 +27,11 @@ export interface RegisterResponse {
 const BASE = '/api/auth'
 
 export const authApi = {
-  /** GET /api/me：无有效会话时后端返回 Result.error(1004)，拦截器转 rejected Promise。 */
+  /** GET /api/me：无有效会话时后端返回 Result.error(1004)，拦截器转 rejected Promise。
+   *  探测单独给 5s 短超时——守卫的 loading 与"不可达"判定都挂在它上面，
+   *  不该陪跑全局 60s 超时（后端半死状态下的最坏等待）。 */
   me(): Promise<AuthUser> {
-    return request.get<AuthUser>('/api/me')
+    return request.get<AuthUser>('/api/me', { timeout: 5_000 })
   },
 
   /** POST /api/auth/login：成功即下发会话 Cookie。 */
