@@ -167,6 +167,10 @@ export function mockRespond(method: string, url: string, body: AxiosRequestConfi
     return success({ ...target, origin: 'KNOWLEDGE_BASE', kbDocId: typeof kbDocId === 'string' ? kbDocId : null })
   }
 
+  // knowledge（P1a-05）：mock 模式按约定只保证「页面可开、UI 可看、无数据」——
+  // 上传/分块预览/删除需要真后端（解析、S3、embedding 无法在前端模拟），仍走 1002 错误态
+  if (path === '/api/knowledge/docs' && m === 'get') return success([])
+
   if (path === '/api/study/sessions/today') return success(SESSIONS)
   if (path === '/api/study/sessions' && m === 'post') {
     const b = parseBody(body)
