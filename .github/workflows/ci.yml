@@ -154,6 +154,14 @@ jobs:
             grep -aE '\[ERROR\] io\.annona\..*<<< (FAILURE|ERROR)!' target/docker-it.log | head -4
             grep -a -m 1 -A 2 'Caused by' target/docker-it.log
           } | head -8 | while IFS= read -r l; do echo "::error::${l:0:380}"; done
+      - name: Surface ExtensionMissingIT assertion detail
+        if: failure()
+        # ExtensionMissingIT 失败是断言（AssertionError 无 Caused by 链），只有 surefire
+        # 报告文件里有完整消息；单独一步避免单步注解数超限。
+        run: |
+          grep -a -A 6 'vanillaPostgresWithoutPgvectorFailsBoot' \
+            annona-server/target/surefire-reports/io.annona.integration.ExtensionMissingIT.txt \
+            | head -7 | while IFS= read -r l; do echo "::error::${l:0:380}"; done
       - name: Report how many ran
         if: always()
         run: |
