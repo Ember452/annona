@@ -74,9 +74,11 @@ public class StudySessionService {
         entity.setDirectionId(UUID.fromString(request.directionId()));
         entity.setMode(StudySessionEntity.MODE_POMODORO);
         entity.setStartAt(Instant.now());
-        sessionRepository.save(entity);
+        // 预置主键 save 走 merge 分支：必须映射受管返回值——原引用拿不到 created_at
+        // 等 DB-default 列，SessionResponse 未来加字段时不会在这里悄悄变 null（AGENTS §4 约定）
+        StudySessionEntity saved = sessionRepository.save(entity);
         saveEvent(entity.getId(), StudyEventEntity.TYPE_START);
-        return mapper.toResponse(entity);
+        return mapper.toResponse(saved);
     }
 
     /** 心跳只证明活着：落 Redis 时间线，不产生 DB 写（ADR §决策 1）。 */
