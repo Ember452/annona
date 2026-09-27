@@ -34,8 +34,11 @@ public interface DirectionRepository extends JpaRepository<DirectionEntity, UUID
     /**
      * 可见性校验（P1a-04 起 study 等业务模块经 DirectionQueryService 使用）：
      * ACTIVE 且（内置或本人）；本人半边命中 idx_direction_user partial index。
+     * 返回计数而非 {@code select (count(d) > 0)} 布尔投影——后者作 select 项在部分
+     * Hibernate 版本解析不稳，而 Spring Data 在启动期解析 @Query，一旦解析失败整个
+     * {@code @SpringBootTest} 上下文连坐失败。调用方按 {@code > 0} 判定。
      */
-    @Query("select (count(d) > 0) from DirectionEntity d where d.id = :id"
+    @Query("select count(d) from DirectionEntity d where d.id = :id"
         + " and d.status = 'ACTIVE' and (d.userId is null or d.userId = :userId)")
-    boolean existsVisible(@Param("id") UUID id, @Param("userId") UUID userId);
+    long countVisible(@Param("id") UUID id, @Param("userId") UUID userId);
 }

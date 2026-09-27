@@ -40,6 +40,6 @@ public class DirectionQueryService {
         } catch (IllegalArgumentException | NullPointerException e) {
             return false;
         }
-        return repository.existsVisible(id, UUID.fromString(userId));
+        return repository.countVisible(id, UUID.fromString(userId)) > 0;
     }
 }

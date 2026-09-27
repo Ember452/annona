@@ -71,10 +71,10 @@ class DirectionQueryServiceTest {
     }
 
     @Test
-    @DisplayName("existsVisibleTo：直接委托仓库布尔结果，内置或本人方向可见")
+    @DisplayName("existsVisibleTo：countVisible>0 即内置或本人方向可见")
     void delegatesExistenceToRepository() {
         UUID directionId = UUID.randomUUID();
-        when(repository.existsVisible(directionId, UUID.fromString(OWNER))).thenReturn(true);
+        when(repository.countVisible(directionId, UUID.fromString(OWNER))).thenReturn(1L);
 
         assertThat(service.existsVisibleTo(OWNER, directionId.toString())).isTrue();
     }
