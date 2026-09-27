@@ -41,17 +41,20 @@ class ExtensionMissingIT {
             .as("BAD_DB_DATASOURCE_URL 只在 CI 提供；本机不应跑 docker 组测试")
             .isNotBlank();
 
+        // 必须走命令行参数（run 的可变参数，优先级高于 OS env）：builder.properties() 落在
+        // defaultProperties——全链最低优先级，会被 docker-it job 的 SPRING_PROFILES_ACTIVE=docker
+        // 与 SPRING_DATASOURCE_URL=<好库> 环境变量整体压掉，导致本测试实际连上好库优雅启动，
+        // assertThatThrownBy 扑空（CI 实测）。命令行参数（优先级第 4）压得过 env（第 10）。
         assertThatThrownBy(() -> new SpringApplicationBuilder(AnnonaApplication.class)
             .web(WebApplicationType.NONE)
-            .properties(
-                "spring.profiles.active=prod",
-                "annona.kek.secret=dummy-kek-for-test-only-not-empty",
-                "spring.datasource.url=" + badUrl,
-                "spring.datasource.username=" + System.getenv().getOrDefault("BAD_DB_USER", "postgres"),
-                "spring.datasource.password=" + System.getenv().getOrDefault("BAD_DB_PASSWORD", "postgres"),
-                "spring.main.banner-mode=off",
-                "logging.level.root=OFF")
-            .run())
+            .run(
+                "--spring.profiles.active=prod",
+                "--annona.kek.secret=dummy-kek-for-test-only-not-empty",
+                "--spring.datasource.url=" + badUrl,
+                "--spring.datasource.username=" + System.getenv().getOrDefault("BAD_DB_USER", "postgres"),
+                "--spring.datasource.password=" + System.getenv().getOrDefault("BAD_DB_PASSWORD", "postgres"),
+                "--spring.main.banner-mode=off",
+                "--logging.level.root=OFF"))
             // 守卫的 IllegalStateException 发生在 bean 创建阶段，Spring 会把它包成
             // BeanCreationException（不同于 StartupValidator：后者在 context refresh 前抛，
             // 所以 ProdProfileWithoutKekIT 断言的就是裸 IllegalStateException）。
