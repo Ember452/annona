@@ -30,11 +30,18 @@ public class KnowledgeDocLifecycleService {
 
     private final KbDocRepository docRepository;
     private final Optional<ObjectStorage> objectStorage;
-    private final KnowledgeVectorizeStream vectorizeStream;
+    /**
+     * 入库通道可选注入（P1a-05 CI 实测）：{@code KnowledgeVectorizeStream} 被
+     * {@code annona.knowledge.ingest.enabled} 门控（docker profile 默认 false），硬注入会让
+     * 所有完整上下文的 IT 连坐炸掉（27 errors）——违背 knowledge-ingestion-adr §决策 9
+     * 的"通道关闭应用照常起，操作时报 23xx"。与 {@code Optional<ObjectStorage>} 同款。
+     */
+    private final Optional<KnowledgeVectorizeStream> vectorizeStream;
     private final TransactionTemplate tx;
 
     public KnowledgeDocLifecycleService(KbDocRepository docRepository,
-        Optional<ObjectStorage> objectStorage, KnowledgeVectorizeStream vectorizeStream,
+        Optional<ObjectStorage> objectStorage,
+        Optional<KnowledgeVectorizeStream> vectorizeStream,
         PlatformTransactionManager transactionManager) {
         this.docRepository = docRepository;
         this.objectStorage = objectStorage;
@@ -67,15 +74,22 @@ public class KnowledgeDocLifecycleService {
             }));
     }
 
-    /** 手动重嵌：仅 READY/FAILED 可重排；在途文档报 2308。投递失败判 FAILED 并抛 2307。 */
+    /**
+     * 手动重嵌：仅 READY/FAILED 可重排；在途文档报 2308。投递失败判 FAILED 并抛 2307。
+     * 入库通道关闭（ingest.enabled=false）时直接抛 2307 且<b>不落任何库写</b>——
+     * 先判后写，避免文档重排进 PENDING 后永远没有消费者认领。
+     */
     public void revectorize(String userId, String docId) {
+        KnowledgeVectorizeStream stream = vectorizeStream.orElseThrow(() ->
+            new BusinessException(ErrorCode.KB_DOC_ENQUEUE_FAILED,
+                "知识入库通道未启用（annona.knowledge.ingest.enabled=false），无法重嵌"));
         KbDocEntity doc = docRepository.findByIdAndUserId(parse(docId), parse(userId))
             .orElseThrow(() -> new BusinessException(ErrorCode.KB_DOC_NOT_FOUND));
         Integer requeued = tx.execute(s -> docRepository.requeueForRevectorize(doc.getId(), Instant.now()));
         if (requeued == null || requeued == 0) {
             throw new BusinessException(ErrorCode.KB_DOC_STATE_CONFLICT);
         }
-        if (!vectorizeStream.send(doc.getId())) {
+        if (!stream.send(doc.getId())) {
             tx.executeWithoutResult(s -> docRepository.markFailedIfPending(doc.getId(),
                 "处理任务投递失败，请稍后重试", Instant.now()));
             throw new BusinessException(ErrorCode.KB_DOC_ENQUEUE_FAILED);
