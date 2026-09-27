@@ -17,12 +17,22 @@ spring:
     hibernate:
       ddl-auto: validate
 
+server:
+  # compose 的 web(nginx) 在前发 X-Forwarded-*：与 prod 同口径，让审计 IP 是真实
+  # 客户端而不是 nginx 容器 IP（直连 server:8080 的健康检查无该头，行为不变）
+  forward-headers-strategy: framework
+
 annona:
   startup:
     require-kek: true
     check-pg-extensions: true
   kek:
     secret: ${ANNONA_SECRET_KEY:}
+  # 会话 Cookie Secure 保持默认 false：compose 冒烟是纯 http 链路，secure cookie
+  # 会被浏览器拒发、登录闭环直接断。公网 https 部署必须设
+  # ANNONA_SESSION_COOKIE_SECURE=true（见 .env.example 与 README 部署前置）
+  session:
+    cookie-secure: ${ANNONA_SESSION_COOKIE_SECURE:false}
 
 logging:
   level:

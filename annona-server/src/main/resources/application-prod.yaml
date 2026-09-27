@@ -10,6 +10,12 @@ spring:
     hibernate:
       ddl-auto: validate
 
+server:
+  # 反代（nginx 发 X-Forwarded-*）后由 Tomcat 在可信代理边界内解析真实 client IP：
+  # user_session.ip 审计列与未来 IP 维度的限流都依赖它；直连部署无该头，行为不变。
+  # 只认 framework 解析而不在代码里读头——直信 X-Forwarded-For 会让客户端伪造 IP
+  forward-headers-strategy: framework
+
 logging:
   level:
     io.annona: INFO
@@ -23,3 +29,7 @@ annona:
     check-pg-extensions: true
   kek:
     secret: ${ANNONA_SECRET_KEY:}
+  session:
+    # 生产默认走 TLS（prod profile 的前提就是公网 https）；纯 http 生产环境不提供
+    # 默认放行——必须显式设 ANNONA_SESSION_COOKIE_SECURE=false 才能关掉（fail-closed）
+    cookie-secure: ${ANNONA_SESSION_COOKIE_SECURE:true}
