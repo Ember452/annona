@@ -64,8 +64,11 @@
         <redisson.version>3.34.1</redisson.version>
         <mapstruct.version>1.6.3</mapstruct.version>
         <!-- BouncyCastle：spring-security-crypto 的 SCryptPasswordEncoder 运行期依赖（未传递），
-             版本上收到根 pom 统一管理 -->
-        <bcprov.version>1.80</bcprov.version>
+             版本上收到根 pom 统一管理；1.81.1 为 Tika 3.2.1 的 RequireUpperBoundDeps 下限（P1a-05） -->
+        <bcprov.version>1.81.1</bcprov.version>
+        <!-- P1a-05：Tika 文档解析与 AWS S3 SDK（对象存储，对接 PGSTY Silo），版本集中管理 -->
+        <tika.version>3.2.1</tika.version>
+        <aws-sdk.version>2.30.31</aws-sdk.version>
 
         <!-- Mockito 在 JDK 21 上动态 attach 会告警，显式放行（surefire 与 CI 同一口径） -->
         <annona.test.jvmArgs>--enable-native-access=ALL-UNNAMED</annona.test.jvmArgs>
@@ -85,6 +88,18 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- JUnit BOM 显式导入并置于所有自带 BOM 之前：spring-ai-bom 2.0.0 内嵌的
+                 junit 5.13.2 管理会以"先到先得"压过 Boot 父链的 junit-bom 6.0.3，而
+                 spring-test 7 依赖 jupiter 6 的 Store.computeIfAbsent（缺它 = 上下文测试
+                 NoSuchMethodError，P1a-05 实测）。版本取 Boot 的 junit-jupiter.version 属性保持对齐。 -->
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit-jupiter.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <!-- 内部模块坐标集中在父 pom；子模块引用不写 version -->
             <dependency>
                 <groupId>io.annona</groupId>
@@ -111,6 +126,34 @@
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-bom</artifactId>
                 <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Jackson 2 BOM 显式导入：Boot 父链靠 jackson-2-bom.version 属性管理 jackson-bom，
+                 但本仓自己 import 的 BOM（tika/aws）按"先到先得"压过父链管理——tika-bom 携带的
+                 jackson 2.19.1 会覆盖 Boot 的 2.22.1（jsr310 上收冲突，P1a-05 实测）。
+                 放在所有自带 BOM 之前，让 2.22.1 保持权威。 -->
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson-2-bom.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- P1a-05：Tika（解析）与 AWS SDK（S3 存储）BOM，子模块引用不写 version -->
+            <dependency>
+                <groupId>org.apache.tika</groupId>
+                <artifactId>tika-bom</artifactId>
+                <version>${tika.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>${aws-sdk.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -153,6 +196,18 @@
                 <artifactId>bcprov-jdk18on</artifactId>
                 <version>${bcprov.version}</version>
             </dependency>
+            <!-- Tika 3.2.1 声明 log4j-to-slf4j 2.25.5，高于 Boot 管理的 2.25.0；
+                 钉到确实存在的 2.26.0 满足上收（适配器，无行为耦合），log4j-api 随同 -->
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-to-slf4j</artifactId>
+                <version>2.26.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-api</artifactId>
+                <version>2.26.0</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -191,8 +246,16 @@
                                     <message>Maven 3.9 以下版本不受支持，请使用 ./mvnw。</message>
                                 </requireMavenVersion>
 
-                                <!-- 依赖冲突上收到根 pom：避免子模块各自传递出不同版本 -->
-                                <requireUpperBoundDeps/>
+                                <!-- 依赖冲突上收到根 pom：避免子模块各自传递出不同版本。
+                                     jackson-annotations 豁免：其 2.x 版本线冻结在 2.19.x
+                                     （Boot 4 的 jackson-2 BOM 也如此管理），Tika 3.2.x 声明的
+                                     "2.21" 是不可解析的幽灵声明——按声明版本比较必然失败，
+                                     managed 2.19.1 即事实上的最新版。 -->
+                                <requireUpperBoundDeps>
+                                    <excludes>
+                                        <exclude>com.fasterxml.jackson.core:jackson-annotations</exclude>
+                                    </excludes>
+                                </requireUpperBoundDeps>
 
                                 <!-- 存储栈已收敛为 PostgreSQL + Redis + S3，
                                      见 docs/specs/2026-09-25-storage-single-postgres-adr.md。
