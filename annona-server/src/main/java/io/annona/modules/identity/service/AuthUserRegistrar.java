@@ -99,12 +99,14 @@ public class AuthUserRegistrar {
         user.setPasswordAlgo(hasher.currentAlgo());
         user.setStatus("ACTIVE");
         user.setRole("USER");
-        userRepository.saveAndFlush(user);
+        // 预置主键 saveAndFlush 走 merge 分支：register/provisionExternal 映射的是这里的
+        // 返回值（受管副本），不能用原引用——它拿不到 created_at 等 DB-default 列（AGENTS §4 约定）
+        AppUserEntity saved = userRepository.saveAndFlush(user);
 
         UserProfileEntity profile = new UserProfileEntity();
-        profile.setUserId(user.getId());
+        profile.setUserId(saved.getId());
         profileRepository.save(profile);
-        return user;
+        return saved;
     }
 
     /** 随机口令（两枚 UUIDv4 拼接，244 位随机）；只进哈希、永不外泄。 */
