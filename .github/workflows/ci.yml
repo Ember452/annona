@@ -132,13 +132,18 @@ jobs:
       - name: Flyway V1 + docker-tagged ITs
         # 必须同时清掉根 pom 的默认排除（现在走属性，能被覆盖）并指定 groups；
         # 下一步的断言保证“0 个测试”不可能再伪装成绿。
+        # pipefail 必须显式打开：默认 bash -e 不管道错误，曾经 mvn 失败而 tee 返回 0，
+        # 15 个上下文启动错误被吞成"绿"（667cacb 复盘）。
         run: |
           mkdir -p target
+          set -o pipefail
           ./mvnw -B verify -Dannona.tests.excluded= -Dgroups=docker | tee target/docker-it.log
       - name: Assert docker-tagged tests actually ran
+        # 只认 surefire 的总 summary 行（无 Time elapsed / 无 "-- in 类名" 后缀）：
+        # 旧断言匹配任何单类干净行，FlywayBaselineIT 一行干净就掩护了其余类全部报错（假绿复盘）。
         # 块形 scalar：普通标量里出现“: ”会被 YAML 当映射分隔符解析失败
         run: |
-          grep -qE 'Tests run: *[1-9][0-9]*, Failures: 0, Errors: 0' target/docker-it.log
+          grep -qE 'Tests run: [1-9][0-9]*, Failures: 0, Errors: 0, Skipped: [0-9]+ *$' target/docker-it.log
       - name: Report how many ran
         if: always()
         run: |
