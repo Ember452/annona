@@ -48,7 +48,20 @@ public enum ErrorCode {
     // ========== study 2200–2299（P1a-04，学习行为采集） ==========
     STUDY_SESSION_NOT_FOUND(2200, "学习会话不存在"),
     STUDY_SESSION_ALREADY_FINISHED(2201, "学习会话已结束"),
-    STUDY_SESSION_INVALID_RANGE(2202, "时间范围无效");
+    STUDY_SESSION_INVALID_RANGE(2202, "时间范围无效"),
+
+    // ========== knowledge 2300–2399（P1a-05，知识库入库） ==========
+    KB_DOC_NOT_FOUND(2300, "知识库文档不存在"),
+    KB_DOC_TOO_LARGE(2301, "文件超过大小上限（50MB）"),
+    KB_DOC_TYPE_NOT_SUPPORTED(2302, "暂不支持该文件类型（支持 PDF / DOCX / TXT / MD）"),
+    KB_DOC_PARSE_FAILED(2303, "文档解析失败"),
+    KB_DOC_PARSE_TIMEOUT(2304, "文档解析超时"),
+    KB_DOC_TEXT_EMPTY(2305, "文档解析后没有可用文本"),
+    KB_DOC_STORAGE_NOT_CONFIGURED(2306, "对象存储未配置，无法上传文档"),
+    KB_DOC_ENQUEUE_FAILED(2307, "文档已保存但处理任务投递失败，可稍后重试处理"),
+    KB_DOC_STATE_CONFLICT(2308, "文档正在处理中，请稍后再试"),
+    KB_EMBEDDING_NOT_CONFIGURED(2310, "向量化模型未配置，无法处理文档"),
+    KB_EMBEDDING_FAILED(2311, "向量化失败，请稍后重试");
 
     private final int code;
     private final String message;
