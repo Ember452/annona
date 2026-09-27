@@ -10,7 +10,9 @@ import io.annona.modules.study.mapper.StudyMapper;
 import io.annona.modules.study.repository.CheckinRepository;
 import io.annona.modules.study.repository.StudySessionRepository;
 import io.annona.shared.direction.service.DirectionQueryService;
+import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -39,15 +41,18 @@ public class CheckinService {
     private final StudySessionRepository sessionRepository;
     private final DirectionQueryService directions;
     private final StudyMapper mapper;
+    private final EntityManager entityManager;
 
     public CheckinService(CheckinRepository checkinRepository,
                           StudySessionRepository sessionRepository,
                           DirectionQueryService directions,
-                          StudyMapper mapper) {
+                          StudyMapper mapper,
+                          EntityManager entityManager) {
         this.checkinRepository = checkinRepository;
         this.sessionRepository = sessionRepository;
         this.directions = directions;
         this.mapper = mapper;
+        this.entityManager = entityManager;
     }
 
     @Transactional
@@ -59,6 +64,9 @@ public class CheckinService {
         if (hours.signum() < 0 || hours.compareTo(MAX_HOURS) > 0) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "学习时长需为 0–24 小时");
         }
+        // 与列 NUMERIC(4,1) 同精度归一：否则 1.25 会被 PG 舍成 1.3，而联动会话用 1.25×60=75，
+        // 两个"真相源"差 3 分钟（评审 A2）。先归一再算 minutes，单一口径。
+        hours = hours.setScale(1, RoundingMode.HALF_UP);
         if (request.energy() != null && (request.energy() < 1 || request.energy() > 5)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "能量值需为 1–5");
         }
@@ -84,9 +92,12 @@ public class CheckinService {
         entity.setEnergy(request.energy());
         entity.setNote(request.note());
         entity.setSnapshotUrl(request.snapshotUrl());
-        checkinRepository.save(entity);
+        // created_at 是 insertable=false + DB DEFAULT：save 后 flush + refresh 回读，
+        // 令 POST 与 GET 同形（P1a-03 DirectionCommandService 同款修法，评审 A1）。
+        checkinRepository.saveAndFlush(entity);
+        entityManager.refresh(entity);
 
-        syncLinkedSession(entity, hours);
+        syncLinkedSession(entity);
         return mapper.toResponse(entity);
     }
 
@@ -97,7 +108,8 @@ public class CheckinService {
             .orElse(null);
     }
 
-    private void syncLinkedSession(CheckinEntity checkin, BigDecimal hours) {
+    private void syncLinkedSession(CheckinEntity checkin) {
+        BigDecimal hours = checkin.getHours();
         if (hours.signum() > 0) {
             StudySessionEntity session = sessionRepository.findByCheckinId(checkin.getId())
                 .orElseGet(() -> {

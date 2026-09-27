@@ -20,6 +20,8 @@ import io.annona.modules.study.repository.StudyEventRepository;
 import io.annona.modules.study.repository.StudySessionRepository;
 import io.annona.shared.direction.service.DirectionQueryService;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -183,6 +185,15 @@ class StudySessionServiceTest {
             verify(heartbeats).touch(eq(running.getId()), any());
             verifyNoInteractions(eventRepository);
         }
+
+        @Test
+        @DisplayName("非法 UUID 会话 id → 1001（parseUuid 兑底，不查库）")
+        void heartbeatRejectsMalformedUuid() {
+            assertThatThrownBy(() -> service.heartbeat(OWNER, "not-a-uuid"))
+                .isInstanceOfSatisfying(BusinessException.class,
+                    e -> assertThat(e.getCode()).isEqualTo(1001));
+            verifyNoInteractions(sessionRepository, heartbeats);
+        }
     }
 
     @Nested
@@ -338,6 +349,25 @@ class StudySessionServiceTest {
                 new ManualSessionRequest(DIRECTION_ID, now.minusSeconds(90000), now)))
                 .isInstanceOfSatisfying(BusinessException.class,
                     e -> assertThat(e.getCode()).isEqualTo(2202));
+        }
+    }
+
+    @Nested
+    @DisplayName("today：Asia/Shanghai 日界")
+    class Today {
+
+        @Test
+        @DisplayName("拉取起点按上海当日 00:00（非 UTC）")
+        void todayUsesShanghaiDayStart() {
+            ZoneId zone = ZoneId.of("Asia/Shanghai");
+            Instant expectedDayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant();
+            when(sessionRepository.findToday(any(), any())).thenReturn(List.of());
+
+            service.today(OWNER);
+
+            ArgumentCaptor<Instant> captor = ArgumentCaptor.forClass(Instant.class);
+            verify(sessionRepository).findToday(eq(UUID.fromString(OWNER)), captor.capture());
+            assertThat(captor.getValue()).isEqualTo(expectedDayStart);
         }
     }
 }

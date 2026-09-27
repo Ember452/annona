@@ -23,7 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * study 采集（P1a-04）：番茄钟会话、心跳、事件、手动补录与打卡。
  * 鉴权由 SessionAuthFilter 对 /api/** 强制且白名单不含本路径——未登录即 1004。
- * 心跳是正常高频操作（15s 一次），不做 @RateLimit（会误伤真实专注）。
+ * 心跳是正常高频操作（15s 一次）：P0-05 接入 {@code @RateLimit} 后须豁免本路径（会误伤真实专注），
+ * 该注解目前尚未落地（评审 C4）。
  */
 @RestController
 @RequestMapping("/api/study")

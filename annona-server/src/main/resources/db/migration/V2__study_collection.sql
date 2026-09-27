@@ -61,4 +61,5 @@ CREATE TABLE study_event (
     CONSTRAINT chk_study_event_type CHECK (type IN ('START', 'BLUR', 'FINISH', 'INTERRUPT'))
 );
 COMMENT ON COLUMN study_event.type IS 'START/BLUR 由会话创建与前端失焦上报；FINISH/INTERRUPT 由 finish(abandon) 服务端落——HEARTBEAT 刻意不在枚举内（心跳是活着的证明，只服务质量判定，ADR §背景）';
+COMMENT ON TABLE study_event IS '会话作用域子表，不冗余 user_id（破结构文档「业务表必含 user_id」约定，评审 C2）：只能通过 session_id 访问、user 经 study_session 外键可达且 ON DELETE CASCADE 同级联清理，当前无任何按 user 直查事件的读路径';
 CREATE INDEX idx_study_event_session ON study_event (session_id, at);

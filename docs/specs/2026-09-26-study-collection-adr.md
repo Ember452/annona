@@ -37,7 +37,21 @@ P1a-04 建 `study_session` / `study_event` / `checkin` 三表。上游 summer-ch
 - 所有时间计算用服务端 `Instant`；唯 `manual` 补录取用户给的 startAt/endAt（其 quality 恒 SELF_REPORTED，无欺诈面）。
 - "今日"口径固定 `Asia/Shanghai`；per-user 时区（user_profile.timezone）推迟到有海外用户需求时。
 - `mode` 枚举含 `IMMERSIVE`（设计 §4.A 长时段专注）但 P1a-04 只落 POMODORO/CHECKIN 两条生产路径，IMMERSIVE 留 P2。
+- `study_event` 不冗余 `user_id`（破结构文档「业务表必含 user_id」约定，评审 C2）：它是会话作用域子表，只经 `session_id` 访问、随 `ON DELETE CASCADE` 清理，当前无按 user 直查事件的读路径。若 P1c 需按用户查事件再补列（届时数据模型变更触发本 ADR 修订）。
+
+## P1c 开工前必须拍板（评审遗留语义，本批只实现不定夺）
+
+- **B1 PARTIAL 的 minutes = 墙钟**会把「主动暂停 / 离席 / 合盖休眠」计成学习时长（暂停 40min 再恢复 → 一条 65min 的 PARTIAL），「挂机 2h → 降难度」的防线可能从这个口子漏回。设计 §6.1 只规定 SELF_REPORTED 不进难度调整，对 PARTIAL 沉默；且服务端无法区分「用户主动暂停」与「离席」。P1c 决策 ADR 必须定：PARTIAL 是否计入、按覆盖还是墙钟、要不要按 gap 时长打折（倾向覆盖口径）。
+- **B2 孤儿 RUNNING 会话无收尾**：`findToday` 的 `or end_at is null` 让未结束会话永久挂在今日；无定时任务、无「一人同时一个 RUNNING」约束（前端 localStorage 挡，清存储即绕）。P1c 聚合须显式忽略 `end_at IS NULL`，并补收尾入口或「新 start 顶掉旧 RUNNING 按 PARTIAL 结算」规则。
+- **B3 打卡联动会话 `start_at` 是合成值**（当日 00:00、`end_at`=00:00+hours），不可用于时段分布/热力图，否则打卡时长全堆在 00:00。P1c 消费前须知晓，或改用打卡实际提交时刻。
+- **B4 手动补录与打卡联动共用 `mode=CHECKIN`**：P1c 若想按二者可信度不同分别对待，需加 `origin`/`source` 列——越早越便宜。
+- **B5 planner 读 `study_session` 的跨模块入口未定**：`modules/study` 无对外只读服务，ArchUnit 仅禁了 `shared.direction.repository`，未禁 `modules/*.repository`。P1c-01 前须定「走 `StudySessionQueryService` 还是 SPI」并把禁令升级为通用跨模块规则，否则重演 P1a-03「直接注入他人 repository」。
 
 ## 何时重新评估
 
 单机用户量级使 Redis ZSET 成为瓶颈（远期）；P2 沉浸模式需要长时段会话时复检 240min 上限与 60s gap 容忍（浏览器后台节流最坏 ≥1min/跳，若实测误伤则放宽 GAP_TOLERANT）。
+
+## 本批未纳入（评审提示，另起任务）
+
+- **覆盖率门禁（AGENTS「从 P1a 起生效」）尚未落地**：全仓 pom 无任何 jacoco 配置（评审 C3，P1a-03 已提过一次）。属跨模块构建决策（哪些模块、85% 清单 vs 60% 门槛），应独立 `build` 任务补，不夹带进采集批次。
+- **前端零测试**：`usePomodoro` 408 行状态机是本批最易错处却无测试（评审 D4）。建议在 P1b 前单列任务引入 vitest（借鉴地图已把上游 `*.test.ts` 列为「最省事的验收清单」）。

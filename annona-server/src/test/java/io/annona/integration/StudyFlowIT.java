@@ -5,13 +5,19 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.annona.common.exception.BusinessException;
 import io.annona.common.study.HeartbeatTimeline;
+import io.annona.modules.study.dto.CheckinResponse;
 import io.annona.modules.study.dto.ManualSessionRequest;
 import io.annona.modules.study.dto.SessionResponse;
 import io.annona.modules.study.dto.StartSessionRequest;
+import io.annona.modules.study.dto.UpsertCheckinRequest;
+import io.annona.modules.study.entity.StudySessionEntity;
+import io.annona.modules.study.repository.StudySessionRepository;
+import io.annona.modules.study.service.CheckinService;
 import io.annona.modules.study.service.StudySessionService;
 import io.annona.shared.direction.entity.DirectionEntity;
 import io.annona.shared.direction.repository.DirectionRepository;
 import jakarta.persistence.EntityManager;
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -42,6 +48,12 @@ class StudyFlowIT {
 
     @Autowired
     private StudySessionService studySessions;
+
+    @Autowired
+    private CheckinService checkinService;
+
+    @Autowired
+    private StudySessionRepository sessionRepository;
 
     @Autowired
     private HeartbeatTimeline heartbeats;
@@ -151,6 +163,44 @@ class StudyFlowIT {
             new StartSessionRequest(strangerDirection.toString(), 25)))
             .isInstanceOfSatisfying(BusinessException.class,
                 e -> assertThat(e.getCode()).isEqualTo(2100));
+    }
+
+    @Test
+    @DisplayName("同日打卡两次：真库 uq_checkin_user_day 只留一行且联动会话 minutes 同步为 120")
+    void checkinUpsertsOneRowPerDay() {
+        UUID owner = insertUser();
+        UUID directionId = direction(owner);
+
+        CheckinResponse first = checkinService.upsertToday(owner.toString(),
+            new UpsertCheckinRequest(directionId.toString(), new BigDecimal("1.5"), null, null, null, null));
+        CheckinResponse second = checkinService.upsertToday(owner.toString(),
+            new UpsertCheckinRequest(directionId.toString(), new BigDecimal("2"), null, null, null, null));
+
+        assertThat(second.id()).isEqualTo(first.id());
+        Integer rows = jdbcTemplate.queryForObject(
+            "select count(*) from checkin where user_id = ?", Integer.class, owner);
+        assertThat(rows).isEqualTo(1);
+
+        StudySessionEntity linked = sessionRepository.findByCheckinId(UUID.fromString(first.id()))
+            .orElseThrow();
+        assertThat(linked.getMode()).isEqualTo("CHECKIN");
+        assertThat(linked.getQuality()).isEqualTo("SELF_REPORTED");
+        assertThat(linked.getMinutes()).isEqualTo(120);
+    }
+
+    @Test
+    @DisplayName("hours 归 0：真库上联动会话被删除（不留悬空 SELF_REPORTED 时长）")
+    void zeroHoursRemovesLinkedSession() {
+        UUID owner = insertUser();
+        UUID directionId = direction(owner);
+        CheckinResponse first = checkinService.upsertToday(owner.toString(),
+            new UpsertCheckinRequest(directionId.toString(), new BigDecimal("2"), null, null, null, null));
+        assertThat(sessionRepository.findByCheckinId(UUID.fromString(first.id()))).isPresent();
+
+        checkinService.upsertToday(owner.toString(),
+            new UpsertCheckinRequest(directionId.toString(), BigDecimal.ZERO, null, null, null, null));
+
+        assertThat(sessionRepository.findByCheckinId(UUID.fromString(first.id()))).isEmpty();
     }
 
     private UUID insertUser() {

@@ -126,4 +126,27 @@ class QualityGraderTest {
             assertThat(result.minutes()).isEqualTo(25);
         }
     }
+
+    @Nested
+    @DisplayName("边界：倒置范围与时钟偏移")
+    class EdgeCases {
+
+        @Test
+        @DisplayName("endAt 早于 startAt（异常输入）：墙钟夹为 0 → minutes=0")
+        void negativeWallClockClampedToZero() {
+            GradeResult result = QualityGrader.grade(T0.plusSeconds(600), T0, List.of());
+
+            assertThat(result.quality()).isEqualTo("SELF_REPORTED");
+            assertThat(result.minutes()).isZero();
+        }
+
+        @Test
+        @DisplayName("心跳早于 startAt（客户端时钟快于服务）：负 gap 段被忽略，不污染判定")
+        void heartbeatBeforeStartIgnored() {
+            GradeResult result = QualityGrader.grade(T0, T0.plusSeconds(1500),
+                List.of(T0.minusSeconds(600), T0.plusSeconds(15), T0.plusSeconds(30)));
+
+            assertThat(result.quality()).isEqualTo("VERIFIED");
+        }
+    }
 }

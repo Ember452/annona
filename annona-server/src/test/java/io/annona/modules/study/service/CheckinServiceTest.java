@@ -17,6 +17,7 @@ import io.annona.modules.study.mapper.StudyMapperImpl;
 import io.annona.modules.study.repository.CheckinRepository;
 import io.annona.modules.study.repository.StudySessionRepository;
 import io.annona.shared.direction.service.DirectionQueryService;
+import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -55,12 +56,15 @@ class CheckinServiceTest {
     @Mock
     private DirectionQueryService directions;
 
+    @Mock
+    private EntityManager entityManager;
+
     private CheckinService service;
 
     @BeforeEach
     void setUp() {
         service = new CheckinService(checkinRepository, sessionRepository,
-            directions, new StudyMapperImpl());
+            directions, new StudyMapperImpl(), entityManager);
     }
 
     private CheckinEntity todayCheckin() {
@@ -92,14 +96,14 @@ class CheckinServiceTest {
             when(directions.existsVisibleTo(OWNER, DIRECTION_ID)).thenReturn(true);
             when(checkinRepository.findByUserIdAndDay(UUID.fromString(OWNER), LocalDate.now(ZONE)))
                 .thenReturn(Optional.empty());
-            when(checkinRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(checkinRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
             when(sessionRepository.findByCheckinId(any())).thenReturn(Optional.empty());
 
             CheckinResponse response = service.upsertToday(OWNER,
                 new UpsertCheckinRequest(DIRECTION_ID, new BigDecimal("1.5"), "专注", 4, null, null));
 
             ArgumentCaptor<CheckinEntity> checkinCaptor = ArgumentCaptor.forClass(CheckinEntity.class);
-            verify(checkinRepository).save(checkinCaptor.capture());
+            verify(checkinRepository).saveAndFlush(checkinCaptor.capture());
             CheckinEntity saved = checkinCaptor.getValue();
             assertThat(saved.getId()).isNotNull();
             assertThat(saved.getUserId()).isEqualTo(UUID.fromString(OWNER));
@@ -120,6 +124,29 @@ class CheckinServiceTest {
         }
 
         @Test
+        @DisplayName("hours 非 0.1 步进（1.25）：归一为 1.3 落库，联动会话 minutes 按归一后算=78（评审 A2）")
+        void hoursNormalizedToOneDecimal() {
+            when(directions.existsVisibleTo(OWNER, DIRECTION_ID)).thenReturn(true);
+            when(checkinRepository.findByUserIdAndDay(UUID.fromString(OWNER), LocalDate.now(ZONE)))
+                .thenReturn(Optional.empty());
+            when(checkinRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(sessionRepository.findByCheckinId(any())).thenReturn(Optional.empty());
+
+            service.upsertToday(OWNER,
+                new UpsertCheckinRequest(DIRECTION_ID, new BigDecimal("1.25"), null, null, null, null));
+
+            ArgumentCaptor<CheckinEntity> checkinCaptor = ArgumentCaptor.forClass(CheckinEntity.class);
+            verify(checkinRepository).saveAndFlush(checkinCaptor.capture());
+            assertThat(checkinCaptor.getValue().getHours()).isEqualByComparingTo("1.3");
+
+            ArgumentCaptor<StudySessionEntity> sessionCaptor =
+                ArgumentCaptor.forClass(StudySessionEntity.class);
+            verify(sessionRepository).save(sessionCaptor.capture());
+            // 1.3 小时 = 78 分钟（归一前 1.25 会得 75，正是两个真相源对不上的偏差源）
+            assertThat(sessionCaptor.getValue().getMinutes()).isEqualTo(78);
+        }
+
+        @Test
         @DisplayName("重复打卡：同一天原地更新（同一行），联动会话 minutes 同步为 120")
         void repeatedCheckinUpdatesInPlace() {
             CheckinEntity existing = todayCheckin();
@@ -127,7 +154,7 @@ class CheckinServiceTest {
             when(directions.existsVisibleTo(OWNER, DIRECTION_ID)).thenReturn(true);
             when(checkinRepository.findByUserIdAndDay(UUID.fromString(OWNER), LocalDate.now(ZONE)))
                 .thenReturn(Optional.of(existing));
-            when(checkinRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(checkinRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
             when(sessionRepository.findByCheckinId(existing.getId())).thenReturn(Optional.of(linked));
             when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -135,7 +162,7 @@ class CheckinServiceTest {
                 new UpsertCheckinRequest(DIRECTION_ID, new BigDecimal("2"), null, null, "改备注", null));
 
             ArgumentCaptor<CheckinEntity> checkinCaptor = ArgumentCaptor.forClass(CheckinEntity.class);
-            verify(checkinRepository).save(checkinCaptor.capture());
+            verify(checkinRepository).saveAndFlush(checkinCaptor.capture());
             assertThat(checkinCaptor.getValue().getId()).isEqualTo(existing.getId());
             assertThat(checkinCaptor.getValue().getHours()).isEqualByComparingTo("2");
             assertThat(checkinCaptor.getValue().getNote()).isEqualTo("改备注");
