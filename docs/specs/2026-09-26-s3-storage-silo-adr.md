@@ -58,3 +58,16 @@ MinIO 上游终止了社区发行：2026-02-13 仓库 archive、2026-09-11 Docke
    docker IT 上下文强建 bean 失败、26 个 IT 连坐）。决策 §6 的"错误后移到使用点"
    语义不变：`enabled=false` 时上传报 2306；`enabled=true` 且 Key 缺失 = 配置错误、
    启动即抛。
+
+### 修订 2（2026-09-27，P1a-05 CI 第二轮实测）
+
+1. **`MINIO_DEFAULT_BUCKETS` 在 Silo fork 上不生效**（head-bucket 404 实证）——该
+   变量从来不是 MinIO 官方 server 的行为，compose 注释当初把它当"官方自举方式"是错的。
+   按 §背景"若不成立则加 init 容器"的预案评估后选了更优解：**移植 🅖
+   FileStorageService.ensureBucketExists 到 S3ObjectStorage**（启动时 head → 404 →
+   create、并发 409 容忍），不再引入 init 容器。理由：真实用户的"一条命令拉起完整栈"
+   （设计文档 §13）本来就需要应用侧建桶兜底，init 容器反而多一个镜像依赖（minio/mc
+   已随上游删除，pgsty/mc 无官方镜像）。compose-smoke 的 head-bucket 断言保留，
+   验证对象从"env 自举"改为"应用自建"。
+2. KnowledgeIngestFlowIT 首轮真跑即拦住 E2E 用例缺 app_user 种子数据的问题——
+   闸门按预期工作。

@@ -9,9 +9,13 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
@@ -41,6 +45,28 @@ public class S3ObjectStorage implements ObjectStorage {
                 AwsBasicCredentials.create(properties.getAccessKey(), properties.getSecretKey())))
             .forcePathStyle(true)
             .build();
+        ensureBucketExists();
+    }
+
+    /**
+     * 启动时幂等建桶（借 🅖 FileStorageService.ensureBucketExists：404 → create、
+     * 并发 409 容忍）。取代被 CI 证伪的 `MINIO_DEFAULT_BUCKETS` 自举——Silo fork 不执行
+     * 该环境变量（head-bucket 404，s3-storage-silo-adr 修订 2），而“全新机器一条
+     * `docker compose up` 拉起完整栈”（设计文档 §13）要求桶必须自动就位。
+     */
+    private void ensureBucketExists() {
+        try {
+            client.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
+            return;
+        } catch (NoSuchBucketException e) {
+            // fall through：建桶
+        }
+        try {
+            client.createBucket(CreateBucketRequest.builder().bucket(bucket).build());
+            log.info("S3 桶不存在，已自动创建 bucket={}", bucket);
+        } catch (BucketAlreadyOwnedByYouException e) {
+            log.debug("S3 桶已被并发创建 bucket={}", bucket);
+        }
     }
 
     @Override

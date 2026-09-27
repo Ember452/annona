@@ -98,7 +98,7 @@ class KnowledgeIngestFlowIT {
     @Test
     @DisplayName("上传 md → 异步管线推进 READY → 分块落库 → 重复上传幂等 → 删除级联")
     void uploadReachesReadyThenDuplicateIsFree() throws Exception {
-        UUID userId = UUID.randomUUID();
+        UUID userId = insertUser();
         UUID directionId = insertBuiltinDirection();
         byte[] content = ("# 章节一\n\n这是用于端到端验证的正文内容，长度足以构成至少一个分块。\n\n"
             + "## 小节\n\n第二段正文，验证标题路径进入分块。").getBytes();
@@ -128,6 +128,14 @@ class KnowledgeIngestFlowIT {
         UUID id = UUID.randomUUID();
         jdbc.update("INSERT INTO direction (id, key, name, origin) VALUES (?, ?, ?, 'SKILL_BUILTIN')",
             id, "e2e-ingest-" + UUID.randomUUID().toString().substring(0, 8), "E2E 入库方向");
+        return id;
+    }
+
+    /** kb_doc.user_id 外键到 app_user——上传前先种一个真实用户行（首轮 CI 实测漏种子被 FK 拒）。 */
+    private UUID insertUser() {
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO app_user (id, email, password_hash, status, role) VALUES (?, ?, ?, 'ACTIVE', 'USER')",
+            id, "e2e-" + UUID.randomUUID().toString().substring(0, 8) + "@annona.local", "e2e-no-login");
         return id;
     }
 

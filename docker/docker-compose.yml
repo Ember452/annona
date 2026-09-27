@@ -72,9 +72,9 @@ services:
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY:-annona-dev-ak}
       MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-annona-dev-sk-not-for-prod}
-      # 官方支持的自举建桶方式；bucket 名与 annona-server 的 S3_BUCKET 一致。
-      # 生效性由 compose-smoke 的 head-bucket 断言坐实（不成立则加 mcli init 容器）。
-      MINIO_DEFAULT_BUCKETS: ${S3_BUCKET:-annona}
+      # 建桶由 annona-server 的 S3ObjectStorage.ensureBucketExists 启动时幂等完成——
+      # MINIO_DEFAULT_BUCKETS 在 Silo fork 上不生效（CI head-bucket 404 实测，
+      # s3-storage-silo-adr 修订 2），不要把它加回来当自举手段。
     volumes:
       - storage_data:/data
     # 9000 映射到 host：compose-smoke 从 runner 用 aws cli head-bucket 验证建桶；

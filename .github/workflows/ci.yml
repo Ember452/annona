@@ -209,10 +209,9 @@ jobs:
           # D1 边界：未映射的 /api 绝不被 SPA 回退成 index.html 外壳。P1a-02 强制鉴权后，
           # 未登录的 /api 走业务失败约定 = HTTP 200 + Result JSON(1004)，已证明它不是 HTML。
           curl -s -o /dev/null -w '%{content_type}' http://localhost/api/definitely-not-a-route | grep -qi 'application/json'
-      # P1a-05 遗留实测 ②：MINIO_DEFAULT_BUCKETS 自举建桶在 Silo fork 上生效
-      # （no-init-container 的决定当初是对上游 MinIO 行为做的）。head-bucket 404
-      # 即不成立 → 按 storage 块注释加 mcli init 容器，而不是放宽断言。
-      - name: Verify MINIO_DEFAULT_BUCKETS bootstrapped the bucket
+      # P1a-05 实测 ②结论：MINIO_DEFAULT_BUCKETS 在 Silo fork 上不生效（首轮 404 证伪），
+      # 建桶改由 server 启动时幂等完成——本断言现在验证的正是 auto-create 的效果。
+      - name: Verify the server auto-created the bucket
         run: |
           AWS_ACCESS_KEY_ID=ci-minio-ak \
           AWS_SECRET_ACCESS_KEY=ci-minio-sk \
