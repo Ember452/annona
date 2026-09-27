@@ -3,6 +3,7 @@ import {
   BookOpenIcon,
   CalendarDaysIcon,
   HouseIcon,
+  LibraryBigIcon,
   LoaderCircleIcon,
   MessagesSquareIcon,
   SparklesIcon,
@@ -21,11 +22,12 @@ const PLATEAU_ICONS: Record<RouteKey, LucideIcon> = {
   STUDY: BookOpenIcon,
   INTERVIEW: MessagesSquareIcon,
   QA: SparklesIcon,
+  KNOWLEDGE: LibraryBigIcon,
   PLAN: CalendarDaysIcon,
 }
 
 /**
- * 全局壳：玻璃侧边栏（品牌 + 五平级入口）+ 主区域 <Outlet/> + 登录守卫。
+ * 全局壳：玻璃侧边栏（品牌 + 六平级入口）+ 主区域 <Outlet/> + 登录守卫。
  *
  * <p>配色全部来自全局设计令牌（globals.css 的 sidebar/surface 层），与具体场景解耦：
  * P2-04 增加新场景时本文件零改动。入口元数据统一取自 constants/routes，

@@ -1,6 +1,7 @@
 /**
  * 路由常量集中地。设计主张"入口平级"（见 docs/annona-项目设计文档.md 顶部）
- * 在代码里的落点：四个入口彼此路径平级、无主次，首页作为概览层。
+ * 在代码里的落点：各入口彼此路径平级、无主次，首页作为概览层。知识库入口为
+ * 2026-09-27 用户拍板新增（knowledge-ingestion-adr §决策 10）。
  *
  * <p>禁止在页面/组件里写字面量路径；`import { ROUTES } from '@/constants/routes'`。
  */
@@ -9,6 +10,7 @@ export const ROUTES = {
   STUDY: '/study',
   INTERVIEW: '/interview',
   QA: '/qa',
+  KNOWLEDGE: '/knowledge',
   PLAN: '/plan',
 } as const
 
@@ -23,6 +25,7 @@ export const CHILD_PATHS = {
   STUDY: 'study',
   INTERVIEW: 'interview',
   QA: 'qa',
+  KNOWLEDGE: 'knowledge',
   PLAN: 'plan',
 } as const
 
@@ -39,5 +42,6 @@ export const PLATEAUS: PlateauMeta[] = [
   { key: 'STUDY', path: ROUTES.STUDY, label: '自习室', hint: '采集学习行为、专注与打卡' },
   { key: 'INTERVIEW', path: ROUTES.INTERVIEW, label: '模拟面试', hint: 'AI 出题、评估与可解释面板' },
   { key: 'QA', path: ROUTES.QA, label: '知识问答', hint: '基于知识库的 RAG 流式问答' },
+  { key: 'KNOWLEDGE', path: ROUTES.KNOWLEDGE, label: '知识库', hint: '上传讲义与教材，管理分块与向量化' },
   { key: 'PLAN', path: ROUTES.PLAN, label: '计划日程', hint: '学习计划、面试日程与突击入口' },
 ]

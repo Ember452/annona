@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import KbDocPickerDialog from '@/components/knowledge/KbDocPickerDialog'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -27,7 +28,7 @@ import { toErrorMessage } from '@/lib/errors'
 /**
  * 方向选择器（P1a-03）四能力：下拉（内置分组在前，空态给引导文案）、行内新建
  * （回车即建、自动选中、in-flight 禁用防重复提交）、对 USER_CUSTOM 项提供
- * "绑定知识库"行内动作（临时 UUID 输入占位，P1a-05 换真实知识库选择器）、
+ * "绑定知识库"行内动作（P1a-05 起为真实文档选择对话框：只读列表，仅就绪文档可选）、
  * 对非内置选中项提供"归档"（唯一的删除路径，经确认对话框后执行，成功即清空选中）。
  *
  * <p>KNOWLEDGE_BASE 是单向升级（direction-master-data-adr 修订记录），升级后不再提供
@@ -42,7 +43,7 @@ interface DirectionSelectorProps {
 export default function DirectionSelector({ value, onChange }: DirectionSelectorProps) {
   const { directions, loading, error, create, archive, bindKbDoc } = useDirections()
   const [newName, setNewName] = useState('')
-  const [kbDocInput, setKbDocInput] = useState('')
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [binding, setBinding] = useState(false)
@@ -69,18 +70,17 @@ export default function DirectionSelector({ value, onChange }: DirectionSelector
     }
   }
 
-  async function handleBindKbDoc() {
+  async function handleBindKbDoc(docId: string, docName: string) {
     if (!value) return
-    const kbDocId = kbDocInput.trim()
-    if (!kbDocId) return
     setActionError(null)
     setBinding(true)
     try {
-      const updated = await bindKbDoc(value.id, kbDocId)
-      setKbDocInput('')
+      const updated = await bindKbDoc(value.id, docId)
+      setPickerOpen(false)
       onChange(updated)
+      setActionError(null)
     } catch (e) {
-      setActionError(toErrorMessage(e, '绑定失败，请稍后重试'))
+      setActionError(toErrorMessage(e, `绑定「${docName}」失败，请稍后重试`))
     } finally {
       setBinding(false)
     }
@@ -196,24 +196,43 @@ export default function DirectionSelector({ value, onChange }: DirectionSelector
       )}
 
       {value?.origin === 'USER_CUSTOM' && (
-        <div className="flex gap-2">
-          <Input
-            className="flex-1"
-            placeholder="知识库文档 UUID（P1a-05 前的临时占位）"
-            value={kbDocInput}
-            onChange={(e) => setKbDocInput(e.target.value)}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            disabled={!kbDocInput.trim() || binding}
-            onClick={() => void handleBindKbDoc()}
-          >
-            {binding ? '绑定中…' : '绑定知识库'}
-          </Button>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>
+            {value.kbDocId ? '已绑定知识库文档' : '可绑定知识库文档作为出题素材'}
+          </span>
+          {value.kbDocId && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={binding}
+              onClick={() => setPickerOpen(true)}
+            >
+              重新绑定
+            </Button>
+          )}
+          {!value.kbDocId && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="ml-auto"
+              disabled={binding}
+              onClick={() => setPickerOpen(true)}
+            >
+              {binding ? '绑定中…' : '绑定知识库'}
+            </Button>
+          )}
         </div>
       )}
       {actionError && <p className="text-xs text-destructive">{actionError}</p>}
+
+      <KbDocPickerDialog
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        binding={binding}
+        onPick={(docId, docName) => void handleBindKbDoc(docId, docName)}
+      />
 
       <Dialog open={archiveOpen} onOpenChange={setArchiveOpen}>
         <DialogContent>
