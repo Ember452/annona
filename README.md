@@ -2,7 +2,7 @@
 
 > 你练过的每一分钟，都会长成下一道题的形状。
 
-**annona 是什么**：自习室 + AI 模拟面试的双功能训练平台。自习室 / 模拟面试 / 知识问答 / 计划日程四个入口平级且各自独立成立，共用一套内核（身份、模型网关、知识库、学习信号、方向字典）。
+**annona 是什么**：自习室 + AI 模拟面试的双功能训练平台。自习室 / 模拟面试 / 知识问答 / 知识库 / 计划日程各入口平级且各自独立成立（知识库入口为 2026-09-27 新增，见 docs/specs/2026-09-27-knowledge-ingestion-adr.md §决策 10），共用一套内核（身份、模型网关、知识库、学习信号、方向字典）。
 
 面试出题不是随机的：决策层以**面试侧自身数据**（历史得分、掌握度、错题、距上次练习天数）为主要依据决定问哪个方向、出多难的题、追问几层、掺多少复习题；当学习方向与面试方向相交时（比如你在自习室备考面试科目），自习室的专注时长与完成率作为辅助证据参与——方向不相交时两线互不干扰。**每一次自动决策的依据都落库、可查看**——系统必须能回答"你凭什么这么考我"。
 
@@ -20,12 +20,12 @@
 | AI 协作规范 | ✅ [`AGENTS.md`](./AGENTS.md) |
 | 仓库入口文件 | ✅ `README` / `LICENSE`(AGPL-3.0 全文) / `SECURITY` / `CONTRIBUTING` / `CODE_OF_CONDUCT` / `.editorconfig` / `.env.example` |
 | **Maven 结构** | ✅ 已拆为 4 个 Java 模块（`annona-common` / `annona-spi` / `annona-infrastructure` / `annona-server`）+ 聚合根 pom；`annona-web` 为 Vite 子项目 |
-| **业务代码** | 🔶 P1a 逐模块填充中：`identity`（P1a-01/02，注册登录 + 三身份模式）、`study`（P1a-04，打卡 + 番茄钟 + 服务端质量分级）、`shared/direction`（P1a-03，方向字典）已有实现；前端有设计基座、登录/注册页与守卫、方向选择器与自习室页；其余 13 个业务模块仍只有 `package-info.java` |
-| 已落地的技术基座 | ✅ `Result`/异常体系、`traceId` 过滤器、四类线程池 + Micrometer、启动 fail-fast（缺 KEK / 缺 pgvector 拒起）、Flyway V1（身份 7 表 + `direction` 主数据）→ V2（study 采集 3 表）→ V3（checkin_id 定位索引），已应用迁移由 pre-commit 冻结机检保护、覆盖由 JaCoCo 60% 底线机检保护、前端由 ESLint/vitest 机检保护、ArchUnit 七条、`.githooks/`、5+1 job 的 `ci.yml`（action 全部 SHA pin）、compose 三阶段 Dockerfile、`Makefile`、CI 密钥扫描 |
-| **施工阶段** | 🔶 **P1a 进行中**（数据与知识底座）：P1a-00~04 已并入 main，下一任务 P1a-05（知识库写侧）；任务清单与状态以 [docs/annona-开发计划.md](./docs/annona-开发计划.md) 为唯一真相源 |
+| **业务代码** | 🔶 P1a 逐模块填充中：`identity`（P1a-01/02）、`study`（P1a-04）、`shared/direction`（P1a-03）、`knowledge`（P1a-05/06，入库管线 + 分块器）已有实现；前端有设计基座、登录/注册页与守卫、方向选择器、自习室页与知识库页；其余 12 个业务模块仍只有 `package-info.java` |
+| 已落地的技术基座 | ✅ `Result`/异常体系、`traceId` 过滤器、四类线程池 + Micrometer、启动 fail-fast（缺 KEK / 缺 pgvector 拒起）、Flyway V1（身份 7 表 + `direction` 主数据）→ V2（study 采集 3 表）→ V3（checkin_id 定位索引）→ V4（kb_doc + kb_doc_chunk），已应用迁移由 pre-commit 冻结机检保护、覆盖由 JaCoCo 60% 底线机检保护（chunk 包 85% 专项）、前端由 ESLint/vitest 机检保护、ArchUnit 七条、`.githooks/`、5+1 job 的 `ci.yml`（action 全部 SHA pin）、compose 三阶段 Dockerfile、`Makefile`、CI 密钥扫描 |
+| **施工阶段** | 🔶 **P1a 进行中**（数据与知识底座）：批 1（P1a-06 + P1a-05）已实现并入 main，CI 实证中；任务清单与状态以 [docs/annona-开发计划.md](./docs/annona-开发计划.md) 为唯一真相源 |
 | Docker 相关 | 📄 文件已交，**本机不跑**（无 Docker），验证全部在 CI（见下） |
 
-> **一句话定位现状**：地基与门禁就位，P1a 的采集与身份链路已落地——默认 `local` 模式下打开首页即可注册/登录进入自习室；下一个任务 P1a-05（文档入库与分块）。
+> **一句话定位现状**：地基与门禁就位；身份 / 方向字典 / 学习采集 / 知识库入库管线已落地（含前端六个入口），检索与流式问答在批 2/3。P1a 出口 = 真实资料可流式问答。
 > 目标结构与当前代码的差异，以 [docs/annona-项目结构.md](./docs/annona-项目结构.md) §12 的状态列与 [开发计划](./docs/annona-开发计划.md) 「当前进度」表为准。
 
 ---

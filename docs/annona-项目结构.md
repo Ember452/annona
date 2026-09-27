@@ -152,13 +152,15 @@ io.annona
 │   │   └── template/                  #   计划/文档模板库
 │   │
 │   ├── knowledge/                     # 知识库与文档 ETL（D 模块，不含检索）
-│   │   ├── controller/ service/ repository/ entity/ dto/
-│   │   ├── ingest/                    #   上传、格式解析调度、内容 hash 幂等
-│   │   ├── parse/                     #   Tika 适配、结构识别（标题/段落边界）
+│   │   ├── controller/ service/ repository/ entity/ dto/ mapper/
+│   │   ├── ingest/                    #   上传编排、内容 hash 幂等（解析调度并入 ingest）
 │   │   ├── chunk/                     #   ★ 分块算法（重叠滑窗、死循环兜底）——纯逻辑，重点单测
-│   │   ├── embed/                     #   向量化批处理、进度状态机、失败重试
-│   │   ├── ops/                       #   重新向量化、下载、分类、统计
-│   │   └── listener/                  #   Redis Stream 消费者（向量化任务）
+│   │   ├── embed/                     #   向量化批处理、进度状态机、失败重试（TransactionTemplate 短事务）
+│   │   ├── ops/                       #   列表 / 详情 / 删除级联 / 重嵌入
+│   │   ├── progress/                  #   入库进度 SSE 枢纽（信封契约见 knowledge-ingestion-adr §决策 10）
+│   │   └── listener/                  #   Redis Stream 生产 / 消费注册（SmartLifecycle）/ 恢复调度
+│   │   # Tika/S3/Redisson 的 SDK 适配在 infrastructure（parse/ storage/ stream/），端口在
+│   │   # common——模块内只做编排（knowledge-ingestion-adr §决策 8，2026-09-27 落地口径）
 │   │
 │   ├── retrieval/                     # 检索能力（D 模块的读侧，与 knowledge 写侧分离）
 │   │   ├── controller/ dto/           #   检索测试接口（query → 命中块 + 分数）

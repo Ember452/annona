@@ -31,12 +31,13 @@
 
 **唯一允许的依赖方向**：`server → spi → common`，`infrastructure → spi → common`，`server` 在运行期装配 `infrastructure` 实现。业务代码 `import` 到 `infrastructure` 具体类即 ArchUnit 失败。
 
-## 2. 五个扩展点
+## 2. 六个扩展点
 
 | SPI | 作用 | 内置实现 | 切换方式 |
 |---|---|---|---|
 | `IdentityProvider` | 认证与会话 | 本地账号 / 平台账号 / 单机免登录 | `annona.identity.mode` |
 | `ModelProvider` | 模型调用与 Key 归属 | BYOK / 平台代持 | `annona.model.mode` |
+| `EmbeddingProvider` | 文本向量化（P1a-05 落地，ModelProvider javadoc 预留的独立扩展点） | OpenAI 兼容 / Fake | `annona.model.embedding.provider` |
 | `Retriever` | 检索后端 | PgVector（默认）/ ElasticSearch（可选） | `annona.retrieval.backend` |
 | `LearningSignalReader` | 学习信号读取 | 采集库实现 / 空实现（未启用自习室时） | 模块存在性 |
 | `DecisionRule` | 决策层规则链 | 遗忘曲线 / 薄弱方向 / 保护规则… | 每条规则独立开关 |
