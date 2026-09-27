@@ -104,6 +104,9 @@ services:
       # 上传 E2E，真模型的向量化验证在部署环境。
       S3_ENABLED: "true"
       S3_ENDPOINT: http://storage:9000
+      # docker profile 默认关后台消费线程（IT 跨上下文抢消息，见 application-docker.yaml
+      # 注释）；compose 是真实运行时，显式打开
+      ANNONA_KNOWLEDGE_INGEST_ENABLED: "true"
       S3_BUCKET: ${S3_BUCKET:-annona}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-annona-dev-ak}
       S3_SECRET_KEY: ${S3_SECRET_KEY:-annona-dev-sk-not-for-prod}

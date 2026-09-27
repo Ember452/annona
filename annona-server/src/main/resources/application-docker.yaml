@@ -28,6 +28,13 @@ annona:
     check-pg-extensions: true
   kek:
     secret: ${ANNONA_SECRET_KEY:}
+  # 后台消费线程（Redis Stream 向量化）在本 profile 默认关：CI 的每个 docker-profile
+  # 测试上下文各注册一条消费线程会跨上下文抢消息（E2E IT 的文档被没有 Fake 的上下文
+  # 处理成 FAILED）。compose 运行时用环境变量显式打开（ANNONA_KNOWLEDGE_INGEST_ENABLED，
+  # 见 docker-compose.yml server.env）；IT 侧由用例同步调用 handler 走真库全链路。
+  knowledge:
+    ingest:
+      enabled: ${ANNONA_KNOWLEDGE_INGEST_ENABLED:false}
   # 会话 Cookie Secure 保持默认 false：compose 冒烟是纯 http 链路，secure cookie
   # 会被浏览器拒发、登录闭环直接断。公网 https 部署必须设
   # ANNONA_SESSION_COOKIE_SECURE=true（见 .env.example 与 README 部署前置）

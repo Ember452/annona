@@ -1,8 +1,0 @@
-# docker profile 的测试类路径专属配置（只影响 @Tag("docker") 的 IT，不影响 compose 运行时）。
-# 每个 @SpringBootTest 上下文都会注册一条 task-stream 消费线程，且共享 CI 的同一个
-# Redis——多条消费线程跨上下文抢消息，会让 E2E IT 的文档被"没有 Fake 存储的上下文"
-# 处理成 FAILED（P1a-05 实测）。IT 统一关闭消费线程，管线由用例同步调用 handler 验证。
-annona:
-  knowledge:
-    ingest:
-      enabled: false

@@ -1,7 +1,7 @@
 #!/bin/sh
 # annona pre-commit hook
 #
-# 三个动作：Flyway 迁移冻结检查 → workflow YAML 结构自检 → gitleaks 密钥扫描。
+# 四个动作：Flyway 迁移冻结检查 → workflow YAML 结构自检 → 测试侧配置遮蔽检查 → gitleaks 密钥扫描。
 # 权威门禁在 CI（.github/workflows/ci.yml 的 gitleaks job + branch protection）；
 # 这里是**本地第一道**，让开发者在 commit 前就看到，而不是等 CI 红。
 #
@@ -34,6 +34,18 @@ if git diff --cached --name-only | grep -qE '^\.github/workflows/.*\.ya?ml$'; th
     exit 1
   fi
   python scripts/ci/validate-workflows.py || exit 1
+fi
+
+# 第二道：测试侧 profile 配置遮蔽检查。test 类路径先于 main，src/test/resources 里的
+# application-{profile}.yaml 会把 main 同名文件的整个 profile（KEK/datasource）静默
+# 遮蔽掉（P1a-05 实测：27 个 IT 上下文死于 KEK 校验，复刻 B5 事故）。
+if git diff --cached --name-only | grep -qE '^annona-server/src/test/resources/application'; then
+  if ! command -v python >/dev/null 2>&1; then
+    printf '%s
+' "pre-commit: 本次改了测试侧 application 配置，需要 python 跑遮蔽检查。" >&2
+    exit 1
+  fi
+  python scripts/ci/check-test-config-shadowing.py || exit 1
 fi
 
 if ! command -v gitleaks >/dev/null 2>&1; then
