@@ -144,6 +144,16 @@ jobs:
         # 块形 scalar：普通标量里出现“: ”会被 YAML 当映射分隔符解析失败
         run: |
           grep -qE 'Tests run: [1-9][0-9]*, Failures: 0, Errors: 0, Skipped: [0-9]+ *$' target/docker-it.log
+      - name: Surface docker-it failure digest
+        if: failure()
+        # 失败摘要写成 ::error:: 注解：checks API 匿名可读，复盘不依赖日志下载权限；
+        # -a 防 maven ANSI 字符让 grep 把日志当二进制。
+        run: |
+          {
+            grep -aE '\[ERROR\] Tests run: [0-9]+, Failures' target/docker-it.log | tail -1
+            grep -aE '\[ERROR\] io\.annona\..*<<< (FAILURE|ERROR)!' target/docker-it.log | head -4
+            grep -a -m 1 -A 2 'Caused by' target/docker-it.log
+          } | head -8 | while IFS= read -r l; do echo "::error::${l:0:380}"; done
       - name: Report how many ran
         if: always()
         run: |
