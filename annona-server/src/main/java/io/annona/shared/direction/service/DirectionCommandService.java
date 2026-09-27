@@ -66,10 +66,12 @@ public class DirectionCommandService {
         entity.setOrigin(DirectionEntity.ORIGIN_USER_CUSTOM);
         entity.setStatus(DirectionEntity.STATUS_ACTIVE);
         entity.setUserId(owner);
-        repository.saveAndFlush(entity);
         // created_at 是 insertable=false + DB DEFAULT：flush 后 refresh 回读，保证 POST 响应
         // 与 GET 同形（createdAt 非 null）。并发窗口穿过预检查撞唯一约束时，DIVE 从这里穿出
-        // 事务边界（事务内 catch 不可行），由 GlobalExceptionHandler 转成 409/DATA_CONFLICT
+        // 事务边界（事务内 catch 不可行），由 GlobalExceptionHandler 转成 409/DATA_CONFLICT。
+        // 预置主键实体的 save() 走 merge，返回的才是受管副本——必须接住返回值再 refresh，
+        // 直接 refresh 原引用必抛 DetachedObjectException（CI 真 PG 集测实测）。
+        entity = repository.saveAndFlush(entity);
         entityManager.refresh(entity);
         return mapper.toResponse(entity);
     }
