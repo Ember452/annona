@@ -86,7 +86,7 @@ quickstart: setup up
 	@echo "   入口      http://localhost"
 	@echo "   identity  $${ANNONA_IDENTITY_MODE:-local}  (改 .env 可切 platform / none)"
 	@echo "   model     $${ANNONA_MODEL_MODE:-byok}"
-	@echo "   seed      'make seed' 将在 P5-05 落地 (annona-cli DataSeeder)"
+	@echo "   seed      'make seed' 将随 P1c-08 'annona demo seed' 落地 (合成 6 周演示数据)"
 	@echo "   停止      make down"
 	@echo "   日志      make logs"
 	@echo "=============================================================="
