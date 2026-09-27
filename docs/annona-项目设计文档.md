@@ -487,7 +487,7 @@ Micrometer 埋点：ASR 首字、LLM 首 token、TTS 首包、端到端（用户
 | 新增 `qa` 模块 | 知识库写侧（ingest/chunk/embed）、读侧（retrieval）、交互侧（会话与流式）三者变更频率与资源模型完全不同 |
 | 新增 `resume`、`notify` | 各自有独立异步链路与生命周期（简历分析走 Redis Stream；通知有去重与定时推送） |
 
-**关键工程约束**：Controller 只做路由与校验；`@Transactional` 只在 Service 且范围最小；LLM / S3 / 外部 HTTP 调用**严禁**进入事务；业务异常统一 `BusinessException(ErrorCode.X, msg)`；**异常出口分两类：业务失败返回 HTTP 200 + `Result.error(code, msg)`（前端靠 `code` 分流），而路由/传输层错误（404 / 405 / 400 / 500）返回真实 HTTP 状态码 + 同样的 `Result` 响应体**——全压成 200 会让监控看不到故障、还会把 SPA 未做 fallback 的 404 伪装成“成功但数据不对”；不返回 Entity 给前端（MapStruct 映射）；构造器注入 + `@RequiredArgsConstructor`；2 空格缩进、无通配符 import；SLF4J 占位符且异常作为最后参数。
+**关键工程约束**：Controller 只做路由与校验；`@Transactional` 只在 Service 且范围最小；LLM / S3 / 外部 HTTP 调用**严禁**进入事务；业务异常统一 `BusinessException(ErrorCode.X, msg)`；**异常出口分两类：业务失败返回 HTTP 200 + `Result.error(code, msg)`（前端靠 `code` 分流），而路由/传输层错误（404 / 405 / 400 / 500）返回真实 HTTP 状态码 + 同样的 `Result` 响应体**——全压成 200 会让监控看不到故障、还会把 SPA 未做 fallback 的 404 伪装成“成功但数据不对”；不返回 Entity 给前端（MapStruct 映射）；构造器注入 + `@RequiredArgsConstructor`；Java 4 空格缩进（前端 2 空格）、无通配符 import；SLF4J 占位符且异常作为最后参数。
 
 ---
 

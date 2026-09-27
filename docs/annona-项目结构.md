@@ -53,7 +53,7 @@ annona/
 │   └── FUNDING.yml                #   赞助入口（开源可持续性）
 ├── .mvn/wrapper/                  # Maven Wrapper（统一 mvn 版本，clone 即可构建）
 ├── .githooks/                     # Git hooks：commit-msg 规范、pre-commit 密钥扫描
-├── .editorconfig                  # 跨 IDE 缩进/编码一致性（已落地，Java/前端 2 空格、XML 4 空格）
+├── .editorconfig                  # 跨 IDE 缩进/编码一致性（已落地，Java 4 空格、前端 2 空格、XML 4 空格）
 ├── .env.example                   # 环境变量模板（只放占位符，绝不放真实 Key）
 ├── .gitignore / .gitattributes    # 忽略规则与换行/LFS 约定
 ├── LICENSE                        # AGPL-3.0
@@ -448,7 +448,7 @@ Maven Central 的对外契约）。两边分工写清，免得后人误以为 Ar
 | 测试类 | `被测类 + Test`（单测）/ `+IT`（集成） | `MasteryCalculatorTest` |
 | Git 分支/提交 | `feat\|fix\|docs\|refactor\|test\|chore: <描述>`（commit-msg hook 校验，**P0-11 落地前靠自觉**） | — |
 
-代码风格：2 空格缩进、无通配符 import、手写构造器注入（不用 Lombok，见 AGENTS.md §4）、SLF4J 占位符且异常作为最后一个参数。
+代码风格：Java 4 空格缩进（前端 2 空格）、无通配符 import、手写构造器注入（不用 Lombok，见 AGENTS.md §4）、SLF4J 占位符且异常作为最后一个参数。
 
 ---
 

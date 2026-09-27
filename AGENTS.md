@@ -147,7 +147,7 @@
 **命名与风格**
 
 - 后缀：`XxxEntity` / `XxxRequest` / `XxxResponse` / `XxxDTO` / `XxxRepository` / `XxxMapper`；请求体优先 `record`；Entity↔DTO 一律 MapStruct。
-- 2 空格缩进、无通配符 import、避免内联全限定类名、**手写构造器注入（全仓不使用 Lombok，不要引入 `@RequiredArgsConstructor`）**。
+- 缩进：Java 4 空格、前端 2 空格（2026-09-27 与全仓现实对齐，.editorconfig 同步）；无通配符 import、避免内联全限定类名、**手写构造器注入（全仓不使用 Lombok，不要引入 `@RequiredArgsConstructor`）**。
 - 命名一致性优先：同一概念在全仓只用一个词（`direction` 不混用 `topic/subject/category`；`session` 不混用 `round/conversation` 表达同一物）。
 - 方向引用一律走 `direction.id` 外键（`key` 只在 owner 内唯一，存字符串无法定位归属），禁止用自由文本表示方向。
 

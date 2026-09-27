@@ -1,4 +1,4 @@
-# editorconfig.org —— 与 AGENTS.md §4「命名与风格」保持一致
+# editorconfig.org —— 与 AGENTS.md §4「命名与风格」保持一致（Java 4 空格 / 前端 2 空格）
 root = true
 
 [*]
@@ -9,8 +9,11 @@ trim_trailing_whitespace = true
 indent_style = space
 indent_size = 2
 
-# Java 与前端：2 空格（AGENTS.md §4 明确要求 2 空格缩进）
-[*.{java,kt,ts,tsx,js,jsx,json,css,scss}]
+# Java 4 空格（社区惯例与全仓现实一致，2026-09-27 对齐）；前端 2 空格
+[*.java]
+indent_size = 4
+
+[*.{kt,ts,tsx,js,jsx,json,css,scss}]
 indent_size = 2
 
 # Maven / XML 沿用社区惯例 4 空格（现有 pom.xml 即为 4 空格）
