@@ -1,0 +1,18 @@
+{
+  "description": "无标题文档：前言、表格块与正文合并为单节单片，偏移覆盖跨块区间（段间分隔符钳位）",
+  "options": { "sectionChunkSize": 800, "overlap": 50, "sentenceBreakRatio": 0.6 },
+  "blocks": [
+    { "type": "PARAGRAPH", "text": "开篇导语。", "charStart": 0, "charEnd": 5 },
+    { "type": "TABLE", "text": "指标|值\n行数|3", "charStart": 5, "charEnd": 14 },
+    { "type": "PARAGRAPH", "text": "结尾。", "charStart": 14, "charEnd": 17 }
+  ],
+  "expected": [
+    {
+      "index": 0,
+      "headingPath": "",
+      "charStart": 0,
+      "charEnd": 17,
+      "text": "开篇导语。\n\n指标|值\n行数|3\n\n结尾。"
+    }
+  ]
+}

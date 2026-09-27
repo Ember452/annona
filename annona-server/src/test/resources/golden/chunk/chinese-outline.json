@@ -1,0 +1,30 @@
+{
+  "description": "中文多级标题文档：两级标题路径、列表合并进节、默认参数 800/50/0.6",
+  "options": { "sectionChunkSize": 800, "overlap": 50, "sentenceBreakRatio": 0.6 },
+  "blocks": [
+    { "type": "HEADING", "level": 1, "text": "Java 基础", "charStart": 0, "charEnd": 7 },
+    { "type": "PARAGRAPH", "text": "Java 是一门面向对象语言。", "charStart": 7, "charEnd": 22 },
+    { "type": "HEADING", "level": 2, "text": "语法", "charStart": 22, "charEnd": 24 },
+    { "type": "PARAGRAPH", "text": "类是对象的模板。", "charStart": 24, "charEnd": 32 },
+    { "type": "LIST_ITEM", "text": "封装", "charStart": 32, "charEnd": 34 },
+    { "type": "LIST_ITEM", "text": "继承", "charStart": 34, "charEnd": 36 },
+    { "type": "LIST_ITEM", "text": "多态", "charStart": 36, "charEnd": 38 },
+    { "type": "PARAGRAPH", "text": "以上是三大特性。", "charStart": 38, "charEnd": 46 }
+  ],
+  "expected": [
+    {
+      "index": 0,
+      "headingPath": "Java 基础",
+      "charStart": 7,
+      "charEnd": 22,
+      "text": "Java 基础\nJava 是一门面向对象语言。"
+    },
+    {
+      "index": 1,
+      "headingPath": "Java 基础 > 语法",
+      "charStart": 24,
+      "charEnd": 46,
+      "text": "Java 基础 > 语法\n类是对象的模板。\n\n封装\n\n继承\n\n多态\n\n以上是三大特性。"
+    }
+  ]
+}

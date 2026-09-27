@@ -1,0 +1,23 @@
+{
+  "description": "超长节窗口化：自定义小参数 40/5/0.6 放大窗口行为——句末断点提前收口、重叠推进、偏移精确",
+  "options": { "sectionChunkSize": 40, "overlap": 5, "sentenceBreakRatio": 0.6 },
+  "blocks": [
+    { "type": "PARAGRAPH", "text": "aaaaaaaaaa。bbbbbbbbbb。cccccccccc。dddddddddd。", "charStart": 0, "charEnd": 44 }
+  ],
+  "expected": [
+    {
+      "index": 0,
+      "headingPath": "",
+      "charStart": 0,
+      "charEnd": 33,
+      "text": "aaaaaaaaaa。bbbbbbbbbb。cccccccccc。"
+    },
+    {
+      "index": 1,
+      "headingPath": "",
+      "charStart": 28,
+      "charEnd": 44,
+      "text": "cccc。dddddddddd。"
+    }
+  ]
+}
