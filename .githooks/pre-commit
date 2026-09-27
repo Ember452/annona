@@ -1,15 +1,28 @@
 #!/bin/sh
 # annona pre-commit hook
 #
-# 唯一的动作：跑 gitleaks 扫 staged diff，检测硬编码密钥。
+# 三个动作：Flyway 迁移冻结检查 → workflow YAML 结构自检 → gitleaks 密钥扫描。
 # 权威门禁在 CI（.github/workflows/ci.yml 的 gitleaks job + branch protection）；
-# 这里是**本地第一道**，让开发者在 commit 前就看到，而不是等 3 分钟 CI 红。
+# 这里是**本地第一道**，让开发者在 commit 前就看到，而不是等 CI 红。
 #
 # 激活：git config core.hooksPath .githooks  或  make setup
 # 参考：docs/specs/2026-09-25-model-api-key-adr.md（项目不内置任何可用 Key）
 #      AGENTS.md §0.2（绝不硬编码密钥）与 §5 提交前自查
 
 set -eu
+
+# 第零道：Flyway 迁移冻结。已应用的 V<n>__*.sql 被 checksum 冻结（validate-on-migrate:
+# true），修改会让所有持久库启动失败——结构变更只能新增版本号（AGENTS.md §4 约定；
+# V1 曾被改两次，见 reports/2026-09-27-docker-it-假绿复盘.md §5）。删除（D）与改名（R，
+# git mv 产生 R100）同样拦截：迁移链不允许断号或换名重放。
+MIGRATION_DIR='annona-server/src/main/resources/db/migration'
+FROZEN=$(git diff --cached --name-only --diff-filter=MDR -- "$MIGRATION_DIR" || true)
+if [ -n "$FROZEN" ]; then
+  printf '%s\n' "pre-commit: 已应用的 Flyway 迁移禁止修改/删除（checksum 冻结）：" >&2
+  printf '%s\n' "$FROZEN" >&2
+  printf '%s\n' "结构变更请新增 ${MIGRATION_DIR}/V<n+1>__*.sql（见 AGENTS.md §4）。" >&2
+  exit 1
+fi
 
 # 第一道：workflow YAML 自检。GitHub 对无效 workflow 是**静默不运行**（不报错、
 # 不产生 check run），靠 CI 自己查 CI 配置文件是鸡生蛋问题，所以必须本地拦。

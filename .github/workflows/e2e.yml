@@ -1,5 +1,5 @@
-# Playwright 端到端。annona-web 目前 (P0-09) 只有骨架没有真实页面，e2e/ 目录
-# 不存在；workflow 先就位，P1a-01 (identity) 首次加真实用例时自动生效。
+# Playwright 端到端。e2e/ 目录尚未建立；workflow 先就位，首个真实用例随前端
+# 真实用户路径批次落地时生效（P1a-01 绑定已废止，见 P0 总结 §5 D7 改判）。
 # 手动触发：给 PR 打 `needs-e2e` 标签；每日凌晨 3:00 UTC 定时跑主干。
 name: E2E
 
@@ -34,8 +34,8 @@ jobs:
       run:
         working-directory: annona-web
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           package_json_file: annona-web/package.json
       - name: Install deps

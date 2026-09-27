@@ -5,9 +5,12 @@
 # （docker-it / compose-smoke / frontend / gitleaks）在 CI 上跑。
 #
 # branch protection（P0-15）只需把 **`gate` 一个 job 设为必需检查**：
-# 本 workflow 带 paths-ignore，纯文档 PR 不会触发上面五个 job；
-# 若把它们直接设为必需检查，docs-only PR 会永久停在 "Expected"。
-# gate 总是运行（if: always()）并汇总前面的结果，因此没有可被跳过的必需检查。
+# gate 会汇总五个 blocking job（非 success/skipped 即红）。
+# ⚠️ pull_request 触发**不能配 paths-ignore**：过滤命中的 PR 整个 workflow 不触发，
+# 不产生任何 check run——若 gate 是必需检查，纯文档 PR 会永久停在 "Expected" 无法
+# 合并（GitHub 官方明确告诫勿把路径过滤与必需检查混用）。因此 docs-only PR 也照常
+# 跑全量 CI（浪费一些分钟数，换取门禁永远可判定）；push 到 main 保留 paths-ignore
+# 省分钟——主干已被 PR 门禁把过一道。
 name: CI
 
 on:
@@ -21,13 +24,6 @@ on:
       - '.github/PULL_REQUEST_TEMPLATE.md'
       - '.github/FUNDING.yml'
   pull_request:
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
-      - 'LICENSE'
-      - '.github/ISSUE_TEMPLATE/**'
-      - '.github/PULL_REQUEST_TEMPLATE.md'
-      - '.github/FUNDING.yml'
   workflow_dispatch:
 
 permissions:
@@ -47,8 +43,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: '21'
@@ -121,8 +117,8 @@ jobs:
           --health-timeout 3s
           --health-retries 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: '21'
@@ -170,15 +166,15 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────
   # 3) compose 冒烟（B4 交付物的端到端；P0 出口条件 ② 的落地）
   #    这是全 CI 里唯一真正需要 docker-compose.yml 的 job——它测交付物
-  #    而不是业务逻辑。慢，15-20 分钟；用 paths-ignore 排除文档 PR 已
-  #    在 on: 里配好。
+  #    而不是业务逻辑。慢，15-20 分钟；docs-only PR 也照常跑（pull_request
+  #    不配 paths-ignore 的原因见文件顶部注释）。
   # ─────────────────────────────────────────────────────────────────────
   compose-smoke:
     name: docker compose config + bring up stack + probe /
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Compose config (structural validation, incl. extends graph)
         run: docker compose --env-file .env.example -f docker/docker-compose.yml config -q
       - name: Prepare .env with CI-only secrets
@@ -224,20 +220,24 @@ jobs:
       run:
         working-directory: annona-web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       # pnpm/action-setup 读 annona-web/package.json 里的 packageManager 字段
       # 决定 pnpm 版本；放在 setup-node 之前，让 setup-node 的 cache:pnpm
       # 能拿到 pnpm 二进制定位 lockfile。
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           package_json_file: annona-web/package.json
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: pnpm
           cache-dependency-path: annona-web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      # eslint（typescript-eslint + react-hooks）：exhaustive-deps 是过期闭包类 bug 的
+      # 第一道机器防线（番茄钟到期振荡即此类），rules 设 error，绿才算过
+      - run: pnpm lint
+      - run: pnpm test
       - run: pnpm build
       - name: Verify static output reached annona-server
         run: test -f ../annona-server/src/main/resources/static/index.html
@@ -260,20 +260,20 @@ jobs:
       contents: read
       pull-requests: write   # gitleaks-action 需要回写 PR 评论
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           # 全历史扫描需要完整 fetch；PR 只 diff 模式可以省，但我们做全扫
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}  # 组织账号需要，个人仓库不填
 
   # ─────────────────────────────────────────────────────────────────────
   # 6) gate：唯一需要设进 branch protection 的必需检查
-  #    上面五个 job 带了 paths-ignore，纯文档 PR 会整体不触发；若把它们直接
-  #    设为必需检查，docs-only PR 会永久停在 "Expected"。
-  #    gate 自 if: always() 所以总会跑；skipped 视为通过，failure/cancelled/timed_out 不通过。
+  #    gate 依赖五个 blocking job，非 success/skipped 即红；skipped 视为通过
+  #    （gitleaks 对 fork PR 显式 skip）。pull_request 无 paths-ignore（原因见
+  #    文件顶部），因此 gate 在任何 PR 上都会真实运行一次，必需检查不会卡 Expected。
   # ─────────────────────────────────────────────────────────────────────
   gate:
     name: CI gate

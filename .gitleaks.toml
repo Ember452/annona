@@ -1,0 +1,14 @@
+# annona 的 gitleaks 配置。CI（ci.yml gitleaks job）与本地 pre-commit 都会读取。
+#
+# 原则：只**扩展**默认规则、只对"占位值专用文件"开白名单——绝不用 allowlist 盖住
+# 业务代码与 docs 正文，那里出现的密钥永远是事故（AGENTS.md §0.2）。
+# 当前 .env.example 的 replace-me/replace-me-kek/not-needed 都是低熵占位，
+# 默认规则本就不命中；白名单是给未来"示例密钥类教学文案"预留的显式出口，
+# 扩大范围（比如放开 docs/** 或 src/test/**）必须先在评审里说明理由。
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "仅环境变量模板：该文件按定义只允许占位符（见文件头注释）"
+paths = ['''^\.env\.example$''']
