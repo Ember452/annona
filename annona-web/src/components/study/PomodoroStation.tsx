@@ -10,12 +10,11 @@ import {
 } from '@/components/ui/card'
 import DirectionSelector from '@/components/direction/DirectionSelector'
 import FocusTimer from '@/components/study/FocusTimer'
-import { usePomodoro } from '@/hooks/usePomodoro'
+import { BREAK_MINUTES, usePomodoro } from '@/hooks/usePomodoro'
 import { cn } from '@/lib/utils'
 import type { Direction } from '@/types/direction'
 
 const FOCUS_PRESETS = [25, 45, 60]
-const BREAK_MINUTES = 5
 
 interface PomodoroStationProps {
   /** 一次会话落定（自然到期 / 主动放弃的 finish 成功）后通知父级刷新今日列表。 */
@@ -132,6 +131,18 @@ export default function PomodoroStation({ onSessionSettled }: PomodoroStationPro
         </div>
 
         {actionError && <p className="text-xs text-destructive">{actionError}</p>}
+        {pomodoro.pendingFinish && (
+          <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+            <span>本次专注已结束但时长未同步到服务器。</span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void pomodoro.retryFinish().catch(() => {})}
+            >
+              重试同步
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

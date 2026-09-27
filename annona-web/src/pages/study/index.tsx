@@ -19,7 +19,7 @@ export default function StudyPage() {
 
       <div className="mt-8 grid items-start gap-6 lg:grid-cols-[1.1fr_1fr]">
         <PomodoroStation onSessionSettled={handleSessionSettled} />
-        <CheckinCard />
+        <CheckinCard onSessionsChanged={handleSessionSettled} />
       </div>
 
       <div className="mt-6">

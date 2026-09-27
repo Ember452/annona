@@ -17,12 +17,17 @@ import { cn } from '@/lib/utils'
 import type { Direction } from '@/types/direction'
 import type { Checkin } from '@/types/study'
 
+interface CheckinCardProps {
+  /** 提交成功（hours>0 会联动生成自报会话）后通知父级刷新今日列表。 */
+  onSessionsChanged?: () => void
+}
+
 /**
  * 每日打卡卡（借鉴 🅢 checkin 的"一天一条"心智，拒绝语义改为幂等更新）：
  * 挂载即拉今日打卡回填（已打过则可改）；hours>0 由后端联动落 SELF_REPORTED 会话，
  * hours 归 0 即收回补录。截图上传（snapshotUrl）属后续阶段，先不提供入口。
  */
-export default function CheckinCard() {
+export default function CheckinCard({ onSessionsChanged }: CheckinCardProps) {
   const [direction, setDirection] = useState<Direction | null>(null)
   const [hours, setHours] = useState('0')
   const [mood, setMood] = useState('')
@@ -88,6 +93,8 @@ export default function CheckinCard() {
       })
       setExisting(saved)
       setMessage(existing ? '今日打卡已更新' : '今日打卡已记录')
+      // hours 联动会话是今日列表的新增项，提交后拉一次（评审：联动会话不自动出现）
+      onSessionsChanged?.()
     } catch (e) {
       setError(e instanceof Error ? e.message : '打卡失败，请稍后重试')
     } finally {

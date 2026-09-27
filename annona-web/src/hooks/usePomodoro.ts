@@ -11,7 +11,7 @@ export interface PomodoroOptions {
 }
 
 const STORAGE_KEY = 'annona-study-pomodoro'
-const BREAK_MINUTES = 5
+export const BREAK_MINUTES = 5
 /** 250ms tick + 绝对截止时间计算：刷新与浏览器后台节流都不会造成计时漂移（借鉴上游 focus-timer）。 */
 const TICK_MS = 250
 
@@ -93,6 +93,8 @@ export function usePomodoro(options: PomodoroOptions = {}) {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
   const [abandoning, setAbandoning] = useState(false)
+  /** 自然到期/恢复补 finish 失败时挂起的会话 id：前端已切休息，但后端仍 RUNNING，给用户重试入口（评审 A3）。 */
+  const [pendingFinish, setPendingFinish] = useState<string | null>(null)
   const [hydrated, setHydrated] = useState(false)
 
   const modeRef = useRef(mode); modeRef.current = mode
@@ -158,7 +160,8 @@ export function usePomodoro(options: PomodoroOptions = {}) {
     const sid = sessionIdRef.current
     if (modeRef.current === 'focus') {
       if (sid) {
-        void studyApi.finishSession(sid, false).then(settleSession).catch(() => {})
+        // 失败不静默吞：保留 sid 到 pendingFinish，UI 给"未同步"提示 + 重试（finish 服务端幂等）
+        void studyApi.finishSession(sid, false).then(settleSession).catch(() => setPendingFinish(sid))
       }
       applyState({
         mode: 'break',
@@ -207,7 +210,10 @@ export function usePomodoro(options: PomodoroOptions = {}) {
           save({ ...snap, remaining: rest, expiresAt: deadline })
         } else if (snap.mode === 'focus') {
           if (snap.sessionId) {
-            void studyApi.finishSession(snap.sessionId, false).then(settleSession).catch(() => {})
+            void studyApi
+              .finishSession(snap.sessionId, false)
+              .then(settleSession)
+              .catch(() => setPendingFinish(snap.sessionId))
           }
           applyState({
             mode: 'break',
@@ -383,6 +389,15 @@ export function usePomodoro(options: PomodoroOptions = {}) {
     }
   }, [])
 
+  /** 重试同步一个 finish 失败的到期会话（服务端幂等，成功后清 pendingFinish 并通知列表刷新）。 */
+  const retryFinish = useCallback(async () => {
+    const sid = pendingFinish
+    if (!sid) return
+    await studyApi.finishSession(sid, false)
+    setPendingFinish(null)
+    onSessionSettledRef.current?.()
+  }, [pendingFinish])
+
   // 心跳内聚在这里：专注运行中每 15s 一跳，失焦暂停 + BLUR，恢复续跳。
   useHeartbeat(sessionId, isRunning && mode === 'focus')
 
@@ -397,6 +412,9 @@ export function usePomodoro(options: PomodoroOptions = {}) {
     hasSession: sessionId !== null,
     starting,
     abandoning,
+    /** 非 null 表示有一次到期会话未同步成功，UI 据此提示重试。 */
+    pendingFinish,
+    retryFinish,
     start,
     pause,
     resume,
