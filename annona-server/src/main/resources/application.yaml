@@ -43,8 +43,11 @@ annona:
     platform-secret: ${ANNONA_IDENTITY_PLATFORM_SECRET:}
     platform-secret-header: ${ANNONA_IDENTITY_PLATFORM_SECRET_HEADER:X-Auth-Request-Access-Token}
   # P1a-05：对象存储（S3 兼容，PGSTY Silo，见 docs/specs/2026-09-26-s3-storage-silo-adr.md）。
-  # endpoint 为空 = 不装配 S3 bean，上传报 2306（启动不拦，knowledge-ingestion-adr §决策 9）。
+  # enabled 显式开关（默认关）：endpoint 的 yaml 映射把键恒定义为空串，不能当装配条件
+  # （@ConditionalOnProperty 只判键存在，空串也命中——P1a-05 CI 实测坑，StorageConfig 注释）。
+  # enabled=true 且 Key 缺失 = 配置错误，启动即抛。
   storage:
+    enabled: ${S3_ENABLED:false}
     endpoint: ${S3_ENDPOINT:}
     bucket: ${S3_BUCKET:annona}
     access-key: ${S3_ACCESS_KEY:}
