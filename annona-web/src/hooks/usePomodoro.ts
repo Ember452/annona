@@ -110,7 +110,9 @@ export function usePomodoro(options: PomodoroOptions = {}) {
   const onSessionSettledRef = useRef(options.onSessionSettled)
   onSessionSettledRef.current = options.onSessionSettled
 
-  function persist(running: boolean, rem: number, expiresAt: number | null) {
+  // persist/applyState/settleSession 只读 ref 与 state setter（两者都稳定），用 useCallback
+  // 定为稳定引用——下游 useCallback 的依赖数组因此可以写真实依赖而非整段 disable（ESLint 接入门禁）
+  const persist = useCallback((running: boolean, rem: number, expiresAt: number | null) => {
     save({
       mode: modeRef.current,
       round: roundRef.current,
@@ -121,7 +123,7 @@ export function usePomodoro(options: PomodoroOptions = {}) {
       expiresAt,
       sessionId: sessionIdRef.current,
     })
-  }
+  }, [])
 
   interface NextState {
     mode: PomodoroMode
@@ -134,7 +136,7 @@ export function usePomodoro(options: PomodoroOptions = {}) {
   }
 
   /** refs + state 同步落地并持久化（所有状态迁移的唯一出口）。 */
-  function applyState(next: NextState) {
+  const applyState = useCallback((next: NextState) => {
     modeRef.current = next.mode
     roundRef.current = next.round
     completedRef.current = next.completed
@@ -149,11 +151,11 @@ export function usePomodoro(options: PomodoroOptions = {}) {
     setIsRunning(next.isRunning)
     setSessionId(next.sessionId)
     persist(next.isRunning, next.remaining, next.expiresAt)
-  }
+  }, [persist])
 
-  function settleSession() {
+  const settleSession = useCallback(() => {
     onSessionSettledRef.current?.()
-  }
+  }, [])
 
   /** 专注自然到期：后端 finish 判质量（幂等；失败时会话仍 RUNNING，列表原样展示）；休息到期切下一轮。 */
   function handleExpire() {
@@ -252,7 +254,15 @@ export function usePomodoro(options: PomodoroOptions = {}) {
     persist(true, remainingRef.current, deadline)
 
     const update = () => {
-      const next = secondsUntil(deadline)
+      // 每跳从 ref 读当前截止时间，不用闭包里的 deadline：到期切 break 后 effect 不重建
+      // （isRunning 仍 true），旧 focus deadline 会让后续 tick 反复触发 expire，把休息段
+      // 整段吞掉并在 focus/break 间振荡（vitest 回归用例锁死此行为，借鉴上游 focus-timer
+      // 的 isRunning-false 方案不适合"到期自动进入休息"的语义）。
+      // 反向同理：break→focus 置 isRunning=false 后、React 提交 effect cleanup 前，
+      // 同步窗口内的残留 tick 必须忽略，否则又会用旧 deadline 反复 expire。
+      if (!isRunningRef.current) return
+      const current = expiresAtRef.current ?? deadline
+      const next = secondsUntil(current)
       if (next <= 0) {
         handleExpire()
         return
@@ -260,7 +270,7 @@ export function usePomodoro(options: PomodoroOptions = {}) {
       if (next !== remainingRef.current) {
         remainingRef.current = next
         setRemaining(next)
-        persist(true, next, deadline)
+        persist(true, next, current)
       }
     }
     update()
@@ -293,7 +303,7 @@ export function usePomodoro(options: PomodoroOptions = {}) {
       startingRef.current = false
       setStarting(false)
     }
-  }, [])
+  }, [applyState])
 
   /** 暂停：会话仍 RUNNING，心跳随 active=false 停跳，暂停段会被服务端如实记为 gap。 */
   const pause = useCallback(() => {
@@ -310,7 +320,7 @@ export function usePomodoro(options: PomodoroOptions = {}) {
       expiresAt: null,
       sessionId: sessionIdRef.current,
     })
-  }, [])
+  }, [applyState])
 
   const resume = useCallback(() => {
     if (!sessionIdRef.current || isRunningRef.current) return
@@ -324,7 +334,7 @@ export function usePomodoro(options: PomodoroOptions = {}) {
       expiresAt: Date.now() + seconds * 1000,
       sessionId: sessionIdRef.current,
     })
-  }, [])
+  }, [applyState])
 
   /** 提前结束：服务端按心跳时间线判质量（abandon 语义），本轮不记 completed。 */
   const abandon = useCallback(async () => {
@@ -348,7 +358,7 @@ export function usePomodoro(options: PomodoroOptions = {}) {
       abandoningRef.current = false
       setAbandoning(false)
     }
-  }, [settleSession])
+  }, [settleSession, applyState])
 
   const skipBreak = useCallback(() => {
     if (sessionIdRef.current || modeRef.current !== 'break') return
@@ -361,7 +371,7 @@ export function usePomodoro(options: PomodoroOptions = {}) {
       expiresAt: null,
       sessionId: null,
     })
-  }, [])
+  }, [applyState])
 
   /** 清空轮次进度（仅空闲可用；运行中须先提前结束，避免后端会话悬空）。 */
   const reset = useCallback(() => {
@@ -375,7 +385,7 @@ export function usePomodoro(options: PomodoroOptions = {}) {
       expiresAt: null,
       sessionId: null,
     })
-  }, [])
+  }, [applyState])
 
   /** 切换专注预设；运行/暂停中不生效（会话已带 plannedMinutes），break 段只影响下一轮。 */
   const setFocusMinutes = useCallback((minutes: number) => {
@@ -387,7 +397,7 @@ export function usePomodoro(options: PomodoroOptions = {}) {
       setRemaining(minutes * 60)
       persist(false, minutes * 60, null)
     }
-  }, [])
+  }, [persist])
 
   /** 重试同步一个 finish 失败的到期会话（服务端幂等，成功后清 pendingFinish 并通知列表刷新）。 */
   const retryFinish = useCallback(async () => {
