@@ -40,13 +40,15 @@ import org.junit.jupiter.api.Test;
 class SpiFakesSmokeTest {
 
     @Test
-    @DisplayName("FakeIdentityProvider：mode=none；任何 token 都返回 local principal")
+    @DisplayName("FakeIdentityProvider：mode=none；任何 token 都返回固定 UUID 的 local principal")
     void fakeIdentityProviderReturnsLocalPrincipal() {
         FakeIdentityProvider sut = new FakeIdentityProvider();
         assertEquals("none", sut.mode());
         Optional<Principal> principal = sut.authenticate("any-token-at-all");
         assertTrue(principal.isPresent());
-        assertEquals("local", principal.get().id());
+        // id 必须是可落库的 UUID（与 NoneIdentityProvider.LOCAL_USER_ID 同值），
+        // 不能是字面量 "local"——下游测试拿它写业务表外键时 UUID 解析会炸
+        assertEquals("00000000-0000-0000-0000-000000000001", principal.get().id());
         assertTrue(principal.get().roles().contains("USER"));
     }
 
