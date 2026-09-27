@@ -64,6 +64,15 @@ python scripts\ci\validate-workflows.py                   # 改过 .github/workf
 > check run，只会在 Actions 页面留一行提示。曾因此让一整批 CI 改动实际从未执行，所以改
 > `.github/workflows/**` 必须本地先校。
 
+### 纯前端模式（不启动后端调样式/交互）
+
+```bash
+echo 'VITE_MOCK_BACKEND=1' > annona-web/.env.local   # 该文件已被 gitignore
+cd annona-web; pnpm dev
+```
+
+开启后**所有 API 请求由本地 fixtures 应答**（`src/mocks/mockBackend.ts`，axios adapter 层拦截）：任意邮箱密码点登录即进，方向/自习室页有假数据，未实现的端点返回业务错误码走既有错误态。仅用于前端细节开发——**行为规格仍以 CI 上的真后端验证为准**，不要据 mock 行为写后端契约。未开启 mock 且后端未启动时，应用会停在"无法连接后端"面板（不是登录页），点"重试连接"即可在后端就绪后进入。
+
 ### 本机不跑（CI / 部署环境执行）
 
 | 项 | 由谁跑 |

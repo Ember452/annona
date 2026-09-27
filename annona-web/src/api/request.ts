@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import type { Result } from '@/types/api'
+import { createMockAdapter, MOCK_ENABLED } from '@/mocks/mockBackend'
 
 /**
  * annona 前端所有 HTTP 请求的<b>唯一</b>入口。
@@ -101,6 +102,9 @@ export function onRejected(error: unknown): Promise<never> {
 const instance: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 60_000,
+  // 纯前端模式（VITE_MOCK_BACKEND=1，仅前端样式/交互开发用）：所有请求由本地 fixtures
+  // 在 adapter 层应答，拦截器与业务代码零感知；env 不设时 undefined，路径完全不变
+  adapter: MOCK_ENABLED ? createMockAdapter() : undefined,
 })
 
 instance.interceptors.response.use(onFulfilled, onRejected)
