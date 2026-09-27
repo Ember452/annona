@@ -16,6 +16,7 @@ import { useDirections } from '@/hooks/useDirections'
 import { cn } from '@/lib/utils'
 import type { Direction } from '@/types/direction'
 import type { Checkin } from '@/types/study'
+import { toErrorMessage } from '@/lib/errors'
 
 interface CheckinCardProps {
   /** 提交成功（hours>0 会联动生成自报会话）后通知父级刷新今日列表。 */
@@ -96,7 +97,7 @@ export default function CheckinCard({ onSessionsChanged }: CheckinCardProps) {
       // hours 联动会话是今日列表的新增项，提交后拉一次（评审：联动会话不自动出现）
       onSessionsChanged?.()
     } catch (e) {
-      setError(e instanceof Error ? e.message : '打卡失败，请稍后重试')
+      setError(toErrorMessage(e, '打卡失败，请稍后重试'))
     } finally {
       setSubmitting(false)
     }

@@ -22,6 +22,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useDirections } from '@/hooks/useDirections'
 import type { Direction } from '@/types/direction'
+import { toErrorMessage } from '@/lib/errors'
 
 /**
  * 方向选择器（P1a-03）四能力：下拉（内置分组在前，空态给引导文案）、行内新建
@@ -62,7 +63,7 @@ export default function DirectionSelector({ value, onChange }: DirectionSelector
       setNewName('')
       onChange(created)
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : '创建失败，请稍后重试')
+      setActionError(toErrorMessage(e, '创建失败，请稍后重试'))
     } finally {
       setCreating(false)
     }
@@ -79,7 +80,7 @@ export default function DirectionSelector({ value, onChange }: DirectionSelector
       setKbDocInput('')
       onChange(updated)
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : '绑定失败，请稍后重试')
+      setActionError(toErrorMessage(e, '绑定失败，请稍后重试'))
     } finally {
       setBinding(false)
     }
@@ -101,7 +102,7 @@ export default function DirectionSelector({ value, onChange }: DirectionSelector
       setArchiveOpen(false)
       onChange(null)
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : '归档失败，请稍后重试')
+      setActionError(toErrorMessage(e, '归档失败，请稍后重试'))
       setArchiveOpen(false)
     } finally {
       setArchiving(false)

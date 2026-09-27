@@ -13,6 +13,7 @@ import FocusTimer from '@/components/study/FocusTimer'
 import { BREAK_MINUTES, usePomodoro } from '@/hooks/usePomodoro'
 import { cn } from '@/lib/utils'
 import type { Direction } from '@/types/direction'
+import { toErrorMessage } from '@/lib/errors'
 
 const FOCUS_PRESETS = [25, 45, 60]
 
@@ -38,7 +39,7 @@ export default function PomodoroStation({ onSessionSettled }: PomodoroStationPro
     try {
       await pomodoro.start(direction.id)
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : '开始失败，请稍后重试')
+      setActionError(toErrorMessage(e, '开始失败，请稍后重试'))
     }
   }
 
@@ -46,7 +47,7 @@ export default function PomodoroStation({ onSessionSettled }: PomodoroStationPro
     if (!window.confirm('确定提前结束本次专注？已专注时长仍会按心跳如实判定质量。')) return
     setActionError(null)
     pomodoro.abandon().catch((e: unknown) => {
-      setActionError(e instanceof Error ? e.message : '结束失败，请稍后重试')
+      setActionError(toErrorMessage(e, '结束失败，请稍后重试'))
     })
   }
 

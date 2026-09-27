@@ -11,6 +11,7 @@ import {
 import { useDirections } from '@/hooks/useDirections'
 import { cn } from '@/lib/utils'
 import type { SessionQuality, StudySession } from '@/types/study'
+import { toErrorMessage } from '@/lib/errors'
 
 /** 质量徽章三色（设计 §6.1：面板必须显示质量等级）。 */
 const QUALITY_BADGE: Record<SessionQuality, { label: string; className: string }> = {
@@ -57,7 +58,7 @@ export default function SessionList({ refreshKey }: SessionListProps) {
       setSessions(await studyApi.todaySessions())
       setError(null)
     } catch (e) {
-      setError(e instanceof Error ? e.message : '今日会话加载失败')
+      setError(toErrorMessage(e, '今日会话加载失败'))
     } finally {
       setLoading(false)
     }
