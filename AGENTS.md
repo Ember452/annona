@@ -46,7 +46,7 @@
 | 某个决策为什么这么定、否决了什么 | `docs/specs/YYYY-MM-DD-<topic>-adr.md` | 见 §6 触发清单 |
 | 跨 ≥3 模块的改造方案 | `docs/plans/<TOPIC>_PLAN.md` | 计划推进或中止 |
 | 阶段级进度（P0–P5 到哪了） | `docs/annona-开发计划.md` 顶部「当前进度」表 | 阶段开工与出口时 |
-| 任务级进度 | 对应 GitHub issue 的开关状态 | 任务完成时关闭并回链 commit |
+| 任务级进度 | `docs/annona-开发计划.md` 各阶段任务表（**不建任务级 issue**，见 §5） | 任务完成时去掉 ID 格里的 🔶 并回写顶部进度表 |
 | 当前阶段做到哪、遗留什么 | `docs/reports/P<n>-<名>-阶段总结.md` | 每个阶段收尾（见 §7） |
 | 指标怎么测、实测结果 | `docs/tests/指标测试-<模块>.md`、`docs/benchmarks/<主题>_YYYYMMDD.md` | 每次跑评测/压测 |
 | 接口清单 | `docs/api/` 或 SpringDoc `/v3/api-docs` | 由脚本生成，不手写 |
@@ -124,6 +124,8 @@
 
 **结构与边界（改完必自查）**
 
+- **约定 → 机检的升级元规则**：任何一条本文件或代码注释里的硬约定，一旦被实际违反/踩坑一次，随修复**同一批次**给它配上机器门禁（pre-commit 检查 / ArchUnit 规则 / CI 断言）——只靠"下一个人读文档"传递的项目约定必然失守。已有先例：save/merge 语义（假绿复盘后进 §4）、迁移冻结（V1 被改两次后上 pre-commit）、pipefail（tee 吞退出码后进 validate-workflows）。新增约定时要么同时交出机检，要么写明触发升级的条件。
+
 - 依赖方向只能是 `modules → spi → common`；`modules/*` 之间禁止 import，除白名单 `interview/orchestrator → planner/advisor`。跨模块通信只有两种：只读走 `XxxQueryService` / `shared` 读模型；写走领域事件。
 - 分层：`Controller`（路由、校验、委托）→ `Service`（编排，`@Transactional` 只在此层且范围最小）→ `Repository`（JPA，自定义查询用方法名或 `@Query`）。
 - 异常出口分两类：**业务失败**返回 HTTP 200 + `Result.error(code, msg)`；**路由/传输层错误**（404/405/400/500）返回真实 HTTP 状态码 + 同样的 `Result` 体。不得把后者也压成 200（会吞掉故障信号并伪装 SPA fallback 缺失）。
@@ -131,6 +133,7 @@
 - **改 `.github/workflows/**` 后必跑** `python scripts/ci/validate-workflows.py`：GitHub 对无效 workflow 是**静默不运行**（不报错、不产生 check run），跟假绿一样隐蔽；让 CI 自校 CI 配置是鸡生蛋问题，以本地钩子为唯一防线。YAML 普通标量里不能出现 `: `（冒号+空格），含它的 `run:` 一律用块形 scalar。
 - 基础设施能力放 `annona-infrastructure` 或 `common`，禁止散落到业务 Service。
 - **预置主键实体的 save/merge 语义（全仓约定）**：实体 id 由应用侧 `UUID.randomUUID()` 赋值（不用 `@GeneratedValue`），`save()` 因此走 `merge()` 分支——**返回值才是受管副本，原引用仍是游离态**。需要回读 DB-default 列（`created_at` 等 `insertable=false` 列）时必须接住返回值再 `refresh`；直接 refresh 原引用抛 `DetachedObjectException`，用原引用映射响应拿到 null。slice 测试的 mock EM 探不到此错，只在真 PG 集测暴露（P1a-04 加固批实测）。同理，依赖 `handlerExceptionResolver` 等 web 专属 bean 的组件必须 `@ConditionalOnWebApplication(SERVLET)`，否则 docker 组 IT 的 NONE 上下文连坐失败（先例：`SessionAuthFilter`）。
+- **已应用的 Flyway 迁移禁改（全仓约定，pre-commit 机检）**：`db/migration/V<n>__*.sql` 一旦进入任何真实环境（CI 集测、compose 卷、本机原生 PG）即被 checksum 冻结——修改既有文件会让所有持久库 `validate-on-migrate` 启动失败。结构变更一律新增 `V<n+1>`；本机/CI 都是一次性库时不许因"CI 能绿"而放松（先例：V1 曾被改两次，见 2026-09-27 假绿复盘 §5）。
 - `io.annona.modules.<name>` 顶层包与 `io.annona.shared.*` 必须有 `package-info.java` 声明职责与允许依赖（子包不强制，避免堆无用文件）。
 
 **借鉴扫描义务（写任何一块前先做）**
@@ -144,7 +147,7 @@
 **命名与风格**
 
 - 后缀：`XxxEntity` / `XxxRequest` / `XxxResponse` / `XxxDTO` / `XxxRepository` / `XxxMapper`；请求体优先 `record`；Entity↔DTO 一律 MapStruct。
-- 2 空格缩进、无通配符 import、避免内联全限定类名、构造器注入 + `@RequiredArgsConstructor`。
+- 2 空格缩进、无通配符 import、避免内联全限定类名、**手写构造器注入（全仓不使用 Lombok，不要引入 `@RequiredArgsConstructor`）**。
 - 命名一致性优先：同一概念在全仓只用一个词（`direction` 不混用 `topic/subject/category`；`session` 不混用 `round/conversation` 表达同一物）。
 - 方向引用一律走 `direction.id` 外键（`key` 只在 owner 内唯一，存字符串无法定位归属），禁止用自由文本表示方向。
 
@@ -162,7 +165,7 @@
 
 **测试最低门槛**
 
-- 关键纯逻辑包（`planner/mastery`、`planner/guard`、`evaluation/structured`、`knowledge/chunk`、`infrastructure` 的分词与向量序列化）**必须有纯逻辑单测 + golden 快照**，覆盖率阈值 85%；其余 60%。**阈值从 P1a 起生效**（P0 只有项目骨架，卡覆盖率只会逼人写空测试）。
+- 关键纯逻辑包（`planner/mastery`、`planner/guard`、`evaluation/structured`、`knowledge/chunk`、`infrastructure` 的分词与向量序列化）**必须有纯逻辑单测 + golden 快照**，覆盖率阈值 85%；其余 60%。**阈值从 P1a 起生效**（P0 只有项目骨架，卡覆盖率只会逼人写空测试）。**机检现状（2026-09-27）**：`annona-server` 的 BUNDLE 行覆盖 60% 已由 JaCoCo `check` 挂进 `mvn verify`（实测基线 68.0%）；85% 关键包在其首个包落地时随代码加带 `includes` 的专用 check，不预置空规则。
 - **测试分层（本机无 Docker，见 §0.9 与 `specs/2026-09-25-dockerless-local-dev-adr.md`）**：无 tag = 纯逻辑单测（本机默认跑）；`@Tag("slice")` = Mockito 切片；`@Tag("docker")` = 需真实 PG/Redis/S3，**本机不跑，surefire 默认 excludedGroups=docker，仅 CI 以 `-Dgroups=docker` 执行**。
 - 测试意图用中文 `@DisplayName` 描述，复杂场景 `@Nested` 分组。
 - 改动公共能力必须跑 `mvn verify`；改动必须附带能证伪它的命令。
@@ -276,11 +279,11 @@ Signed-off-by: ...      ← DCO 签名，提交时带 -s
 .\mvnw.cmd -B -q verify                                  # 编译 + 单测 + slice + ArchUnit（默认排除 docker 组）
 .\mvnw.cmd -B -q test -Dtest=ArchitectureTest            # 单跑一个纯逻辑测试类
 .\mvnw.cmd -B -q -pl annona-server -am package           # 打包（已拆 4 个 Java 模块）
-cd annona-web; pnpm install; pnpm typecheck; pnpm build   # 前端（产物写入 annona-server 的 static/）
+cd annona-web; pnpm install; pnpm typecheck; pnpm lint; pnpm test; pnpm build   # 前端（产物写入 annona-server 的 static/；lint=ESLint、test=vitest）
 python scripts\ci\validate-workflows.py                  # 改过 .github/workflows 时必跑
 ```
 
-上述命令均已在当前 HEAD 实跑验证（`verify` 与前端 `typecheck/build` 均 EXIT=0）。
+上述命令均已在当前 HEAD 实跑验证（`verify` 含 JaCoCo 60% 覆盖率 check、前端 typecheck/lint/test/build 均 EXIT=0）。
 
 ### 8.2 本机不跑（由 CI 或部署环境执行；不得因本机跑不了而删除或 mock 这些测试）
 

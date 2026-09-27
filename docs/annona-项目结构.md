@@ -53,7 +53,6 @@ annona/
 │   └── FUNDING.yml                #   赞助入口（开源可持续性）
 ├── .mvn/wrapper/                  # Maven Wrapper（统一 mvn 版本，clone 即可构建）
 ├── .githooks/                     # Git hooks：commit-msg 规范、pre-commit 密钥扫描
-├── lombok.config                  # Lombok 全局配置（copyableAnnotations 等）
 ├── .editorconfig                  # 跨 IDE 缩进/编码一致性（已落地，Java/前端 2 空格、XML 4 空格）
 ├── .env.example                   # 环境变量模板（只放占位符，绝不放真实 Key）
 ├── .gitignore / .gitattributes    # 忽略规则与换行/LFS 约定
@@ -70,7 +69,7 @@ annona/
 
 ```text
                      ┌───────────────────┐
-                     │   annona-common   │  无外部依赖（除 slf4j/jackson/lombok）
+                     │   annona-common   │  无外部依赖（除 slf4j/jackson）
                      └─────────┬─────────┘
                                ▲
         ┌──────────────────────┼──────────────────────┐
@@ -356,7 +355,7 @@ annona-web/
     └── i18n/?                       # 暂不引入（v1 仅中文），目录预留位则视为过度设计
 ```
 
-前端只依赖 `/api/*` 与 `/ws/voice` 契约，不感知 Java 结构；类型定义以 OpenAPI 生成为准（`scripts/gen-api.ts`）。
+前端只依赖 `/api/*` 与 `/ws/voice` 契约，不感知 Java 结构；类型定义以 OpenAPI 生成为准（脚本：`annona-web/scripts/gen-api.mjs`，`pnpm gen:api`，从 `/v3/api-docs` 拉取）。
 
 ---
 
@@ -384,8 +383,9 @@ scripts/
 ├── seed/                            # 合成学习数据（决策层冷启动演示）
 ├── rag-eval/                        # Recall@K / MRR 评测与基线对比
 ├── bench/                           # 并发压测与延迟分位数（语音端到端、接口 P95）
-├── gen/                             # OpenAPI → 前端类型生成
-└── release/                         # 版本发布、changelog、镜像构建
+├── ci/                              # 工程自检脚本（validate-workflows.py 等）
+├── release/                         # 版本发布、changelog、镜像构建
+└── （OpenAPI → 前端类型生成在 annona-web/scripts/gen-api.mjs，`pnpm gen:api`）
 
 docker/
 ├── Dockerfile                       # 多阶段：前端 build → maven package → JRE 运行时
@@ -446,13 +446,13 @@ Maven Central 的对外契约）。两边分工写清，免得后人误以为 Ar
 | 测试类 | `被测类 + Test`（单测）/ `+IT`（集成） | `MasteryCalculatorTest` |
 | Git 分支/提交 | `feat\|fix\|docs\|refactor\|test\|chore: <描述>`（commit-msg hook 校验，**P0-11 落地前靠自觉**） | — |
 
-代码风格：2 空格缩进、无通配符 import、构造器注入 + `@RequiredArgsConstructor`、SLF4J 占位符且异常作为最后一个参数。
+代码风格：2 空格缩进、无通配符 import、手写构造器注入（不用 Lombok，见 AGENTS.md §4）、SLF4J 占位符且异常作为最后一个参数。
 
 ---
 
-## 12. 当前仓库 → 目标结构的 P0 重组清单
+## 12. 当前仓库 → 目标结构的重组清单
 
-目标结构（§2–§11 描述的完整形态）不是一次到位的，P0 分 5 批交付。下表登记当前进度：
+目标结构（§2–§11 描述的完整形态）不是一次到位的，分阶段交付。下表登记当前进度（阶段级状态真相源是 [annona-开发计划.md](./annona-开发计划.md) 顶部「当前进度」表，本表只记结构落地）：
 
 | # | 目标 | 状态 | 落地批次 |
 |---|---|---|---|
@@ -463,7 +463,8 @@ Maven Central 的对外契约）。两边分工写清，免得后人误以为 Ar
 | 5 | Flyway 基线 `V1__baseline.sql`（含 `direction` 字典表）、`db/seed/`、`prompts/`、`skills/` 目录占位 | ✅ 已完成（P0-06，`V1__baseline.sql` + `docker/postgres/init.sql` 两文件，PR #3 merge `f0a60d9`）；`db/seed` 与 `prompts/` `skills/` 目录占位待 P1a 填 | B2 |
 | 6 | `annona-server/src/test/java/io/annona/arch/` 落地 §10 的 ArchUnit 七条规则（先失败后放行的红名单机制） | ✅ 已完成（P0-07，B1） | B1 |
 | 7 | `docker/` 双 compose、`deploy/nginx/`、`.github/workflows/ci.yml`（build/test/lint/archunit + gitleaks 密钥扫描） | ✅ 已完成（P0-10 `docker/Dockerfile` 三阶段 + `docker-compose.yml`/`compose.dev.yml`，P0-11 hooks，P0-12 `ci.yml` 5 blocking jobs + 5 个辅助 workflow + `CODEOWNERS`/ISSUE/PR 模板/FUNDING，P0-13 `Makefile`）。~~`dependabot.yml`~~ 已从 P0 产出中移除（见 D16） | B4 + B5 |
-| 8 | 仓库门面：`README.md`、`LICENSE`（AGPL-3.0 FSF 原文）、`AGENTS.md`、`.env.example`、`SECURITY.md`、`CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`.editorconfig` 已落地；`.github/` 全套见 §13（P0-12）；决策记录已在 `docs/specs/` 落地 8 条 ADR | ✅ 门面 + `.github/` 全套完成（P0-14，PR #6 本批；`CODEOWNERS` 强审 4 区：`planner/` `direction/` `annona-spi/` `docs/specs/` + `.github/` `.githooks/`） | B5 |
+| 8 | 仓库门面：`README.md`、`LICENSE`（AGPL-3.0 FSF 原文）、`AGENTS.md`、`.env.example`、`SECURITY.md`、`CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`.editorconfig` 已落地；`.github/` 全套见 §13（P0-12）；决策记录落 `docs/specs/`（ADR 清单以目录为准，本表不再维护计数——计数曾在两批内两次失准） | ✅ 门面 + `.github/` 全套完成（P0-14，PR #6 本批；`CODEOWNERS` 强审 4 区：`planner/` `direction/` `annona-spi/` `docs/specs/` + `.github/` `.githooks/`） | B5 |
+| 9 | P1a 结构增量：`modules/identity`（P1a-01/02）、`modules/study`（P1a-04）、`shared/direction`（P1a-03）实现落地；`infrastructure/cache` Redisson 三件套；`common/session` + `common/study` 契约；Flyway V1/V2；`config/web` 的 SPA fallback + SessionAuthFilter；前端设计基座、方向选择器、自习室页 | ✅ 已落地（结构细节以代码与各 ADR 为准） | P1a |
 
 **验收**：`mvn -q verify` 全绿、ArchUnit 七条规则生效（本机到此为止）；`docker compose up` 后首页 200 与 `/api/meta/ping` 、模型连通性测试由 **CI 验证并留存日志**（本机无 Docker，见 `specs/2026-09-25-dockerless-local-dev-adr.md`）。
 
@@ -483,7 +484,7 @@ Maven Central 的对外契约）。两边分工写清，免得后人误以为 Ar
 | `workflows/release.yml` | 打 tag → 构建镜像 → GitHub Release + changelog | `v*` tag |
 | `workflows/publish-spi.yml` | 将 `annona-spi` 发布到 Maven Central（GPG 签名 + sources/javadoc） | spi 目录变更的 tag |
 | `workflows/stale.yml` | 30 天无回应自动关闭 issue/PR | 定时 |
-| `dependabot.yml` | **P0-P1a 不启用**（骨架阶段无 CVE 暴露面，自动 PR 噪声大于价值）。P1b-10 首次接 BYOK 真实 Key 前写 ADR 重新引入，分组与 ignore 策略届时定。见阶段总结 §5 D16 | 目标 P1b-10+ |
+| `dependabot.yml` | **P0-P1a 不启用**（骨架阶段无 CVE 暴露面，自动 PR 噪声大于价值）。P1b-10 首次接 BYOK 真实 Key 前写 ADR 重新引入，分组与 ignore 策略届时定，**须含 github-actions 组**（2026-09-27 起第三方 action 已 SHA pin、失去浮动 tag 的自动更新，靠该组提醒升级）。见阶段总结 §5 D16 | 目标 P1b-10+ |
 
 本表的**完整执行矩阵（哪个验证用 `services:`、哪个才用 compose、用哪个镜像、paths 怎么过滤）以 `docs/specs/2026-09-25-dockerless-local-dev-adr.md` 为准**。要点：集测不走 compose（runner 托管的 services 更快），真正需要 compose 的只有“验证交付物”那一个 job。
 

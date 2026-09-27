@@ -14,10 +14,12 @@
 | `interview` | interview.md | 组卷流程与 SKILL 加载机制 | 待实现期写 |
 | `questionbank` | questionbank.md | 出题与容量校验、难度标定 | 待实现期写 |
 | `voice` | voice.md | 音频链路时序、并发 TTS 调度、延迟预算 | 待实现期写 |
-| `study` | study.md | 心跳→会话聚合→质量分级判定 | 待实现期写 |
+| `study` | study.md | 心跳→会话聚合→质量分级判定 | 已实现（P1a-04），待补文档 |
+| `identity` | identity.md | 三 provider 模式切换面、会话/锁定策略（关键取舍已有 [identity-modes ADR](../specs/2026-09-26-identity-provider-modes-adr.md)，文档补服务编排视角） | 已实现（P1a-01/02），待补文档 |
 | `usage` | usage.md | 记账不进事务的取舍、配额熔断点 | 待实现期写 |
 | `agent` | agent.md | 工具注册、审批门、留痕模型 | P4 前写 |
-| `schedule` `plan` `qa` `resume` `notify` `identity` | — | 常规 CRUD + 单层编排，读代码即可 | 不需要 |
+| `shared/direction` | —（以 [direction ADR](../specs/2026-09-25-direction-master-data-adr.md) 为准） | 字典 CRUD 单层编排，关键取舍（key 生成、归档语义、可见性）已全部落 ADR | 不需要（读代码 + ADR） |
+| `schedule` `plan` `qa` `resume` `notify` | — | 常规 CRUD + 单层编排，读代码即可 | 不需要 |
 
 ## 单篇文档的固定结构
 

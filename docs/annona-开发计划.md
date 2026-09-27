@@ -19,7 +19,7 @@
 |---|---|---|
 | 文档（设计/结构/计划/ADR）+ 入口（README/LICENSE/.env.example/SECURITY/CONTRIBUTING/CoC/.editorconfig） | ✅ done | 本仓 20+ 个文档文件；LICENSE 为 AGPL-3.0 FSF 原文（已校验） |
 | P0 骨架与门禁 | ✅ done(2026-09-26) —— 六条出口全部满足；② compose-smoke + docker-it 均已在真 PG/Redis 上实证（main run [#14](https://github.com/Ember452/annona/actions/runs/36220137784) 六 job 全绿） | `mvn -B -q verify` EXIT=0（48 tests）、6 个 workflow 解析通过、CI run #14 Success（含 gate）、本地与 `origin/main` 齐平；详见 [reports/P0-骨架-阶段总结.md](./reports/P0-骨架-阶段总结.md) §3 |
-| P1a 数据与知识底座 | 🔶 doing —— P1a-01 identity 后端已完成并入 main（a356cb7 feat → 0484f5c docs → 9730074 加固批）；CI run #15/#16 六 job 全绿，含真实 PG+Redis 集测（登录闭环 / 会话 CRUD / schema validate）与 compose 冒烟（[run #16](https://github.com/Ember452/annona/actions/runs/36226190524)）。P1a-02 三 provider 已并入 main（136bc70 feat → e4a8d06 ADR），本机 `mvn verify` 82 tests 全绿；`@Tag("docker")` 集测（none bootstrap / platform JIT）已由 [run #20](https://github.com/Ember452/annona/actions/runs/36236993728) 六 job 全绿坐实（随批推送的 cafe1bc 那次红仅 compose-smoke 探活断言写法问题、业务 job 全绿，已由 31d2d67 修复）；下一任务 P1a-00（设计基座，随后 P1a-03） | — |
+| P1a 数据与知识底座 | 🔶 doing —— **P1a-00/01/02/03/04 已全部并入 main**（P1a-04 含 09-27 加固批：假绿复盘定位的 refresh 游离实体 ×3 与 CI 门禁修复，见 [reports/2026-09-27-docker-it-假绿复盘.md](./reports/2026-09-27-docker-it-假绿复盘.md)）；docker-it 门禁重修后由 [run 36293504920](https://github.com/Ember452/annona/actions/runs/36293504920) 六 job 全绿坐实。09-27 复核与质量批顺带落地：登录 UI 与 `/api/me` 守卫接线、前端 vitest（番茄钟到期转移回归测试）、`ApiError` 保留 code/traceId、方向字典共享 Context、**ESLint（react-hooks 门禁）与 JaCoCo 60% 覆盖率机检**、V3 迁移补 `study_session.checkin_id` 索引、SPA fallback 补裸 `/api` 边界、第三方 action 全量 SHA pin、none 模式 logout 重探修复。**下一任务 P1a-05（知识库写侧，迁移走 V4——V3 已被索引修复占用）** | — |
 | P1b 面试与评估 | ⬜ todo | — |
 | P1c 训练决策层 | ⬜ todo | — |
 | P2 / P3 / P4 / P5 | ⬜ todo | — |
@@ -198,7 +198,7 @@ P0-15（仓库设置）不计批次，需你在 GitHub 网页操作。
 | P1a-01 | `identity` 模块：注册/登录/登出/会话、Redis 会话（7 天滑动）、`user_profile`、`login_attempt` 锁定、scrypt 编码器与透明重哈希 | 注册→登录→改密→旧口令失效；10 次失败登录被锁；`user_session` 写失败不影响登录 | 2（实测含两轮加固 ≈3，加固系数标定点） | P0-06 |
 | P1a-02 | `IdentityProvider` 三实现：`local`（会话 Cookie）/ `platform`（受信反代头 + JIT 建号）/ `none`（固定 UUID `00000000-0000-0000-0000-000000000001` 启动 bootstrap）；`/api/**` 强制鉴权 + 白名单（见 [specs/2026-09-26-identity-provider-modes-adr.md](./specs/2026-09-26-identity-provider-modes-adr.md)） | 三种 mode 下同一套业务代码都能跑；none 模式无登录页直达首页 | 1 | P1a-01 |
 | P1a-03 | `direction` 字典服务 + 方向选择器组件（下拉 + 即时新建 + 升级为绑定知识库） | 新建方向即落库；`USER_CUSTOM` 可绑 `kb_doc_id`；有历史数据的方向只能归档不能删 | 1.5 | P0-06 |
-| P1a-04 🔶 | `study` 采集：打卡、番茄钟、`study_session` + `study_event`、服务端心跳与质量分级（VERIFIED/PARTIAL/SELF_REPORTED） | 挂机 30 分钟无心跳 → 标 PARTIAL；手动补录 → SELF_REPORTED 且不进决策计算（有测试） | 2 | P1a-03 |
+| P1a-04 | `study` 采集：打卡、番茄钟、`study_session` + `study_event`、服务端心跳与质量分级（VERIFIED/PARTIAL/SELF_REPORTED）。09-27 加固批修复 refresh 游离实体与 CI 门禁假绿（见复盘报告） | 挂机 30 分钟无心跳 → 标 PARTIAL；手动补录 → SELF_REPORTED 且不进决策计算（有测试） | 2 | P1a-03 |
 | P1a-05 | `knowledge` 写侧：上传→S3→Tika 解析→结构感知分块→内容 hash 幂等→Embedding 批处理→状态机 + 进度 SSE | 上传 PDF 与 DOCX 各一篇，READY 后能看到分块；重复上传零 token 消耗 | 2.5 | P1a-01 |
 | P1a-06 | 分块器纯逻辑实现 + 单测（死循环兜底、段落边界、重叠滑窗、上限保护） | `chunk` 包覆盖率 ≥85%，golden 快照入库 | 1 | P1a-05 |
 | P1a-07 | `retrieval`：语义通道（HNSW）+ 关键词通道（应用层分词 + `simple` + `pg_trgm`）+ RRF + 余弦重排；`PgVectorRetriever` 实现 SPI | 检索测试接口给出命中与分数；改 `annona.retrieval.backend` 不报错（Fake ES） | 2 | P1a-05 |
@@ -313,7 +313,7 @@ P0-15（仓库设置）不计批次，需你在 GitHub 网页操作。
 
 ## 计划维护规则
 
-1. 进度登记只有一层：**任务级看本文各阶段任务表**，**阶段级状态看顶部「当前进度」表**；不建任务级 issue，不在任务表里塞 checkbox，阶段 issue 只作为本文的**摘要视图**（不得在 issue 里单独维护一份与此不同的任务列表）。
+1. 进度登记只有一层：**任务级看本文各阶段任务表**，**阶段级状态看顶部「当前进度」表**；不建任务级 issue，不在任务表里塞 checkbox，阶段 issue 只作为本文的**摘要视图**（不得在 issue 里单独维护一份与此不同的任务列表）。任务级完成标记的约定（P1a-03 起）：**ID 格里的 🔶 = 进行中；标记移除 = 已确认完成**（完成凭证写进顶部进度表对应阶段行）。每完成一个任务必须当场回写本表，过期状态即缺陷。
 2. 估时偏差 > 30% 时，在对应阶段小结里写清原因（是漏了什么，还是砍了什么），**不许悄悄挪工作量到下一阶段**。
 3. 新增功能必须先回答"是否服务决策主线"（判据见 POST_V1_EXTENSION_PLAN §8：面试决策可解释、相交时学习信号能增强决策）。若否 → 进设计文档 §15 Non-goals 讨论，不进计划。
 4. 任何跨 ≥3 模块的改造另开 `docs/plans/<TOPIC>_PLAN.md`，本文档只登记结论与出口条件变化。
@@ -334,3 +334,4 @@ P0-15（仓库设置）不计批次，需你在 GitHub 网页操作。
 | 本机无 Docker 导致反馈延迟变大（迁移与检索问题到 CI 才暴露） | 高 | 中 | 纯逻辑与 IO 彻底分离 + `@Tag("docker")` 分层 + CI 集测与 compose 冒烟强制运行；PR 等 CI 绿才合并 |
 | 单人开发断档（课业/求职） | 高 | 中 | 每阶段出口物必须独立可演示，断档后能从任何一个出口重新启动 |
 | 规范先行但门禁未落地 | 中 | 高 | 全部门禁类任务压在 P0（P0-07/08/11/12），P0 未出口不开 P1 |
+| JDK/Boot 升级窗口（当前 Java 21 LTS + Boot 4.1，**不主动升级**） | 低（近期）/ 高（Boot 停维护后） | 中 | **升级只由三条触发条件驱动**：① 跟随的 Spring Boot 升级要求更高 Java 基线（Boot 2→3 把 Java 8 甩到 17 的先例）；② 所用 JDK 发行版停止安全补丁（21 LTS 的社区支持到 2028+）；③ 出现具体能力需求。触发后按一次独立批次处理，动**四个 pin 点**：本机 `JAVA_HOME`、`ci.yml` 三处 `java-version`、`docker/Dockerfile` 基础镜像、根 pom enforcer JDK 规则——其余代码（无 Lombok / 无 JVM-agent 依赖）天然免疫。验证：`mvn verify` + CI 六 job 全绿 |

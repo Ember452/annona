@@ -16,16 +16,16 @@
 
 | 项 | 状态 |
 |---|---|
-| 设计 / 结构 / 开发计划 / 10 条 ADR | ✅ 已定稿，在 [`docs/`](./docs/README.md) |
+| 设计 / 结构 / 开发计划 / ADR（数量以 `docs/specs/` 目录为准，不在此处维护计数） | ✅ 已定稿，在 [`docs/`](./docs/README.md) |
 | AI 协作规范 | ✅ [`AGENTS.md`](./AGENTS.md) |
 | 仓库入口文件 | ✅ `README` / `LICENSE`(AGPL-3.0 全文) / `SECURITY` / `CONTRIBUTING` / `CODE_OF_CONDUCT` / `.editorconfig` / `.env.example` |
 | **Maven 结构** | ✅ 已拆为 4 个 Java 模块（`annona-common` / `annona-spi` / `annona-infrastructure` / `annona-server`）+ 聚合根 pom；`annona-web` 为 Vite 子项目 |
-| **业务代码** | 🚧 `io.annona.modules.*` 与 `annona-infrastructure` 下**只有 `package-info.java`**，16 个业务模块尚无任何实现类（从 P1a 起逐个填充） |
-| 已落地的技术基座 | ✅ `Result`/异常体系、`traceId` 过滤器、四类线程池 + Micrometer、启动 fail-fast（缺 KEK / 缺 pgvector 拒起）、Flyway V1（身份 7 表 + `direction` 主数据）、ArchUnit 七条、`.githooks/`、5+1 job 的 `ci.yml`、compose 三阶段 Dockerfile、`Makefile`、CI 密钥扫描 |
-| **施工阶段** | 🔶 **P0 收尾中**：剩 P0-15（GitHub 网页设置）与 P0 评审整改项；任务清单见 [docs/annona-开发计划.md](./docs/annona-开发计划.md) |
+| **业务代码** | 🔶 P1a 逐模块填充中：`identity`（P1a-01/02，注册登录 + 三身份模式）、`study`（P1a-04，打卡 + 番茄钟 + 服务端质量分级）、`shared/direction`（P1a-03，方向字典）已有实现；前端有设计基座、登录/注册页与守卫、方向选择器与自习室页；其余 13 个业务模块仍只有 `package-info.java` |
+| 已落地的技术基座 | ✅ `Result`/异常体系、`traceId` 过滤器、四类线程池 + Micrometer、启动 fail-fast（缺 KEK / 缺 pgvector 拒起）、Flyway V1（身份 7 表 + `direction` 主数据）→ V2（study 采集 3 表）→ V3（checkin_id 定位索引），已应用迁移由 pre-commit 冻结机检保护、覆盖由 JaCoCo 60% 底线机检保护、前端由 ESLint/vitest 机检保护、ArchUnit 七条、`.githooks/`、5+1 job 的 `ci.yml`（action 全部 SHA pin）、compose 三阶段 Dockerfile、`Makefile`、CI 密钥扫描 |
+| **施工阶段** | 🔶 **P1a 进行中**（数据与知识底座）：P1a-00~04 已并入 main，下一任务 P1a-05（知识库写侧）；任务清单与状态以 [docs/annona-开发计划.md](./docs/annona-开发计划.md) 为唯一真相源 |
 | Docker 相关 | 📄 文件已交，**本机不跑**（无 Docker），验证全部在 CI（见下） |
 
-> **一句话定位现状**：地基与门禁已就位，产品功能一行都没写。下一个阶段是 P1a（采集 + 知识库 + 检索 + 问答）。
+> **一句话定位现状**：地基与门禁就位，P1a 的采集与身份链路已落地——默认 `local` 模式下打开首页即可注册/登录进入自习室；下一个任务 P1a-05（文档入库与分块）。
 > 目标结构与当前代码的差异，以 [docs/annona-项目结构.md](./docs/annona-项目结构.md) §12 的状态列与 [开发计划](./docs/annona-开发计划.md) 「当前进度」表为准。
 
 ---
@@ -77,7 +77,7 @@ python scripts\ci\validate-workflows.py                   # 改过 .github/workf
 
 1. 业务逻辑写成**纯逻辑单测可覆盖**的形态：算法、状态机、规则链、边界值都用 `unit` 测试断言，关键包配 golden 快照。
 2. 依赖中间件的代码通过 **SPI + Fake 实现**测试（`annona-spi` 的意义所在），不把 IO 混进算法。
-3. SQL 正确性风险靠两道防线补：Flyway 脚本评审（本机）+ **CI 上的真实空库迁移演练**；`ddl-auto: validate` 要等有 JPA Entity 之后才真正校验东西（现阶段无 Entity，它是空转的，不要当成保护）。
+3. SQL 正确性风险靠两道防线补：Flyway 脚本评审（本机）+ **CI 上的真实空库迁移演练**；`ddl-auto: validate` 自 P1a-01 起（已有 8 个 JPA Entity + `IdentitySchemaValidateIT`）真实校验实体↔迁移一致性——但它只校字段类型不校索引，索引漂移仍要靠迁移评审与集测。
 4. 声明"验证通过"必须贴出**实际跑过的命令与输出**（`AGENTS.md` §0.8）。
 5. 本机跑不到中间件层，所以 **PR 必须等 CI 变绿才算完成**；`@Tag("docker")` 测试与 compose 冒烟的凭证可以是 CI 日志链接。
 
@@ -87,11 +87,13 @@ python scripts\ci\validate-workflows.py                   # 改过 .github/workf
 
 本机要真跑起来时必须自行准备 PostgreSQL 16（含 `vector` 与 `citext` 扩展）与 Redis，配置写进 `.env`（模板见 [`.env.example`](./.env.example)）。没有这两个组件时，**仍然可以正常完成编译、单测与前端构建**——这正是上面的开发循环。
 
+> **公网部署前置（安全）**：`register` / `login` 目前**没有限流**（identity ADR 要求的 `@RateLimit` 基建随 P1b-10 落地）——对外暴露前必须自备反代层限流，否则脚本注册可无成本消耗 scrypt 资源并刷库。同理：HTTPS 部署必须设 `ANNONA_SESSION_COOKIE_SECURE=true`；启用 `platform` 身份模式前先读 `.env.example` 的信任边界注释与 `docs/specs/2026-09-26-identity-provider-modes-adr.md`。
+
 ---
 
 ## 许可证
 
-本仓库整体采用 **AGPL-3.0**：许可全文已逐字落在根目录 [`LICENSE`](./LICENSE)（FSF 标准文本，661 行），`pom.xml` 的 `<licenses>` 与之一致。`skills/` 目录下的内置 `SKILL.md` 采用 **CC-BY-4.0**（便于站外引用与社区改写；该声明随 P0 建 `skills/` 目录时一并加入）。
+本仓库整体采用 **AGPL-3.0**：许可全文已逐字落在根目录 [`LICENSE`](./LICENSE)（FSF 标准文本，661 行），`pom.xml` 的 `<licenses>` 与之一致。`skills/` 目录下的内置 `SKILL.md` 采用 **CC-BY-4.0**（便于站外引用与社区改写；该声明随 P1b-01 建 `skills/` 目录时一并加入）。
 
 > `LICENSE` 文件必须保持与 FSF 原文逐字一致，**不得修改、不得“适配项目名”**；需要声明项目自身的版权时，另写头部注释或 `NOTICE`，不要动 `LICENSE`。
 
