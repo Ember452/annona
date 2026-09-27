@@ -25,7 +25,7 @@ P1a-01 落地了本地账号（注册/登录/登出/会话/锁定），但 `Iden
    | `none` | 无 | 恒成功 | `Principal(00000000-0000-0000-0000-000000000001, "Local User", {USER})` |
 
 3. **platform 不建 `identity_link` 表**：外部标识就是邮箱，首次出现时用 `AuthUserRegistrar.provisionExternal` 建号（`app_user` + `user_profile` 原子写、随机口令哈希使其无法口令登录）；并发首访靠 `app_user.email` 唯一索引兜底，`DataIntegrityViolationException` 由 provider 在**非事务上下文**回读既有行。
-4. **platform 的信任边界必须显式声明**：反代负责完成统一登录、注入身份头，并**剥离客户端自带的同名头**；实例**不得被直连**。provider 构造时打 WARN 把这条约束写进运行日志。这是该模式唯一的安全假设，配置注释、`.env.example` 与本文三处同时记录。
+4. **platform 的信任边界必须显式声明**：反代负责完成统一登录、注入身份头，并**剥离客户端自带的同名头**；实例**不得被直连**。provider 构造时打 WARN 把这条约束写进运行日志。代码侧另加两道强制（P1a-04 L3 评审）：`SessionAuthFilter` 拒绝重复身份头，且 `annona.identity.platform-secret` 配置时要求常数时间匹配的密钥头。这是该模式的安全假设，配置注释、`.env.example`、`application.yaml` 与本文多处同时记录。
 5. **none 模式的 bootstrap 用户用固定 UUID**（不是字符串 `local`），邮箱 `local@annona.local`；由 `NoneModeUserBootstrapper`（`ApplicationRunner`，仅 none 模式装配）在**启动期**幂等创建，而非首次请求惰性创建——启动即就绪，消除首个 `/api/me` 的建号竞态，失败也落在启动日志而非用户可见的 500。
 6. **对 `/api/**` 强制鉴权**，白名单为 `/api/auth/register`、`/api/auth/login`、`/api/auth/logout` 与前缀 `/api/meta/`。过滤器 `shouldNotFilter` 跳过非 `/api/**`（静态资源、actuator）：给静态资源加 Redis 往返没有意义，且强制鉴权会把 SPA 深链 404 伪装成 1004。
 7. **未认证拒绝经 `HandlerExceptionResolver` 复抛 `BusinessException(UNAUTHORIZED)`**（HTTP 200 + `Result.error(1004)` + traceId），复用 `GlobalExceptionHandler` 唯一出口，不在过滤器里手写 JSON。`TraceIdFilter` 是 `HIGHEST_PRECEDENCE`，早于本过滤器，拒绝响应仍带 traceId。
@@ -46,7 +46,7 @@ P1a-01 落地了本地账号（注册/登录/登出/会话/锁定），但 `Iden
 
 ## 后果与约束
 
-1. **部署 platform 模式即接受一条安全前提**：反代剥离客户端同名头 + 实例不可直连。违反则任意客户端可伪造身份。运维侧必须保证；代码侧只能 WARN，无法自证。
+1. **部署 platform 模式即接受一条安全前提**：反代剥离客户端同名头 + 实例不可直连。违反则任意客户端可伪造身份。运维侧必须保证。**（P1a-04 L3 评审 CWE-290 后修正）** “代码侧只能 WARN、无法自证”不再绝对：`SessionAuthFilter` 现已无条件**拒绝重复身份头**（头走私），并支持可选的 `annona.identity.platform-secret`——一旦配置，请求必须携带常数时间匹配的密钥头才认凭据，使“实例被直连”也无法伪造。留空（默认）则仍退回文档式信任边界 + 启动 WARN；生产部署应设此密钥。
 2. **`/api/**` 现在是默认拒绝**。新增任何 API 端点，若需未登录可达，必须显式加入 `SessionAuthFilter` 白名单——这是有意的摩擦（默认安全）。
 3. **platform 模式存在"邮箱即身份"的固有风险**：邮箱变更即换人。当前接受，因为 v1 无第二个身份源；触发条件见下。
 4. **`identity` 模块新增 `provider` 子包**，依赖方向仍为 `modules/identity/provider → modules/identity/{service,repository,entity,dto} → spi/common`；不得让 provider 依赖 `infrastructure`。`io.annona.modules.identity` 顶层 `package-info.java` 已声明模块职责，子包不重复。

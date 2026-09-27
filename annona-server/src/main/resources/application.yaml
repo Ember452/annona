@@ -34,6 +34,9 @@ annona:
     mode: ${ANNONA_IDENTITY_MODE:local}
     # platform 模式的受信反代头；反代必须剥离客户端同名头、实例不得被直连（信任边界）
     platform-header: ${ANNONA_IDENTITY_PLATFORM_HEADER:X-Auth-Request-Email}
+    # 代码强制的代理来源共享密钥（可选，留空=退回文档式信任边界）；配置后请求须带匹配密钥头（评审 CWE-290）
+    platform-secret: ${ANNONA_IDENTITY_PLATFORM_SECRET:}
+    platform-secret-header: ${ANNONA_IDENTITY_PLATFORM_SECRET_HEADER:X-Auth-Request-Access-Token}
 
 management:
   endpoints:

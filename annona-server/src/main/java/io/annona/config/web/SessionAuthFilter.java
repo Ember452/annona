@@ -12,6 +12,9 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -92,9 +95,34 @@ public class SessionAuthFilter extends OncePerRequestFilter {
     private String readCredential(HttpServletRequest request) {
         return switch (identityProperties.getMode()) {
             case LOCAL -> readCookie(request);
-            case PLATFORM -> request.getHeader(identityProperties.getPlatformHeader());
+            case PLATFORM -> readPlatformCredential(request);
             case NONE -> null;
         };
+    }
+
+    /**
+     * platform 凭据读取，叠加两道代码强制（L3 评审 CWE-290：不把信任只写在文档里）：
+     * <ol>
+     *   <li><b>拒绝重复身份头</b>：{@code X-Auth-Request-Email} 出现 0 或 ≥2 个值都视为不可信
+     *       （头走私 / 反代未剥离），凭据按空；</li>
+     *   <li><b>共享密钥证明（配了才强制）</b>：{@code platformSecret} 非空时，请求必须携带常数时间
+     *       匹配的密钥头，否则凭据按空——使“实例被直连”也无法伪造身份。</li>
+     * </ol>
+     */
+    private String readPlatformCredential(HttpServletRequest request) {
+        List<String> values = Collections.list(request.getHeaders(identityProperties.getPlatformHeader()));
+        if (values.size() != 1) {
+            return null;
+        }
+        String secret = identityProperties.getPlatformSecret();
+        if (secret != null && !secret.isBlank()) {
+            String provided = request.getHeader(identityProperties.getPlatformSecretHeader());
+            if (provided == null || !MessageDigest.isEqual(
+                secret.getBytes(StandardCharsets.UTF_8), provided.getBytes(StandardCharsets.UTF_8))) {
+                return null;
+            }
+        }
+        return values.get(0);
     }
 
     /** 包级可见，便于直接断言白名单边界（不依赖过滤器实例）。 */

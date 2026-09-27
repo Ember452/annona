@@ -137,6 +137,54 @@ class SessionAuthFilterTest {
         }
 
         @Test
+        @DisplayName("platform：重复身份头（头走私）→ 凭据按空并拒绝")
+        void platformRejectsDuplicateHeader() throws Exception {
+            identityProperties.setMode(IdentityProperties.Mode.PLATFORM);
+            when(identityProvider.authenticate(isNull())).thenReturn(Optional.empty());
+            MockHttpServletRequest request = request("/api/me");
+            request.addHeader(identityProperties.getPlatformHeader(), "victim@example.test");
+            request.addHeader(identityProperties.getPlatformHeader(), "attacker@example.test");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            filter.doFilterInternal(request, response, chain);
+
+            verify(identityProvider).authenticate(isNull());
+            verify(chain, never()).doFilter(any(), any());
+        }
+
+        @Test
+        @DisplayName("platform：配了共享密钥但请求缺密钥头 → 凭据按空（拒绝）")
+        void platformRejectsWhenSecretMissing() throws Exception {
+            identityProperties.setMode(IdentityProperties.Mode.PLATFORM);
+            identityProperties.setPlatformSecret("s3cr3t");
+            when(identityProvider.authenticate(isNull())).thenReturn(Optional.empty());
+            MockHttpServletRequest request = request("/api/me");
+            request.addHeader(identityProperties.getPlatformHeader(), "someone@example.test");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            filter.doFilterInternal(request, response, chain);
+
+            verify(identityProvider).authenticate(isNull());
+        }
+
+        @Test
+        @DisplayName("platform：配了共享密钥且密钥头匹配 → 正常认证")
+        void platformAcceptsMatchingSecret() throws Exception {
+            identityProperties.setMode(IdentityProperties.Mode.PLATFORM);
+            identityProperties.setPlatformSecret("s3cr3t");
+            authenticateAs(USER_ID);
+            MockHttpServletRequest request = request("/api/me");
+            request.addHeader(identityProperties.getPlatformHeader(), "someone@example.test");
+            request.addHeader(identityProperties.getPlatformSecretHeader(), "s3cr3t");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            filter.doFilterInternal(request, response, chain);
+
+            verify(identityProvider).authenticate("someone@example.test");
+            assertThat(request.getAttribute(SessionAuthFilter.ATTR_USER_ID)).isEqualTo(USER_ID);
+        }
+
+        @Test
         @DisplayName("none：无需任何凭据即认证通过")
         void noneModeAuthenticatesWithoutCredential() throws Exception {
             identityProperties.setMode(IdentityProperties.Mode.NONE);

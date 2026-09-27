@@ -36,6 +36,17 @@ public class IdentityProperties {
      */
     private String platformHeader = "X-Auth-Request-Email";
 
+    /**
+     * platform 模式的<b>代码强制代理来源证明</b>共享密钥（可选）。为空则退回“仅靠文档约定
+     * 的受信反代”形态（L3 评审 CWE-290：文档边界不等于代码边界）；一旦配置，
+     * {@code SessionAuthFilter} 会要求请求携带匹配的 {@link #platformSecretHeader} 头（常数时间比较），
+     * 不匹配即凭据按空处理（未认证），使“实例被直连”也无法伪造身份。
+     */
+    private String platformSecret = "";
+
+    /** 共享密钥所在的请求头名（反代注入，与 {@link #platformHeader} 同样必须剥离客户端自带）。 */
+    private String platformSecretHeader = "X-Auth-Request-Access-Token";
+
     public Mode getMode() {
         return mode;
     }
@@ -50,5 +61,21 @@ public class IdentityProperties {
 
     public void setPlatformHeader(String platformHeader) {
         this.platformHeader = platformHeader;
+    }
+
+    public String getPlatformSecret() {
+        return platformSecret;
+    }
+
+    public void setPlatformSecret(String platformSecret) {
+        this.platformSecret = platformSecret;
+    }
+
+    public String getPlatformSecretHeader() {
+        return platformSecretHeader;
+    }
+
+    public void setPlatformSecretHeader(String platformSecretHeader) {
+        this.platformSecretHeader = platformSecretHeader;
     }
 }
