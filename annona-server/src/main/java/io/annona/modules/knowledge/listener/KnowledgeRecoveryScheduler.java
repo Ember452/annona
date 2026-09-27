@@ -1,9 +1,11 @@
 package io.annona.modules.knowledge.listener;
 
+import io.annona.common.stream.TaskStreamPort;
 import io.annona.modules.knowledge.entity.KbDocEntity;
 import io.annona.modules.knowledge.repository.KbDocRepository;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -35,15 +37,15 @@ public class KnowledgeRecoveryScheduler {
     private static final Logger log = LoggerFactory.getLogger(KnowledgeRecoveryScheduler.class);
 
     private final KbDocRepository docRepository;
-    private final KnowledgeVectorizeStream vectorizeStream;
+    private final TaskStreamPort taskStreamPort;
     private final KnowledgeRecoveryProperties properties;
     private final TransactionTemplate tx;
 
     public KnowledgeRecoveryScheduler(KbDocRepository docRepository,
-        KnowledgeVectorizeStream vectorizeStream, KnowledgeRecoveryProperties properties,
+        TaskStreamPort taskStreamPort, KnowledgeRecoveryProperties properties,
         PlatformTransactionManager transactionManager) {
         this.docRepository = docRepository;
-        this.vectorizeStream = vectorizeStream;
+        this.taskStreamPort = taskStreamPort;
         this.properties = properties;
         this.tx = new TransactionTemplate(transactionManager);
     }
@@ -74,7 +76,8 @@ public class KnowledgeRecoveryScheduler {
                 log.warn("文档恢复次数达上限 docId={}", doc.getId());
                 continue;
             }
-            vectorizeStream.send(doc.getId());
+            taskStreamPort.send(KnowledgeVectorizeStream.STREAM_KEY,
+                Map.of("docId", doc.getId().toString()));
         }
     }
 
@@ -87,7 +90,8 @@ public class KnowledgeRecoveryScheduler {
             Integer reset = tx.execute(s -> docRepository.resetStaleToPending(doc.getId(),
                 doc.getAttemptId(), now));
             if (reset != null && reset == 1) {
-                vectorizeStream.send(doc.getId());
+                taskStreamPort.send(KnowledgeVectorizeStream.STREAM_KEY,
+                Map.of("docId", doc.getId().toString()));
             }
         }
     }

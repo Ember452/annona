@@ -11,9 +11,9 @@ import static org.mockito.Mockito.when;
 
 import io.annona.common.exception.BusinessException;
 import io.annona.common.storage.ObjectStorage;
+import io.annona.common.stream.TaskStreamPort;
 import io.annona.modules.knowledge.dto.UploadResponse;
 import io.annona.modules.knowledge.entity.KbDocEntity;
-import io.annona.modules.knowledge.listener.KnowledgeVectorizeStream;
 import io.annona.modules.knowledge.repository.KbDocRepository;
 import io.annona.shared.direction.service.DirectionQueryService;
 import java.util.Optional;
@@ -60,7 +60,7 @@ class KnowledgeUploadServiceTest {
     @Mock
     private ObjectStorage objectStorage;
     @Mock
-    private KnowledgeVectorizeStream vectorizeStream;
+    private TaskStreamPort taskStreamPort;
     @Mock
     private DirectionQueryService directionQueryService;
 
@@ -73,7 +73,7 @@ class KnowledgeUploadServiceTest {
     @BeforeEach
     void setUp() {
         service = new KnowledgeUploadService(docRepository, Optional.of(objectStorage),
-            vectorizeStream, directionQueryService,
+            taskStreamPort, directionQueryService,
             TX_MGR);
         content = "讲义内容".getBytes();
     }
@@ -112,7 +112,7 @@ class KnowledgeUploadServiceTest {
             assertThatThrownBy(() -> service.upload(userId, content, "a.md", directionId))
                 .isInstanceOfSatisfying(BusinessException.class, e ->
                     assertThat(e.getCode()).isEqualTo(2100));
-            verifyNoInteractions(objectStorage, vectorizeStream);
+            verifyNoInteractions(objectStorage, taskStreamPort);
         }
     }
 
@@ -134,7 +134,7 @@ class KnowledgeUploadServiceTest {
 
             assertThat(response.duplicate()).isTrue();
             assertThat(response.id()).isEqualTo(existing.getId());
-            verifyNoInteractions(objectStorage, vectorizeStream);
+            verifyNoInteractions(objectStorage, taskStreamPort);
         }
 
         @Test
@@ -143,14 +143,14 @@ class KnowledgeUploadServiceTest {
             stubHappyDirection();
             when(docRepository.findByUserIdAndFileHash(any(), anyString())).thenReturn(Optional.empty());
             when(docRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-            when(vectorizeStream.send(any())).thenReturn(true);
+            when(taskStreamPort.send(any(), any())).thenReturn(true);
 
             UploadResponse response = service.upload(userId, content, "讲义.md", directionId);
 
             assertThat(response.duplicate()).isFalse();
             assertThat(response.status()).isEqualTo(KbDocEntity.STATUS_PENDING);
             verify(objectStorage).put(anyString(), eq(content), anyString());
-            verify(vectorizeStream).send(any());
+            verify(taskStreamPort).send(any(), any());
         }
 
         @Test
@@ -159,7 +159,7 @@ class KnowledgeUploadServiceTest {
             stubHappyDirection();
             when(docRepository.findByUserIdAndFileHash(any(), anyString())).thenReturn(Optional.empty());
             when(docRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-            when(vectorizeStream.send(any())).thenReturn(false);
+            when(taskStreamPort.send(any(), any())).thenReturn(false);
 
             assertThatThrownBy(() -> service.upload(userId, content, "a.md", directionId))
                 .isInstanceOfSatisfying(BusinessException.class, e ->
@@ -183,7 +183,7 @@ class KnowledgeUploadServiceTest {
         @DisplayName("对象存储未配置 → 2306（错误后移到使用点，启动不拦）")
         void storageNotConfigured() {
             KnowledgeUploadService withoutStorage = new KnowledgeUploadService(docRepository,
-                Optional.empty(), vectorizeStream, directionQueryService, TX_MGR);
+                Optional.empty(), taskStreamPort, directionQueryService, TX_MGR);
             when(directionQueryService.existsVisibleTo(anyString(), anyString())).thenReturn(true);
 
             assertThatThrownBy(() -> withoutStorage.upload(userId, content, "a.md", directionId))

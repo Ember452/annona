@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import io.annona.common.stream.TaskStreamPort;
 import io.annona.modules.knowledge.entity.KbDocEntity;
 import io.annona.modules.knowledge.listener.KnowledgeRecoveryScheduler;
 import io.annona.modules.knowledge.repository.KbDocRepository;
@@ -53,7 +54,7 @@ class KnowledgeRecoverySchedulerTest {
     @Mock
     private KbDocRepository docRepository;
     @Mock
-    private KnowledgeVectorizeStream vectorizeStream;
+    private TaskStreamPort taskStreamPort;
 
     private KnowledgeRecoveryScheduler scheduler;
     private KnowledgeRecoveryProperties properties;
@@ -61,7 +62,7 @@ class KnowledgeRecoverySchedulerTest {
     @BeforeEach
     void setUp() {
         properties = new KnowledgeRecoveryProperties();
-        scheduler = new KnowledgeRecoveryScheduler(docRepository, vectorizeStream, properties,
+        scheduler = new KnowledgeRecoveryScheduler(docRepository, taskStreamPort, properties,
             TX_MGR);
     }
 
@@ -80,7 +81,7 @@ class KnowledgeRecoverySchedulerTest {
 
         scheduler.recover();
 
-        verifyNoInteractions(docRepository, vectorizeStream);
+        verifyNoInteractions(docRepository, taskStreamPort);
     }
 
     @Test
@@ -92,7 +93,7 @@ class KnowledgeRecoverySchedulerTest {
 
         scheduler.recover();
 
-        verify(vectorizeStream).send(doc.getId());
+        verify(taskStreamPort).send(any(), any());
     }
 
     @Test
@@ -104,7 +105,7 @@ class KnowledgeRecoverySchedulerTest {
 
         scheduler.recover();
 
-        verify(vectorizeStream, never()).send(any());
+        verify(taskStreamPort, never()).send(any(), any());
     }
 
     @Test
@@ -117,7 +118,7 @@ class KnowledgeRecoverySchedulerTest {
         scheduler.recover();
 
         verify(docRepository).markRecoveryExhausted(eq(doc.getId()), eq(3), anyString(), any());
-        verify(vectorizeStream, never()).send(any());
+        verify(taskStreamPort, never()).send(any(), any());
     }
 
     @Test
@@ -136,7 +137,7 @@ class KnowledgeRecoverySchedulerTest {
 
         scheduler.recover();
 
-        verify(vectorizeStream).send(doc.getId());
+        verify(taskStreamPort).send(any(), any());
         verify(docRepository, never()).touchPendingForRecovery(any(), any(), any());
     }
 
@@ -155,6 +156,6 @@ class KnowledgeRecoverySchedulerTest {
 
         scheduler.recover();
 
-        verify(vectorizeStream, never()).send(any());
+        verify(taskStreamPort, never()).send(any(), any());
     }
 }

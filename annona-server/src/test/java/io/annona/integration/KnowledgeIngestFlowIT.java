@@ -2,21 +2,21 @@ package io.annona.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.annona.common.stream.TaskStreamPort;
 import io.annona.common.storage.ObjectStorage;
 import io.annona.modules.knowledge.dto.UploadResponse;
 import io.annona.modules.knowledge.entity.KbDocEntity;
+import io.annona.modules.knowledge.embed.KnowledgeVectorizeService;
 import io.annona.modules.knowledge.ingest.KnowledgeUploadService;
 import io.annona.modules.knowledge.ops.KnowledgeDocLifecycleService;
 import io.annona.modules.knowledge.repository.KbDocChunkRepository;
 import io.annona.modules.knowledge.repository.KbDocRepository;
 import io.annona.spi.fake.FakeEmbeddingProvider;
 import io.annona.spi.model.EmbeddingProvider;
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -44,6 +44,8 @@ class KnowledgeIngestFlowIT {
 
     @Autowired
     private KnowledgeUploadService uploadService;
+    @Autowired
+    private KnowledgeVectorizeService vectorizeService;
     @Autowired
     private KnowledgeDocLifecycleService lifecycleService;
     @Autowired
@@ -107,7 +109,13 @@ class KnowledgeIngestFlowIT {
             "讲义.md", directionId.toString());
         assertThat(first.duplicate()).isFalse();
 
-        KbDocEntity doc = awaitTerminal(first.id(), Duration.ofSeconds(30));
+        // IT 上下文统一关闭消费线程（application-docker.yaml）：同步调 handler 走完
+        // 解析→分块→落库→状态机，真库语义与异步路径完全一致，且无跨上下文竞态
+        TaskStreamPort.Outcome outcome = vectorizeService.handle("e2e-ingest",
+            java.util.Map.of("docId", first.id().toString()), 0);
+        assertThat(outcome).isEqualTo(TaskStreamPort.Outcome.ACK);
+
+        KbDocEntity doc = docRepository.findById(first.id()).orElseThrow();
         assertThat(doc.getStatus()).as("管线应推进到 READY（失败原因: %s）", doc.getError())
             .isEqualTo(KbDocEntity.STATUS_READY);
         assertThat(chunkRepository.findByDocIdOrderByChunkIndexAsc(doc.getId())).isNotEmpty();
@@ -137,27 +145,5 @@ class KnowledgeIngestFlowIT {
         jdbc.update("INSERT INTO app_user (id, email, password_hash, status, role) VALUES (?, ?, ?, 'ACTIVE', 'USER')",
             id, "e2e-" + UUID.randomUUID().toString().substring(0, 8) + "@annona.local", "e2e-no-login");
         return id;
-    }
-
-    /** 轮询等待异步管线到终态；FAILED 立即失败并带出 error，超时抛断言。 */
-    private KbDocEntity awaitTerminal(UUID docId, Duration deadline) throws InterruptedException {
-        AtomicReference<KbDocEntity> latest = new AtomicReference<>();
-        long end = System.nanoTime() + deadline.toNanos();
-        while (System.nanoTime() < end) {
-            Optional<KbDocEntity> doc = docRepository.findById(docId);
-            doc.ifPresent(latest::set);
-            if (doc.isPresent()) {
-                String status = doc.get().getStatus();
-                if (KbDocEntity.STATUS_READY.equals(status)) {
-                    return doc.get();
-                }
-                if (KbDocEntity.STATUS_FAILED.equals(status)) {
-                    return doc.get(); // 交由断言带出 error 信息
-                }
-            }
-            Thread.sleep(200);
-        }
-        String error = latest.get() == null ? "文档行不存在" : latest.get().getStatus();
-        throw new AssertionError("等待超时（" + deadline + "），最后状态: " + error);
     }
 }

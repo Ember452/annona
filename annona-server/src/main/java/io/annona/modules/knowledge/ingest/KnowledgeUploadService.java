@@ -3,6 +3,7 @@ package io.annona.modules.knowledge.ingest;
 import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
 import io.annona.common.storage.ObjectStorage;
+import io.annona.common.stream.TaskStreamPort;
 import io.annona.modules.knowledge.chunk.Chunker;
 import io.annona.modules.knowledge.dto.UploadResponse;
 import io.annona.modules.knowledge.entity.KbDocEntity;
@@ -11,6 +12,7 @@ import io.annona.modules.knowledge.repository.KbDocRepository;
 import io.annona.shared.direction.service.DirectionQueryService;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -41,19 +43,21 @@ public class KnowledgeUploadService {
 
     private final KbDocRepository docRepository;
     private final Optional<ObjectStorage> objectStorage;
-    private final KnowledgeVectorizeStream vectorizeStream;
+    /** 生产侧直连任务流端口而非消费侧 bean：消费注册（SmartLifecycle）被
+     * ingest.enabled 门控，生产路径必须始终可用（两者生命周期刻意分离）。 */
+    private final TaskStreamPort taskStreamPort;
     private final DirectionQueryService directionQueryService;
     /** 投递失败兜底判死用的短事务（@Modifying 无调用方事务在真库上必抛）。 */
     private final TransactionTemplate tx;
 
     public KnowledgeUploadService(KbDocRepository docRepository,
         Optional<ObjectStorage> objectStorage,
-        KnowledgeVectorizeStream vectorizeStream,
+        TaskStreamPort taskStreamPort,
         DirectionQueryService directionQueryService,
         PlatformTransactionManager transactionManager) {
         this.docRepository = docRepository;
         this.objectStorage = objectStorage;
-        this.vectorizeStream = vectorizeStream;
+        this.taskStreamPort = taskStreamPort;
         this.directionQueryService = directionQueryService;
         this.tx = new TransactionTemplate(transactionManager);
     }
@@ -127,7 +131,8 @@ public class KnowledgeUploadService {
             throw e;
         }
 
-        if (!vectorizeStream.send(doc.getId())) {
+        if (!taskStreamPort.send(KnowledgeVectorizeStream.STREAM_KEY,
+            Map.of("docId", doc.getId().toString()))) {
             tx.executeWithoutResult(s -> docRepository.markFailedIfPending(doc.getId(),
                 "处理任务投递失败，请在文档列表中重试处理", Instant.now()));
             throw new BusinessException(ErrorCode.KB_DOC_ENQUEUE_FAILED);
