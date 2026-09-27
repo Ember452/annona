@@ -12,6 +12,10 @@ export const ROUTES = {
   PLAN: '/plan',
 } as const
 
+/** 登录页路径：不进 ROUTES/PLATEAUS——它不是平级入口，而是守卫的外侧（AppLayout 的
+ * PLATEAU_ICONS 对 RouteKey 穷举，无关 key 会破坏映射完整性）。 */
+export const LOGIN_PATH = '/login'
+
 export type RouteKey = keyof typeof ROUTES
 
 /** Router 内部嵌套 <Route path=...> 用的相对路径，去掉前导 `/`。 */

@@ -1,8 +1,9 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Navigate, Outlet, useLocation } from 'react-router-dom'
 import {
   BookOpenIcon,
   CalendarDaysIcon,
   HouseIcon,
+  LoaderCircleIcon,
   MessagesSquareIcon,
   SparklesIcon,
   SproutIcon,
@@ -10,7 +11,8 @@ import {
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
-import { PLATEAUS, ROUTES, type RouteKey } from '@/constants/routes'
+import { LOGIN_PATH, PLATEAUS, ROUTES, type RouteKey } from '@/constants/routes'
+import { useAuth } from '@/stores/auth'
 
 /** 入口图标映射：key 与 PLATEAUS 对应，图标语义随文案走。 */
 const PLATEAU_ICONS: Record<RouteKey, LucideIcon> = {
@@ -22,13 +24,31 @@ const PLATEAU_ICONS: Record<RouteKey, LucideIcon> = {
 }
 
 /**
- * 全局壳：玻璃侧边栏（品牌 + 五平级入口）+ 主区域 <Outlet/>。
+ * 全局壳：玻璃侧边栏（品牌 + 五平级入口）+ 主区域 <Outlet/> + 登录守卫。
  *
  * <p>配色全部来自全局设计令牌（globals.css 的 sidebar/surface 层），与具体场景解耦：
  * P2-04 增加新场景时本文件零改动。入口元数据统一取自 constants/routes，
  * 这里只负责「怎么展示」，不关心「有哪些入口」。
+ *
+ * <p>守卫（登录 UI 落地批）：探测期显示加载，未登录重定向到 /login 并记录来源页
+ * （登录后回跳，不打断手头操作）。none 模式 `/api/me` 恒成功，守卫天然直通。
  */
 export default function AppLayout() {
+  const { user, loading, logout } = useAuth()
+  const location = useLocation()
+
+  if (loading) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-background text-muted-foreground">
+        <LoaderCircleIcon className="size-5 animate-spin text-primary" />
+        <span className="text-sm">加载中…</span>
+      </div>
+    )
+  }
+  if (!user) {
+    return <Navigate to={LOGIN_PATH} replace state={{ from: location.pathname }} />
+  }
+
   return (
     <div className="flex min-h-dvh">
       <aside className="sticky top-0 flex h-dvh w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar/95 p-4 backdrop-blur-xl">
@@ -92,8 +112,15 @@ export default function AppLayout() {
           </ul>
         </nav>
 
-        <footer className="shrink-0 px-3 text-[10px] text-sidebar-foreground/30">
-          基座就绪 · 内容按 P1 计划渐进落地
+        <footer className="flex shrink-0 items-center justify-between gap-2 px-3 text-[10px] text-sidebar-foreground/30">
+          <span>基座就绪 · 内容按 P1 计划渐进落地</span>
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="shrink-0 rounded px-1 py-0.5 text-[10px] text-sidebar-foreground/40 transition-colors hover:text-sidebar-foreground"
+          >
+            退出{user?.displayName ?? '登录'}
+          </button>
         </footer>
       </aside>
 
