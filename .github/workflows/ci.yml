@@ -215,9 +215,22 @@ jobs:
           AWS_SECRET_ACCESS_KEY=ci-minio-sk \
           AWS_EC2_METADATA_DISABLED=true \
           aws --endpoint-url http://localhost:9000 s3api head-bucket --bucket annona
-      - name: Dump server logs on failure
+      - name: Dump compose state and all logs on failure
         if: failure()
-        run: docker compose --env-file .env -f docker/docker-compose.yml logs --tail=200
+        run: |
+          set -o pipefail
+          {
+            echo "### compose ps -a"
+            docker compose --env-file .env -f docker/docker-compose.yml ps -a || true
+            echo "### compose logs (tail 150, all services)"
+            docker compose --env-file .env -f docker/docker-compose.yml logs --tail=150 || true
+          } >> "$GITHUB_STEP_SUMMARY"
+          # 把疑似根因行写进 check-run annotations（匿名可读，排障不依赖登录）
+          docker compose --env-file .env -f docker/docker-compose.yml logs --tail=200 2>&1 \
+            | grep -iE "ERROR|Exception|FATAL|exited|unhealthy|refused|denied|manifest" \
+            | head -20 | while IFS= read -r line; do
+                echo "::error::${line:0:300}"
+              done || true
       - name: Tear down
         if: always()
         run: docker compose --env-file .env -f docker/docker-compose.yml down -v
