@@ -1,6 +1,9 @@
-import { defineConfig, loadEnv } from 'vite'
 import { fileURLToPath, URL } from 'node:url'
 import react from '@vitejs/plugin-react'
+import { loadEnv } from 'vite'
+// defineConfig 取自 vitest/config：同一份配置同时喂 vite build 与 vitest，
+// test 块只在跑测试时生效，build 不感知
+import { defineConfig } from 'vitest/config'
 
 // annona-web 与 annona-server 的耦合只在两处：
 //   1. build.outDir 指向 annona-server 的 classpath static/
@@ -35,6 +38,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: false,
         },
       },
+    },
+    test: {
+      // jsdom：localStorage（番茄钟快照）与 React 渲染都依赖 DOM 环境
+      environment: 'jsdom',
+      include: ['src/**/*.test.{ts,tsx}'],
     },
   }
 })
