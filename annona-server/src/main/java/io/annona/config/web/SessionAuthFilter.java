@@ -18,6 +18,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.servlet.HandlerExceptionResolver;
@@ -40,7 +41,13 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
  *
  * <p>P1a-01 曾"只解析不强制"；本类在 P1a-02 补齐强制鉴权与模式化凭据（见
  * docs/specs/2026-09-26-identity-provider-modes-adr.md）。
+ *
+ * <p>{@code @ConditionalOnWebApplication(SERVLET)}：构造器依赖的 {@code handlerExceptionResolver}
+ * 只由 servlet 语境的 MVC 自动配置提供，非 web 上下文（如 docker 组 IT 的 NONE 环境）装配本类
+ * 必得 NoSuchBeanDefinition。选条件装配而非 {@code ObjectProvider} 延迟解析——过滤器离开
+ * servlet 管线毫无意义，缺席比空转诚实；若未来出现无 web 场景需要凭据读取，再拆出独立组件。
  */
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @Component
 public class SessionAuthFilter extends OncePerRequestFilter {
 
