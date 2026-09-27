@@ -1,0 +1,245 @@
+package io.annona.modules.knowledge.embed;
+
+import io.annona.common.exception.BusinessException;
+import io.annona.common.exception.ErrorCode;
+import io.annona.common.parse.DocumentBlock;
+import io.annona.common.parse.DocumentParser;
+import io.annona.common.storage.ObjectStorage;
+import io.annona.common.stream.TaskStreamPort;
+import io.annona.modules.knowledge.chunk.ChunkOptions;
+import io.annona.modules.knowledge.chunk.Chunker;
+import io.annona.modules.knowledge.chunk.KnowledgeChunk;
+import io.annona.modules.knowledge.dto.ProgressEvent;
+import io.annona.modules.knowledge.entity.KbDocChunkEntity;
+import io.annona.modules.knowledge.entity.KbDocEntity;
+import io.annona.modules.knowledge.ingest.ContentHashes;
+import io.annona.modules.knowledge.progress.KnowledgeProgressHub;
+import io.annona.modules.knowledge.repository.KbDocChunkRepository;
+import io.annona.modules.knowledge.repository.KbDocRepository;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+/**
+ * 向量化消费业务（任务流的 {@link TaskStreamPort.TaskMessageHandler}）。
+ * 状态机推进（knowledge-ingestion-adr §决策 3）与并发语义借 🅖 VectorizeStreamConsumer：
+ * 条件领取（PENDING→PARSING 抢到才干）→ 下载解析 → 分块落库 → 批量嵌入（进度/心跳 30s
+ * 节流）→ 条件终态；代次 fencing（attempt_id）保证被回收的旧代次写不进任何状态。
+ *
+ * <p>失败语义（借 🅖 模板）：一切异常先按可重试处理——把文档条件重置回 PENDING 再
+ * RETRY（重投后重新领取）；重试计数达上限（{@link #MAX_RETRY}，借 🅖）或重置失败时
+ * 条件判 FAILED 并 DEAD。解析类确定性失败也被重试（与上游一致，代价是三次重复解析，
+ * 换取单一失败路径的简单性）。
+ */
+@Service
+public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(KnowledgeVectorizeService.class);
+
+    /** 重试上限（借 🅖 MAX_RETRY_COUNT；重投由端口承担 retryCount 计数）。 */
+    public static final int MAX_RETRY = 3;
+
+    /** 心跳节流（借 🅖 heartbeatThrottle=30s：批与批之间最多 30s 写一次库）。 */
+    private static final long HEARTBEAT_THROTTLE_MILLIS = 30_000;
+
+    /** 消费者丢失执行权（代次被回收/他人接手）的静默中止信号：ACK 丢弃，不重试不判死。 */
+    static final class AttemptLostException extends RuntimeException {
+    }
+
+    private final KbDocRepository docRepository;
+    private final KbDocChunkRepository chunkRepository;
+    private final Optional<ObjectStorage> objectStorage;
+    private final DocumentParser documentParser;
+    private final Optional<io.annona.spi.model.EmbeddingProvider> embeddingProvider;
+    private final KnowledgeProgressHub progressHub;
+
+    public KnowledgeVectorizeService(KbDocRepository docRepository,
+        KbDocChunkRepository chunkRepository,
+        Optional<ObjectStorage> objectStorage,
+        DocumentParser documentParser,
+        Optional<io.annona.spi.model.EmbeddingProvider> embeddingProvider,
+        KnowledgeProgressHub progressHub) {
+        this.docRepository = docRepository;
+        this.chunkRepository = chunkRepository;
+        this.objectStorage = objectStorage;
+        this.documentParser = documentParser;
+        this.embeddingProvider = embeddingProvider;
+        this.progressHub = progressHub;
+    }
+
+    @Override
+    public TaskStreamPort.Outcome handle(String msgId, Map<String, String> payload, int retryCount) {
+        String docIdRaw = payload.get("docId");
+        if (docIdRaw == null || docIdRaw.isBlank()) {
+            return TaskStreamPort.Outcome.ACK; // 消息缺业务 ID（借 🅖：丢弃不处理）
+        }
+        UUID docId;
+        try {
+            docId = UUID.fromString(docIdRaw);
+        } catch (IllegalArgumentException e) {
+            return TaskStreamPort.Outcome.ACK;
+        }
+        Optional<KbDocEntity> found = docRepository.findById(docId);
+        if (found.isEmpty()) {
+            return TaskStreamPort.Outcome.ACK; // 实体不存在（已删）→ ACK 丢弃
+        }
+        KbDocEntity doc = found.get();
+        if (KbDocEntity.STATUS_READY.equals(doc.getStatus())) {
+            return TaskStreamPort.Outcome.ACK; // 已终态（重复投递）→ ACK 丢弃
+        }
+
+        String attemptId = UUID.randomUUID().toString();
+        Instant now = Instant.now();
+        if (docRepository.tryMarkParsing(docId, attemptId, now) == 0) {
+            return TaskStreamPort.Outcome.ACK; // 条件领取失败：其他实例已接手（借 🅖 tryMarkVectorProcessing）
+        }
+        try {
+            process(doc, attemptId);
+            return TaskStreamPort.Outcome.ACK;
+        } catch (AttemptLostException e) {
+            return TaskStreamPort.Outcome.ACK; // 执行权已失效：不重试不判死（新代次已接管）
+        } catch (RuntimeException e) {
+            log.warn("向量化失败 docId={} retryCount={}", docId, retryCount, e);
+            return onFailure(docId, attemptId, retryCount, rootMessage(e), now);
+        }
+    }
+
+    private void process(KbDocEntity doc, String attemptId) {
+        UUID docId = doc.getId();
+        ObjectStorage storage = objectStorage
+            .orElseThrow(() -> new BusinessException(ErrorCode.KB_DOC_STORAGE_NOT_CONFIGURED));
+        long[] lastHeartbeat = {0L};
+
+        progressHub.publish(docId, new ProgressEvent(KbDocEntity.STATUS_PARSING, "解析中", 0, 0, ""));
+        byte[] content = storage.get(doc.getStorageKey());
+        List<DocumentBlock> blocks = documentParser.parse(content, doc.getOriginalFilename());
+        if (blocks.isEmpty()) {
+            throw new BusinessException(ErrorCode.KB_DOC_TEXT_EMPTY);
+        }
+
+        beat(docId, attemptId, lastHeartbeat);
+        if (docRepository.tryMarkChunking(docId, attemptId, Instant.now()) == 0) {
+            throw new AttemptLostException();
+        }
+        progressHub.publish(docId, new ProgressEvent(KbDocEntity.STATUS_CHUNKING, "分块中", 0, 0, ""));
+        List<KnowledgeChunk> chunks = Chunker.chunk(blocks, ChunkOptions.DEFAULTS);
+        if (chunks.isEmpty()) {
+            throw new BusinessException(ErrorCode.KB_DOC_TEXT_EMPTY);
+        }
+        persistChunks(docId, chunks);
+        Map<Integer, UUID> chunkIdByIndex = new HashMap<>();
+        for (KbDocChunkEntity row : chunkRepository.findByDocIdOrderByChunkIndexAsc(docId)) {
+            chunkIdByIndex.put(row.getChunkIndex(), row.getId());
+        }
+
+        if (docRepository.tryMarkEmbedding(docId, attemptId, chunks.size(), Instant.now()) == 0) {
+            throw new AttemptLostException();
+        }
+        io.annona.spi.model.EmbeddingProvider provider = embeddingProvider
+            .orElseThrow(() -> new BusinessException(ErrorCode.KB_EMBEDDING_NOT_CONFIGURED));
+        progressHub.publish(docId, new ProgressEvent(KbDocEntity.STATUS_EMBEDDING, "向量化中",
+            0, chunks.size(), ""));
+
+        int processed = 0;
+        int batchSize = Math.max(1, 10); // 嵌入批量口径与 provider 内部分批一致（DashScope 上限，借 🅖）
+        for (int from = 0; from < chunks.size(); from += batchSize) {
+            beat(docId, attemptId, lastHeartbeat);
+            List<KnowledgeChunk> batch = chunks.subList(from, Math.min(from + batchSize, chunks.size()));
+            List<float[]> vectors = provider.embed(batch.stream().map(KnowledgeChunk::text).toList());
+            for (int i = 0; i < batch.size(); i++) {
+                UUID chunkId = chunkIdByIndex.get(batch.get(i).index());
+                if (chunkId == null) {
+                    throw new IllegalStateException("分块行缺失 docId=" + docId + " index=" + batch.get(i).index());
+                }
+                chunkRepository.updateEmbedding(chunkId, vectorLiteral(vectors.get(i)));
+            }
+            processed += batch.size();
+            docRepository.markProgress(docId, attemptId, processed, Instant.now());
+            progressHub.publish(docId, new ProgressEvent(KbDocEntity.STATUS_EMBEDDING, "向量化中",
+                processed, chunks.size(), ""));
+        }
+
+        if (docRepository.markReady(docId, attemptId, chunks.size(), provider.name(), Instant.now()) == 0) {
+            throw new AttemptLostException();
+        }
+        progressHub.publish(docId, new ProgressEvent(KbDocEntity.STATUS_READY, "就绪",
+            chunks.size(), chunks.size(), ""));
+    }
+
+    /**
+     * 分块落库（重建式：先清掉旧分块再写新分块，ADR §决策 7）。
+     *
+     * <p>刻意不加 @Transactional：embedding 调用必须留在事务外（铁律），而 delete 与
+     * saveAll 各自依托 Spring Data 的方法级事务——delete 成功后 save 失败会留下"无分块"
+     * 的中间态，由重试路径的 deleteByDocId 幂等重建兜住；自调用 @Transactional 本就不生效
+     * （代理陷阱），与其写一个骗人的注解不如明说依赖幂等重跑。
+     */
+    private void persistChunks(UUID docId, List<KnowledgeChunk> chunks) {
+        chunkRepository.deleteByDocId(docId);
+        List<KbDocChunkEntity> rows = new ArrayList<>(chunks.size());
+        for (KnowledgeChunk chunk : chunks) {
+            KbDocChunkEntity row = new KbDocChunkEntity();
+            row.setId(UUID.randomUUID());
+            row.setDocId(docId);
+            row.setChunkIndex(chunk.index());
+            row.setHeadingPath(chunk.headingPath());
+            row.setCharStart(chunk.charStart());
+            row.setCharEnd(chunk.charEnd());
+            row.setContent(chunk.text());
+            row.setContentHash(ContentHashes.sha256Hex(chunk.text()));
+            rows.add(row);
+        }
+        chunkRepository.saveAll(rows);
+    }
+
+    /** 可重试失败：条件重置回 PENDING 后重投；达上限或重置失败（代次易主）→ 判死。 */
+    private TaskStreamPort.Outcome onFailure(UUID docId, String attemptId, int retryCount,
+        String message, Instant now) {
+        progressHub.publish(docId, new ProgressEvent(KbDocEntity.STATUS_FAILED, "失败",
+            0, 0, message));
+        int reset = docRepository.resetStaleToPending(docId, attemptId, now);
+        if (reset == 1 && retryCount < MAX_RETRY) {
+            return TaskStreamPort.Outcome.RETRY;
+        }
+        docRepository.markFailedIfPending(docId, message, now);
+        return TaskStreamPort.Outcome.DEAD;
+    }
+
+    /** 心跳（30s 节流，借 🅖 throttledEmbeddingHeartbeat）；心跳 0 行 = 执行权已失效。 */
+    private void beat(UUID docId, String attemptId, long[] lastHeartbeat) {
+        long now = System.currentTimeMillis();
+        if (now - lastHeartbeat[0] < HEARTBEAT_THROTTLE_MILLIS) {
+            return;
+        }
+        if (docRepository.heartbeat(docId, attemptId, Instant.now()) == 0) {
+            throw new AttemptLostException();
+        }
+        lastHeartbeat[0] = now;
+    }
+
+    private static String vectorLiteral(float[] vector) {
+        StringBuilder builder = new StringBuilder(vector.length * 10).append('[');
+        for (int i = 0; i < vector.length; i++) {
+            if (i > 0) {
+                builder.append(',');
+            }
+            builder.append(vector[i]);
+        }
+        return builder.append(']').toString();
+    }
+
+    private static String rootMessage(Throwable throwable) {
+        String message = throwable.getMessage();
+        if (message == null || message.isBlank()) {
+            message = throwable.getClass().getSimpleName();
+        }
+        return message.length() > 500 ? message.substring(0, 500) : message;
+    }
+}
