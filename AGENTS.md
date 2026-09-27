@@ -133,6 +133,7 @@
 - **改 `.github/workflows/**` 后必跑** `python scripts/ci/validate-workflows.py`：GitHub 对无效 workflow 是**静默不运行**（不报错、不产生 check run），跟假绿一样隐蔽；让 CI 自校 CI 配置是鸡生蛋问题，以本地钩子为唯一防线。YAML 普通标量里不能出现 `: `（冒号+空格），含它的 `run:` 一律用块形 scalar。
 - 基础设施能力放 `annona-infrastructure` 或 `common`，禁止散落到业务 Service。
 - **预置主键实体的 save/merge 语义（全仓约定）**：实体 id 由应用侧 `UUID.randomUUID()` 赋值（不用 `@GeneratedValue`），`save()` 因此走 `merge()` 分支——**返回值才是受管副本，原引用仍是游离态**。需要回读 DB-default 列（`created_at` 等 `insertable=false` 列）时必须接住返回值再 `refresh`；直接 refresh 原引用抛 `DetachedObjectException`，用原引用映射响应拿到 null。slice 测试的 mock EM 探不到此错，只在真 PG 集测暴露（P1a-04 加固批实测）。同理，依赖 `handlerExceptionResolver` 等 web 专属 bean 的组件必须 `@ConditionalOnWebApplication(SERVLET)`，否则 docker 组 IT 的 NONE 上下文连坐失败（先例：`SessionAuthFilter`）。
+- **门控 bean 禁止被常驻 bean 硬注入（全仓约定，docker 组启动守卫机检）**：`@ConditionalOnProperty` 门控的 bean 一律经 `Optional<>` 注入——常驻 bean 链必须在门控全关时照常装配（knowledge-ingestion-adr §决策 9）。守卫是 `AllGatesOffContextIT`（全关）与 `RecoveryWithoutIngestContextIT`（恢复开/入库关）两个启动 IT：它们失败即"有人新增了门控 bean 的硬注入"，先查最近改动的条件装配，而不是放松开关值（先例：`KnowledgeVectorizeStream`，P1a-05 实测 27 errors 连坐；同型还有 `SessionAuthFilter` 的 NONE 上下文连坐）。
 - **已应用的 Flyway 迁移禁改（全仓约定，pre-commit 机检）**：`db/migration/V<n>__*.sql` 一旦进入任何真实环境（CI 集测、compose 卷、本机原生 PG）即被 checksum 冻结——修改既有文件会让所有持久库 `validate-on-migrate` 启动失败。结构变更一律新增 `V<n+1>`；本机/CI 都是一次性库时不许因"CI 能绿"而放松（先例：V1 曾被改两次，见 2026-09-27 假绿复盘 §5）。
 - `io.annona.modules.<name>` 顶层包与 `io.annona.shared.*` 必须有 `package-info.java` 声明职责与允许依赖（子包不强制，避免堆无用文件）。
 
