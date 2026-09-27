@@ -185,6 +185,10 @@ jobs:
           sed -i 's|^SPRING_DATASOURCE_PASSWORD=.*|SPRING_DATASOURCE_PASSWORD=ci-pg-pw|' .env
           sed -i 's|^S3_ACCESS_KEY=.*|S3_ACCESS_KEY=ci-minio-ak|' .env
           sed -i 's|^S3_SECRET_KEY=.*|S3_SECRET_KEY=ci-minio-sk|' .env
+      # P1a-05 遗留实测 ①：Silo 镜像在 runner 上匿名 pull 可得性（此前只 pin 了 tag
+      # 未实证）。失败 = 镜像仓库可达性问题，选型按 s3-storage-silo-adr 重开。
+      - name: Verify anonymous pull of pgsty/silo
+        run: docker pull docker.io/pgsty/silo:20260903
       - name: Bring up the full stack
         run: docker compose --env-file .env -f docker/docker-compose.yml up -d --wait
       - name: Probe /actuator/health + home page + SPA deep link
@@ -202,6 +206,15 @@ jobs:
           # D1 边界：未映射的 /api 绝不被 SPA 回退成 index.html 外壳。P1a-02 强制鉴权后，
           # 未登录的 /api 走业务失败约定 = HTTP 200 + Result JSON(1004)，已证明它不是 HTML。
           curl -s -o /dev/null -w '%{content_type}' http://localhost/api/definitely-not-a-route | grep -qi 'application/json'
+      # P1a-05 遗留实测 ②：MINIO_DEFAULT_BUCKETS 自举建桶在 Silo fork 上生效
+      # （no-init-container 的决定当初是对上游 MinIO 行为做的）。head-bucket 404
+      # 即不成立 → 按 storage 块注释加 mcli init 容器，而不是放宽断言。
+      - name: Verify MINIO_DEFAULT_BUCKETS bootstrapped the bucket
+        run: |
+          AWS_ACCESS_KEY_ID=ci-minio-ak \
+          AWS_SECRET_ACCESS_KEY=ci-minio-sk \
+          AWS_EC2_METADATA_DISABLED=true \
+          aws --endpoint-url http://localhost:9000 s3api head-bucket --bucket annona
       - name: Dump server logs on failure
         if: failure()
         run: docker compose --env-file .env -f docker/docker-compose.yml logs --tail=200
