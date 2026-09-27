@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * OpenAI 兼容 {@code POST /embeddings} 实现（DashScope 兼容模式同协议，借 🅖
@@ -88,7 +89,7 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
                 throw new BusinessException(ErrorCode.KB_EMBEDDING_FAILED,
                     "embedding 服务返回 HTTP " + response.statusCode());
             }
-            return parseEmbeddings(response.body());
+            return parseEmbeddings(response.body(), batch.size());
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.KB_EMBEDDING_FAILED, "embedding 服务网络失败");
         } catch (InterruptedException e) {
@@ -97,11 +98,19 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
         }
     }
 
-    /** 响应形状：{@code {"data":[{"index":0,"embedding":[…]}]}}；按 index 排序后取向量。 */
-    private List<float[]> parseEmbeddings(String body) {
+    /**
+     * 响应形状：{@code {"data":[{"index":0,"embedding":[…]}]}}。协议<b>不保证</b>按请求
+     * 顺序返回——以 index 排序对齐并校验条数，供应商乱序/丢项时显式报错而不是让向量与
+     * chunk 静默错位（那会无声劣化检索质量，P1a-09 评测最不该背的锅）。
+     */
+    private List<float[]> parseEmbeddings(String body, int expectedCount) {
         try {
             JsonNode data = mapper.readTree(body).path("data");
-            List<float[]> out = new ArrayList<>(data.size());
+            if (!data.isArray() || data.size() != expectedCount) {
+                throw new BusinessException(ErrorCode.KB_EMBEDDING_FAILED,
+                    "embedding 返回 " + data.size() + " 条，与请求的 " + expectedCount + " 条不一致");
+            }
+            TreeMap<Integer, float[]> byIndex = new TreeMap<>();
             for (JsonNode item : data) {
                 JsonNode vector = item.path("embedding");
                 float[] values = new float[vector.size()];
@@ -112,9 +121,13 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
                     throw new BusinessException(ErrorCode.KB_EMBEDDING_FAILED,
                         "embedding 维度 " + values.length + " 与配置 " + properties.getDimensions() + " 不一致");
                 }
-                out.add(values);
+                byIndex.put(item.path("index").asInt(), values);
             }
-            return out;
+            if (byIndex.firstKey() != 0 || byIndex.lastKey() != expectedCount - 1) {
+                throw new BusinessException(ErrorCode.KB_EMBEDDING_FAILED,
+                    "embedding 返回的 index 集合不是 0.." + (expectedCount - 1));
+            }
+            return new ArrayList<>(byIndex.values());
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.KB_EMBEDDING_FAILED, "embedding 响应解析失败");
         }

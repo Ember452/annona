@@ -73,4 +73,10 @@ public class S3ObjectStorage implements ObjectStorage {
             return false;
         }
     }
+
+    /** 释放底层连接池（StorageConfig 的 destroyMethod="close" 依赖本方法——Spring 在
+     * bean 定义期校验方法存在，包装类不透出 close 会直接拒绝启动，P1a-05 CI 实测）。 */
+    public void close() {
+        client.close();
+    }
 }

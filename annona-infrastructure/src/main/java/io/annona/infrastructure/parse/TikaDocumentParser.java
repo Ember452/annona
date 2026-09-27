@@ -8,9 +8,12 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.apache.tika.extractor.EmbeddedDocumentExtractor;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.metadata.TikaCoreProperties;
@@ -22,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.xml.sax.Attributes;
+import org.xml.sax.ContentHandler;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
@@ -42,7 +46,8 @@ public class TikaDocumentParser implements DocumentParser {
 
     private static final Logger log = LoggerFactory.getLogger(TikaDocumentParser.class);
 
-    /** 解析文本上限（借 🅖 MAX_TEXT_LENGTH）：防异常文件撑爆内存，超限报 TOO_LARGE。 */
+    /** 解析文本上限（借 🅖 MAX_TEXT_LENGTH）：防异常文件撑爆内存；超限抛 TOO_LARGE——
+     * 静默丢弃超限块会让大文档尾部内容无声消失、永远进不了检索库。 */
     private static final int MAX_TEXT_CHARS = 5 * 1024 * 1024;
 
     private final ExecutorService executor;
@@ -55,17 +60,22 @@ public class TikaDocumentParser implements DocumentParser {
 
     @Override
     public List<DocumentBlock> parse(byte[] content, String filename) {
+        Future<List<DocumentBlock>> future;
         try {
-            return executor.submit(() -> doParse(content, filename))
-                .get(timeoutMillis, TimeUnit.MILLISECONDS);
+            future = executor.submit(() -> doParse(content, filename));
         } catch (RejectedExecutionException e) {
             throw new BusinessException(ErrorCode.KB_DOC_PARSE_FAILED, "解析队列已满，请稍后重试");
-        } catch (java.util.concurrent.TimeoutException e) {
+        }
+        try {
+            return future.get(timeoutMillis, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            future.cancel(true); // 必须取消：否则卡死的解析占死 2 线程池，几个坏文件就打满队列（🅖 同款）
             throw new BusinessException(ErrorCode.KB_DOC_PARSE_TIMEOUT);
         } catch (InterruptedException e) {
+            future.cancel(true);
             Thread.currentThread().interrupt();
             throw new BusinessException(ErrorCode.KB_DOC_PARSE_FAILED, "解析被中断");
-        } catch (java.util.concurrent.ExecutionException e) {
+        } catch (ExecutionException e) {
             Throwable cause = e.getCause() == null ? e : e.getCause();
             if (cause instanceof BusinessException businessException) {
                 throw businessException;
@@ -130,7 +140,7 @@ public class TikaDocumentParser implements DocumentParser {
         }
 
         @Override
-        public void parseEmbedded(InputStream stream, org.xml.sax.ContentHandler handler,
+        public void parseEmbedded(InputStream stream, ContentHandler handler,
             Metadata metadata, boolean outputHtml) {
             // 刻意空实现：shouldParseEmbedded=false 时 Tika 不会走到这里
         }
@@ -151,12 +161,21 @@ public class TikaDocumentParser implements DocumentParser {
         private String openTag;
 
         List<DocumentBlock> blocks() {
-            emit();
+            try {
+                emit();
+            } catch (SAXException e) {
+                // 收尾 emit 超限：解包为业务异常（与 doParse 的 SAX 解包同口径）
+                if (e.getCause() instanceof BusinessException businessException) {
+                    throw businessException;
+                }
+                throw new BusinessException(ErrorCode.KB_DOC_PARSE_FAILED, "文档收尾解析失败");
+            }
             return blocks;
         }
 
         @Override
-        public void startElement(String uri, String localName, String qName, Attributes attributes) {
+        public void startElement(String uri, String localName, String qName, Attributes attributes)
+            throws SAXException {
             String name = elementName(localName, qName);
             if (name.isEmpty()) {
                 return;
@@ -189,7 +208,7 @@ public class TikaDocumentParser implements DocumentParser {
         }
 
         @Override
-        public void characters(char[] ch, int start, int length) {
+        public void characters(char[] ch, int start, int length) throws SAXException {
             if (type == null) {
                 open(DocumentBlock.BlockType.PARAGRAPH, null, "#implicit");
             }
@@ -197,14 +216,14 @@ public class TikaDocumentParser implements DocumentParser {
         }
 
         @Override
-        public void endElement(String uri, String localName, String qName) {
+        public void endElement(String uri, String localName, String qName) throws SAXException {
             String name = elementName(localName, qName);
             if (openTag != null && openTag.equals(name)) {
                 emit();
             }
         }
 
-        private void open(DocumentBlock.BlockType blockType, Integer headingLevel, String tag) {
+        private void open(DocumentBlock.BlockType blockType, Integer headingLevel, String tag) throws SAXException {
             if (type != null) {
                 emit();
             }
@@ -214,7 +233,7 @@ public class TikaDocumentParser implements DocumentParser {
         }
 
         /** 无显式块打开时的兜底（表格内文本、根级裸文本）。 */
-        private void ensureOpen(DocumentBlock.BlockType blockType) {
+        private void ensureOpen(DocumentBlock.BlockType blockType) throws SAXException {
             if (type == null) {
                 type = blockType;
                 level = null;
@@ -222,20 +241,28 @@ public class TikaDocumentParser implements DocumentParser {
             }
         }
 
-        private void emit() {
+        private void emit() throws SAXException {
             if (type == null) {
                 return;
             }
             String cleaned = TextCleaner.clean(buffer.toString());
             buffer.setLength(0);
-            if (!cleaned.isBlank() && committed.length() + cleaned.length() <= MAX_TEXT_CHARS) {
-                blocks.add(new DocumentBlock(type, level, cleaned, committed.length(),
-                    committed.length() + cleaned.length()));
-                committed.append(cleaned);
-            }
+            DocumentBlock.BlockType finishedType = type;
+            Integer finishedLevel = level;
             type = null;
             level = null;
             openTag = null;
+            if (cleaned.isBlank()) {
+                return;
+            }
+            if (committed.length() + cleaned.length() > MAX_TEXT_CHARS) {
+                // SAXException 是 handler 中止的通道，doParse 解包业务异常上抛
+                throw new SAXException(new BusinessException(ErrorCode.KB_DOC_TOO_LARGE,
+                    "解析文本超过 " + (MAX_TEXT_CHARS / 1024 / 1024) + "MB 上限"));
+            }
+            blocks.add(new DocumentBlock(finishedType, finishedLevel, cleaned, committed.length(),
+                committed.length() + cleaned.length()));
+            committed.append(cleaned);
         }
 
         private static boolean endsWith(StringBuilder builder, String suffix) {

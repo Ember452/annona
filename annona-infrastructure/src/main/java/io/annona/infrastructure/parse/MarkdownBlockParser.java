@@ -42,7 +42,9 @@ public final class MarkdownBlockParser {
                 continue;
             }
             if (isFence(line)) {
-                String fence = line.substring(0, 3);
+                // 围栏标记从 trim 后的行取：Markdown 允许围栏带 ≤3 空格缩进，
+                // 用原始行 substring(0,3) 会让闭合匹配不上、整篇误判成代码块
+                String fence = line.trim().startsWith("~~~") ? "~~~" : "```";
                 StringBuilder block = new StringBuilder(line.strip());
                 i++;
                 while (i < lines.length && !lines[i].trim().startsWith(fence)) {
@@ -56,10 +58,14 @@ public final class MarkdownBlockParser {
                 offset = emit(blocks, DocumentBlock.BlockType.CODE, null, block.toString(), offset);
                 continue;
             }
-            if (line.matches("^#{1,6}\\s+.*")) {
-                int level = line.indexOf(' ') - line.indexOf('#');
+            if (line.matches("^#{1,6}[ \\t]+.*")) {
+                // 层级 = 行首 # 的个数（indexOf(' ') 对 "#\t标题" 会算出 -1）
+                int level = 0;
+                while (level < line.length() && line.charAt(level) == '#') {
+                    level++;
+                }
                 offset = emit(blocks, DocumentBlock.BlockType.HEADING, level,
-                    line.replaceFirst("^#{1,6}\\s+", "").strip(), offset);
+                    line.replaceFirst("^#{1,6}[ \\t]+", "").strip(), offset);
                 i++;
                 continue;
             }
