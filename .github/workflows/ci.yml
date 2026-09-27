@@ -186,9 +186,9 @@ jobs:
           sed -i 's|^S3_ACCESS_KEY=.*|S3_ACCESS_KEY=ci-minio-ak|' .env
           sed -i 's|^S3_SECRET_KEY=.*|S3_SECRET_KEY=ci-minio-sk|' .env
       # P1a-05 遗留实测 ①：Silo 镜像在 runner 上匿名 pull 可得性（此前只 pin 了 tag
-      # 未实证）。失败 = 镜像仓库可达性问题，选型按 s3-storage-silo-adr 重开。
+      # 未实证；20260903 裸日期返 manifest unknown，真名遵循 MinIO RELEASE 惯例）。
       - name: Verify anonymous pull of pgsty/silo
-        run: docker pull docker.io/pgsty/silo:20260903
+        run: docker pull docker.io/pgsty/silo:RELEASE.2026-09-03T13-18-01Z
       - name: Bring up the full stack
         run: docker compose --env-file .env -f docker/docker-compose.yml up -d --wait
       - name: Probe /actuator/health + home page + SPA deep link

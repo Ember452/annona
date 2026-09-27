@@ -43,3 +43,18 @@ MinIO 上游终止了社区发行：2026-02-13 仓库 archive、2026-09-11 Docke
 - Pigsty 社区托管状态发生实质变化（仓库归档、签名/SBOM 纪律停止）；
 - MinIO 上游恢复社区镜像发行（Silo 纲领承诺届时收窄范围并把修复回馈上游）；
 - 文档量与文件体积增长到单节点对象存储成为瓶颈（触发量级见 storage-single-postgres ADR §何时重新评估）。
+
+## 后续修订
+
+### 修订 1（2026-09-27，P1a-05 CI 实测）
+
+1. **Docker tag 真名遵循 MinIO 的 `RELEASE.yyyy-MM-ddTHH-mm-ssZ` 惯例**。§决策 3 与
+   compose 注释里的 "Server `20260903`" 是对 release `RELEASE.2026-09-03T13-18-01Z`
+   的错误转写——裸日期 tag 返 `manifest unknown`（compose-smoke 匿名 pull 断言当场
+   拦截，正是该断言设立的意图）。已改为 pin `RELEASE.2026-09-03T13-18-01Z`。
+2. **storage bean 的装配条件改为显式 `annona.storage.enabled` 开关**（原设想的
+   "endpoint 为空不装配"不可实现：application.yaml 的 `${S3_ENDPOINT:}` 把键恒定
+   定义为空串，而 `@ConditionalOnProperty` 只判键存在、空串也命中，导致无 S3 的
+   docker IT 上下文强建 bean 失败、26 个 IT 连坐）。决策 §6 的"错误后移到使用点"
+   语义不变：`enabled=false` 时上传报 2306；`enabled=true` 且 Key 缺失 = 配置错误、
+   启动即抛。
