@@ -191,7 +191,8 @@ public final class Chunker {
         return trail < lead ? null : new int[] {lead, trail + 1};
     }
 
-    /** 局部下标 → 清洗后全文偏移；落在段间分隔符上时钳到前一段末尾。 */
+    /** 局部下标 → 清洗后全文偏移；落在段间分隔符上时钳到<b>下一段开头</b>
+     * （分隔符自身无坐标，取最近的有内容边界）。 */
     private static int mapGlobal(List<int[]> ranges, int local) {
         for (int[] range : ranges) {
             if (local < range[0]) {

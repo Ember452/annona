@@ -57,5 +57,8 @@ public class KnowledgeProgressHub {
                 list.remove(emitter);
             }
         }
+        if (list.isEmpty()) {
+            emitters.remove(docId); // 流结束后清掉空列表，map 不残留死 key
+        }
     }
 }

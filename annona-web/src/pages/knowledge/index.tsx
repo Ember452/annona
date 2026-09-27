@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { UploadIcon } from 'lucide-react'
 
+import { API_BASE_URL } from '@/api/request'
 import { knowledgeApi } from '@/api/knowledge'
 import ChunkPreviewDialog from '@/components/knowledge/ChunkPreviewDialog'
 import DirectionSelector from '@/components/direction/DirectionSelector'
@@ -85,11 +86,12 @@ export default function KnowledgePage() {
     [loadDocs, stopPolling]
   )
 
-  /** 订阅一个在途文档：SSE 为主，onerror 降级轮询。 */
+  /** 订阅一个在途文档：SSE 为主，onerror 降级轮询。EventSource 必须带 API_BASE_URL
+   * 前缀（与 axios 的 baseURL 同源），跨域部署时裸相对路径会打到前端自己的域。 */
   useEffect(() => {
     if (!trackingId) return
     const docId = trackingId
-    const source = new EventSource(`/api/knowledge/docs/${docId}/progress`)
+    const source = new EventSource(`${API_BASE_URL}/api/knowledge/docs/${docId}/progress`)
     source.addEventListener('progress', (ev) => {
       const data = JSON.parse((ev as MessageEvent).data) as KbDocProgress
       setProgress(data)
@@ -128,8 +130,11 @@ export default function KnowledgePage() {
       const result = await knowledgeApi.upload(file, direction.id, setUploadPct)
       setNotice(result.duplicate ? result.message : '已上传，解析与向量化进行中…')
       setFile(null)
-      setTrackingId(result.id)
-      setProgress({ status: result.status, stage: '排队中', processed: 0, total: 0, message: '' })
+      // 终态文档（重复上传命中已 READY/FAILED 的行）没有进度可订阅，不挂空 SSE
+      if (!isTerminal(result.status)) {
+        setTrackingId(result.id)
+        setProgress({ status: result.status, stage: '排队中', processed: 0, total: 0, message: '' })
+      }
       await loadDocs()
     } catch (e) {
       setNotice(toErrorMessage(e, '上传失败，请稍后重试'))
