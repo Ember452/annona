@@ -143,9 +143,16 @@ def score_run(api, queries, doc_ids, top_k, mode):
         elapsed_ms = int((time.monotonic() - started) * 1000)
         hit_docs = [hit["docId"] for hit in data.get("hits", [])]
         expected = [doc_ids[name] for name in item["relevant_docs"] if name in doc_ids]
-        found = [doc for doc in hit_docs if doc in expected]
+        # 检索命中的是「分块」，而 Recall 的分子是「文档」：不去重就会让同一文档的
+        # 多个块各计一次。一条相关文档 + 三块全命中 = Recall 3.0（CI 实测：服务端按
+        # [0,1] 拒了 1.25，这笔账本来就该响，不该静默写进表）
+        ranked_docs = list(dict.fromkeys(hit_docs))
+        found = [doc for doc in ranked_docs if doc in expected]
         recall = len(found) / len(expected) if expected else 0.0
-        mrr = 1.0 / (hit_docs.index(found[0]) + 1) if found else 0.0
+        # MRR 用「第一条相关<分块>」的位置，不是去重后的文档位置：否则相关块排在
+        # 第三、位次会被算得比实际靠前
+        first_relevant = next((i for i, doc in enumerate(hit_docs) if doc in expected), None)
+        mrr = 1.0 / (first_relevant + 1) if first_relevant is not None else 0.0
         recall_sum += recall
         mrr_sum += mrr
         latencies.append(data.get("tookMs", elapsed_ms))
