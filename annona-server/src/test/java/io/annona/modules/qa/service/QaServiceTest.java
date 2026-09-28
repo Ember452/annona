@@ -3,7 +3,9 @@ package io.annona.modules.qa.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -36,18 +38,22 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /**
- * QaService 的 Mockito 切片：占位→回填生命周期、断线保留部分内容、引用组装与空命中
+ * QaService 的 Mockito 切片：占位→条件回填生命周期、断线保留部分内容、引用组装与空命中
  * 透传、provider 缺席的 fail-fast。执行器用同步直跑（Runnable::run），事务管理器 mock
  * （TransactionTemplate 逻辑真实执行，KnowledgeDocLifecycleServiceTest 同口径）。
+ * 回填走仓储的条件 UPDATE（见 backfill 注释的竞态取舍），故断言的是 backfill 调用参数
+ * 而非实体保存。
  */
 @Tag("slice")
 @ExtendWith(MockitoExtension.class)
-@DisplayName("QaService：占位→回填生命周期与引用组装")
+@DisplayName("QaService：占位→条件回填生命周期与引用组装")
 class QaServiceTest {
 
     private static final String USER = "00000000-0000-0000-0000-000000000001";
@@ -74,9 +80,11 @@ class QaServiceTest {
 
     private final List<QaMessageEntity> saved = new ArrayList<>();
 
-    /** 每次 save 时的行状态快照（type/content/completed）：回填复用同一实体实例，
-     * 占位态只能从追加式快照观察，不能看终态的引用。 */
+    /** 每次 save 时的行状态快照（type/content/completed）：占位态只能从追加式快照观察。 */
     private final List<String[]> states = new ArrayList<>();
+
+    @Captor
+    private ArgumentCaptor<List<QaCitation>> citationsCaptor;
 
     @BeforeEach
     void setUp() {
@@ -87,10 +95,9 @@ class QaServiceTest {
             states.add(new String[] {row.getType(), row.getContent(), String.valueOf(row.isCompleted())});
             return row;
         });
-        lenient().when(messageRepository.findById(any(UUID.class))).thenAnswer(inv -> saved.stream()
-            .filter(row -> row.getId().equals(inv.getArgument(0)))
-            .findFirst());
         lenient().when(messageRepository.findMaxOrder(any(UUID.class))).thenReturn(0);
+        lenient().when(messageRepository.backfill(any(UUID.class), any(), anyList(), eq(true)))
+            .thenReturn(1);
         lenient().when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -99,7 +106,7 @@ class QaServiceTest {
             docQueryService, Optional.ofNullable(provider), Runnable::run, transactionManager, mapper);
     }
 
-    /** 确定性 provider：按给定脚本回调；脚本为空 = 模拟未配置之外的异常路径。 */
+    /** 确定性 provider：按给定脚本回调。占位态的观察走 states 快照，无需在流开始时再取。 */
     private static final class StubProvider implements StreamingChatProvider {
 
         private final List<String> deltas;
@@ -140,18 +147,18 @@ class QaServiceTest {
     }
 
     @Nested
-    @DisplayName("占位→回填生命周期")
+    @DisplayName("占位→条件回填生命周期")
     class Lifecycle {
 
         @Test
-        @DisplayName("一次提问落 3 行：USER 行 + ASSISTANT 空占位（completed=false）+ 回填完整回答")
+        @DisplayName("一次提问落 2 行 + 一次条件回填：USER 行、ASSISTANT 空占位、回填完整回答")
         void placeholderThenBackfill() {
             stubRetrieval(CHUNK_ID, false);
             QaService service = service(new StubProvider(List.of("第一", "段"), false));
 
             service.ask(USER, new QaAskRequest(null, "什么是封装？"));
 
-            assertThat(saved).hasSize(3);
+            assertThat(saved).hasSize(2);
             assertThat(saved.get(0).getType()).isEqualTo(QaMessageEntity.TYPE_USER);
             assertThat(saved.get(0).getMessageOrder()).isEqualTo(1);
             assertThat(saved.get(0).getContent()).isEqualTo("什么是封装？");
@@ -160,14 +167,11 @@ class QaServiceTest {
             // 占位态（快照）：USER + 空占位（completed=false），随后才发生流式
             assertThat(states.get(0)).containsExactly(QaMessageEntity.TYPE_USER, "什么是封装？", "true");
             assertThat(states.get(1)).containsExactly(QaMessageEntity.TYPE_ASSISTANT, "", "false");
-            assertThat(states.get(2)).containsExactly(QaMessageEntity.TYPE_ASSISTANT, "第一段", "true");
 
-            // 回填复用占位行（真实 JPA 中即同一受管行），终态：完整内容 + 引用 + completed
-            assertThat(saved.get(1)).isSameAs(saved.get(2));
-            assertThat(saved.get(2).getMessageOrder()).isEqualTo(2);
-            assertThat(saved.get(2).getContent()).isEqualTo("第一段");
-            assertThat(saved.get(2).isCompleted()).isTrue();
-            assertThat(saved.get(2).getCitations()).hasSize(1);
+            verify(messageRepository).backfill(eq(saved.get(1).getId()), eq("第一段"),
+                citationsCaptor.capture(), eq(true));
+            assertThat(citationsCaptor.getValue()).hasSize(1);
+            assertThat(citationsCaptor.getValue().get(0).chunkId()).isEqualTo(CHUNK_ID);
         }
 
         @Test
@@ -187,29 +191,29 @@ class QaServiceTest {
         }
 
         @Test
-        @DisplayName("流中途失败：保留已生成部分内容、completed=false、citations 不落")
+        @DisplayName("流中途失败：条件回填保留部分内容（completed=false、citations 为 null）")
         void interruptionKeepsPartialContent() {
             stubRetrieval(CHUNK_ID, false);
             QaService service = service(new StubProvider(List.of("部分回答，", "然后断了"), true));
 
             service.ask(USER, new QaAskRequest(null, "问题"));
 
-            QaMessageEntity backfilled = saved.get(2);
-            assertThat(backfilled.getContent()).isEqualTo("部分回答，然后断了");
-            assertThat(backfilled.isCompleted()).isFalse();
-            assertThat(backfilled.getCitations()).isNull();
+            UUID assistantId = saved.get(1).getId();
+            verify(messageRepository).backfill(eq(assistantId), eq("部分回答，然后断了"),
+                isNull(), eq(false));
         }
 
         @Test
-        @DisplayName("provider 未配置：占位行保持未完成，不进入流式调用（2502 经 error 事件下发）")
+        @DisplayName("provider 未配置：占位行保持未完成，不发生回填（2502 经 error 事件下发）")
         void missingProviderKeepsPlaceholder() {
             stubRetrieval(CHUNK_ID, false);
             QaService service = service(null);
 
             service.ask(USER, new QaAskRequest(null, "问题"));
 
-            assertThat(saved).hasSize(2); // 只有 USER 行与占位，无回填
+            assertThat(saved).hasSize(2); // 只有 USER 行与占位
             assertThat(saved.get(1).isCompleted()).isFalse();
+            verify(messageRepository, never()).backfill(any(UUID.class), any(), anyList(), eq(true));
         }
     }
 
@@ -232,7 +236,8 @@ class QaServiceTest {
 
             service(new StubProvider(List.of("答"), false)).ask(USER, new QaAskRequest(null, "问题"));
 
-            List<QaCitation> citations = saved.get(2).getCitations();
+            verify(messageRepository).backfill(any(UUID.class), eq("答"), citationsCaptor.capture(), eq(true));
+            List<QaCitation> citations = citationsCaptor.getValue();
             assertThat(citations).hasSize(2);
             assertThat(citations.get(0).chunkId()).isEqualTo(CHUNK_ID);
             assertThat(citations.get(0).chunkIndex()).isEqualTo(3);
@@ -247,8 +252,7 @@ class QaServiceTest {
 
             service(new StubProvider(List.of("资料里没有"), false)).ask(USER, new QaAskRequest(null, "冷门问题"));
 
-            assertThat(saved.get(2).getContent()).isEqualTo("资料里没有");
-            assertThat(saved.get(2).getCitations()).isEmpty();
+            verify(messageRepository).backfill(any(UUID.class), eq("资料里没有"), eq(List.of()), eq(true));
             verify(docQueryService).chunkReferences(eq(USER), any());
         }
 

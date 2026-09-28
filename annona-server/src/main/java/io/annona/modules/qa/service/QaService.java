@@ -259,15 +259,18 @@ public class QaService {
         }
     }
 
-    /** 短事务②：回填回答。completed=false 保留部分内容（断线/中断语义，借 🅖）。 */
+    /**
+     * 短事务②：条件回填占位行（{@code completed=false} 才更新）。占位被并发级联删除、
+     * 或重复终态回调时影响 0 行，记 debug 跳过——merge 版回填的 UPDATE 打到已消失的行
+     * 会抛 StaleObjectStateException（CI docker-it 实测），条件 UPDATE 与 knowledge
+     * 状态机同一取舍。citations 只随 completed=true 落库（中断行保持无引用口径）。
+     */
     private void backfill(UUID assistantId, String content, List<QaCitation> citations, boolean completed) {
-        tx.executeWithoutResult(status ->
-            messageRepository.findById(assistantId).ifPresent(row -> {
-                row.setContent(content);
-                row.setCitations(completed ? citations : null);
-                row.setCompleted(completed);
-                messageRepository.save(row);
-            }));
+        Integer updated = tx.execute(status ->
+            messageRepository.backfill(assistantId, content, completed ? citations : null, completed));
+        if (updated == null || updated == 0) {
+            log.debug("回填跳过：占位行已消失或已回填 messageId={}", assistantId);
+        }
     }
 
     private void fail(SseEmitter emitter, UUID assistantId, Throwable cause) {
