@@ -181,6 +181,11 @@ export function mockRespond(method: string, url: string, body: AxiosRequestConfi
   // 上传/分块预览/删除需要真后端（解析、S3、embedding 无法在前端模拟），仍走 1002 错误态
   if (path === '/api/knowledge/docs' && m === 'get') return success([])
 
+  // qa（P1a-08）：会话与历史给空列表供样式开发；流式提问不在此拦截——SSE 走 fetch
+  // 不经过 axios adapter，mock 短路在 api/qa.ts 的 askStream 内（MOCK_ENABLED 门）
+  if (path === '/api/qa/sessions' && m === 'get') return success([])
+  if (/^\/api\/qa\/sessions\/[^/]+\/messages$/.test(path) && m === 'get') return success([])
+
   if (path === '/api/study/sessions/today') return success(SESSIONS)
   if (path === '/api/study/sessions' && m === 'post') {
     const b = parseBody(body)

@@ -19,6 +19,8 @@ export interface KbDoc {
   totalChunks: number
   chunkCount: number
   error: string | null
+  /** 产生当前分块的算法版本（char-v2…）；与 detail.currentAnalyzerVersion 比对提示重建。 */
+  analyzerVersion: string
   createdAt: string
 }
 
@@ -32,6 +34,8 @@ export interface KbDocChunkView {
 
 export interface KbDocDetail {
   doc: KbDoc
+  /** 服务当前的分块算法版本（Chunker.VERSION）。 */
+  currentAnalyzerVersion: string
   chunks: KbDocChunkView[]
 }
 
