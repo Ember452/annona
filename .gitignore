@@ -66,6 +66,9 @@ hs_err_pid*.log
 __pycache__/
 *.pyc
 
+# 脚本生成产物（rag-eval 报告等）：只当 CI artifact，不入库
+out/
+
 ### 本地数据卷与系统垃圾 ###
 data/
 .DS_Store
