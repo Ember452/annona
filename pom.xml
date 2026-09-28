@@ -68,6 +68,10 @@
         <bcprov.version>1.81.1</bcprov.version>
         <!-- P1a-05：Tika 文档解析与 AWS S3 SDK（对象存储，对接 PGSTY Silo），版本集中管理 -->
         <tika.version>3.2.1</tika.version>
+        <!-- P1a-07 关键词通道的应用层分词器（retrieval-hybrid-adr §决策 10 四问）。1.0.2 是 Central
+             最新版且自 2015-06-17 未动过（冻结型稳）；它带 commons-lang3:3.3.1 传递依赖，必须
+             上收到收敛版本，否则 enforcer 的 requireUpperBoundDeps 会在 validate 直接响。 -->
+        <jieba.version>1.0.2</jieba.version>
         <aws-sdk.version>2.30.31</aws-sdk.version>
 
         <!-- Mockito 在 JDK 21 上动态 attach 会告警，显式放行（surefire 与 CI 同一口径） -->
@@ -195,6 +199,20 @@
                 <groupId>org.bouncycastle</groupId>
                 <artifactId>bcprov-jdk18on</artifactId>
                 <version>${bcprov.version}</version>
+            </dependency>
+            <!-- P1a-07 中文分词（端口在 common/search，实现在 infrastructure/search）。
+                 只排除 2014 年的 commons-lang3：版本由 Boot/Tika 的上收版本接管，jieba 用到的
+                 StringUtils 在新版本里签名未变。排除后 golden 切词单测负责证明它能跑。 -->
+            <dependency>
+                <groupId>com.huaban</groupId>
+                <artifactId>jieba-analysis</artifactId>
+                <version>${jieba.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.apache.commons</groupId>
+                        <artifactId>commons-lang3</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <!-- Tika 3.2.1 声明 log4j-to-slf4j 2.25.5，高于 Boot 管理的 2.25.0；
                  钉到确实存在的 2.26.0 满足上收（适配器，无行为耦合），log4j-api 随同 -->

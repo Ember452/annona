@@ -61,10 +61,55 @@
             <artifactId>apache-client</artifactId>
         </dependency>
 
+        <!-- P1a-07：应用层中文分词（端口在 common/search，本模块是实现方，见结构文档 §3
+             "分词"职责行）。jieba 自带的 commons-lang3:3.3.1 已在根 pom 的
+             dependencyManagement 里排除，版本由 Boot/Tika 的上收版本接管
+             （否则 enforcer 的 requireUpperBoundDeps 会在 validate 响）。 -->
+        <dependency>
+            <groupId>com.huaban</groupId>
+            <artifactId>jieba-analysis</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- AGENTS.md §4 把"infrastructure 的分词"点名为 85% 关键纯逻辑包。卡 CLASS +
+                 类名通配（与 annona-server 的 key-logic-coverage-check 同一写法）：
+                 PACKAGE/BUNDLE 的 includes 写错会匹配零元素静默通过。prepare-agent 与 report
+                 由根 pom 继承——分词器的测试就在本模块，agent 数据也落在这。 -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>search-coverage-check</id>
+                        <goals><goal>check</goal></goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>CLASS</element>
+                                    <includes>
+                                        <include>io/annona/infrastructure/search/*</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.85</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>
