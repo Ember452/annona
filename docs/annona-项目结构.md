@@ -86,7 +86,7 @@ annona/
 
 | 模块 | artifactId | 职责 | 允许依赖 | 禁止 |
 |---|---|---|---|---|
-| 通用 | `annona-common` | 统一响应、异常体系、枚举、常量、工具、注解与切面基类 | 第三方库 | 依赖任何业务概念、依赖 spi/infra/server |
+| 通用 | `annona-common` | 统一响应、异常体系、枚举、常量、工具、注解与切面基类、**跨模块端口** | 第三方库（**但本仓约定 SDK 只进 infra**：common 只放端口与契约，判据见 AGENTS.md §4） | 依赖任何业务概念、依赖 spi/infra/server |
 | 契约 | `annona-spi` | 五个扩展点接口、跨模块契约 DTO、领域事件定义 | common | 引入 Spring / MyBatis / SDK（保证可被外部实现） |
 | 技术 | `annona-infrastructure` | SPI 实现 + 外部系统适配（PG/pgvector、Redis、S3、LLM HTTP、加密、PDF、分词） | common, spi, 各类 SDK | 含业务规则、被 server 编译期直接引用实现类 |
 | 应用 | `annona-server` | 11 个业务模块、REST/SSE/WS 接口、启动类、CLI、prompt 与 skill 资源 | common, spi（infra 仅 runtime） | 直接 `import` infrastructure 的具体实现类 |
@@ -163,13 +163,15 @@ io.annona
 │   │   # common——模块内只做编排（knowledge-ingestion-adr §决策 8，2026-09-27 落地口径）
 │   │
 │   ├── retrieval/                     # 检索能力（D 模块的读侧，与 knowledge 写侧分离）
-│   │   ├── controller/ dto/           #   检索测试接口（query → 命中块 + 分数）
-│   │   ├── hybrid/                    #   ★ 语义 + 关键词双通道、RRF 融合、余弦重排
-│   │   ├── keyword/                   #   应用层中文分词适配、tsv 写入、pg_trgm 兜底
-│   │   ├── rewrite/                   #   查询改写、TopK 自适应、相似度阈值
-│   │   ├── compress/                  #   上下文压缩与去冗余
-│   │   ├── fallback/                  #   联网搜索降级、来源标注
-│   │   └── provider/                  #   PgVectorRetriever / EsRetriever（实现 annona-spi 的 Retriever）
+│   │   ├── controller/ dto/           #   POST /api/retrieval/query（命中块 + 归一化分数 + 空命中诊断）
+│   │   ├── service/                    #   检索编排：入参归一（topK/mode）、计时、空命中归因
+│   │   ├── hybrid/                    #   ★ RRF 融合纯函数（与后端无关，表驱动单测 + 85% 机检）
+│   │   │  # 中文分词不在本包：端口在 common/search，jieba 实现在 infrastructure/search
+│   │   │  # （分词结果写 kb_doc_chunk.tokens，tsv 由 V5 生成列派生，故 hybrid 不直接写 tsv）
+│   │   ├── provider/                  #   PgVectorRetriever（双通道 SQL + trgm 兜底 + 调 RRF）/ EsRetriever
+│   │   ├── rewrite/ compress/ fallback/   # ⏸ 三子包 P1a 不建（查询改写、TopK 自适应、相似度阈值、
+│   │   │                             #   上下文压缩、联网兜底与来源标注）
+│   │   │  # 触发条件＝P1a-09 基线显示召回不足，或真实问答 ≥100 次（开发计划 §P1a-09 定位）
 │   │
 │   ├── qa/                            # RAG 问答会话（D 模块的交互层）
 │   │   ├── controller/                #   SSE 流式问答、会话管理、置顶、多库关联

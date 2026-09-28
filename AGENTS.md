@@ -127,6 +127,7 @@
 - **约定 → 机检的升级元规则**：任何一条本文件或代码注释里的硬约定，一旦被实际违反/踩坑一次，随修复**同一批次**给它配上机器门禁（pre-commit 检查 / ArchUnit 规则 / CI 断言）——只靠"下一个人读文档"传递的项目约定必然失守。已有先例：save/merge 语义（假绿复盘后进 §4）、迁移冻结（V1 被改两次后上 pre-commit）、pipefail（tee 吞退出码后进 validate-workflows）。新增约定时要么同时交出机检，要么写明触发升级的条件。
 
 - 依赖方向只能是 `modules → spi → common`；`modules/*` 之间禁止 import，除白名单 `interview/orchestrator → planner/advisor`。跨模块通信只有两种：只读走 `XxxQueryService` / `shared` 读模型；写走领域事件。
+- **端口放哪个模块的判据**：问"第三方能否在**不改数据库结构**的前提下替换这个实现"。能 → 真扩展点，进 `annona-spi`（`Retriever`、`ModelProvider`、`EmbeddingProvider`）；不能 → 只是内部解耦（让 `modules` 不必 import infra），端口进 `annona-common`、SDK 实现进 `annona-infrastructure`（先例：`DocumentParser`、`ObjectStorage`、`TaskStreamPort`；分词器属后者——它的输出被 V5 的 `tsv` 生成列表达式冻结，换分词器 = 改 DDL）。**不要因为某个 javadoc 写了"预留扩展点"就往 spi 塞端口**：`annona-spi` 是唯一发到 Central 的 artifact，进去即对外契约。
 - 分层：`Controller`（路由、校验、委托）→ `Service`（编排，`@Transactional` 只在此层且范围最小）→ `Repository`（JPA，自定义查询用方法名或 `@Query`）。
 - 异常出口分两类：**业务失败**返回 HTTP 200 + `Result.error(code, msg)`；**路由/传输层错误**（404/405/400/500）返回真实 HTTP 状态码 + 同样的 `Result` 体。不得把后者也压成 200（会吞掉故障信号并伪装 SPA fallback 缺失）。
 - 新增业务模块 = 在 `annona-server` 加包 + 更新 ArchUnit 白名单，**不动 pom**；出现第二个可部署产物才新建 Maven 模块。
@@ -299,6 +300,8 @@ python scripts\ci\validate-workflows.py                  # 改过 .github/workfl
 ### 8.3 本机确实要把应用跑起来时（P1 起才会需要）
 
 自行安装 **Windows 原生 PostgreSQL 16**（含 `vector`、`citext` 扩展）与 **Redis**，参数写进 `.env`（模板 `.env.example`），再 `.\mvnw.cmd -pl annona-server spring-boot:run`。这是调试路径，**不是日常验证手段**，也不是把测试从 CI 搬回本机的理由。
+
+**SQL 行为验证一律走 CI 的 docker-it，不得用本机原生 PG 代替**（2026-09-28 批 2 立项时明确否决过"装本机 PG 换快反馈"这个提议，别再重提）：本机 PG 与 CI 的 `pgvector/pg16` 镜像在 pgvector 小版本、contrib 扩展可用性、collation 三处都会漂移，"本机过 ≠ CI 过"，而这类漂移比慢反馈更难查。正确做法是把同批要验的 SQL 未知数**压进一次 docker-it 推送里集中断言**（先例：`RetrievalSchemaIT` 一轮验生成列派生 / `to_tsquery` / `pg_trgm` / `ts_rank` / GIN 索引存在）。
 
 ### 8.4 借鉴扫描路径（开工前先查 `docs/annona-开发计划.md` §借鉴地图）
 
