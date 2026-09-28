@@ -1,13 +1,13 @@
 # Playwright 端到端。e2e/ 目录尚未建立；workflow 先就位，首个真实用例随前端
 # 真实用户路径批次落地时生效（P1a-01 绑定已废止，见 P0 总结 §5 D7 改判）。
-# 手动触发：给 PR 打 `needs-e2e` 标签；每日凌晨 3:00 UTC 定时跑主干。
+# 手动触发：给 PR 打 `needs-e2e` 标签。
+# 不设 schedule：e2e/ 未落地前每日定时只会装完依赖即跳过（纯空跑）；首个
+# 用例落地时恢复每日 `cron: '0 3 * * *'`（连同镜像 tag 对齐，见 P0 总结 §5 D8）。
 name: E2E
 
 on:
   pull_request:
     types: [labeled]
-  schedule:
-    - cron: '0 3 * * *'
   workflow_dispatch:
 
 permissions:
@@ -20,9 +20,8 @@ concurrency:
 jobs:
   playwright:
     name: Playwright container job
-    # 只有打了 needs-e2e 标签的 PR 或定时/手动触发才跑
+    # 只有打了 needs-e2e 标签的 PR 或手动触发才跑
     if: >
-      github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.event.label.name == 'needs-e2e')
     runs-on: ubuntu-latest
@@ -40,10 +39,10 @@ jobs:
           package_json_file: annona-web/package.json
       - name: Install deps
         run: pnpm install --frozen-lockfile
-      - name: Skip when no e2e specs yet (P0 phase)
+      - name: Skip when no e2e specs yet
         run: |
           if [ ! -d e2e ]; then
-            echo "annona-web/e2e/ not present yet (arrives in P1a-01); skipping"
+            echo "annona-web/e2e/ not present yet; skipping"
             exit 0
           fi
           pnpm exec playwright test

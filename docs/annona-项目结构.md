@@ -489,7 +489,7 @@ Maven Central 的对外契约）。两边分工写清，免得后人误以为 Ar
 | 文件 | 职责 | 触发 |
 |---|---|---|
 | `workflows/ci.yml` | 五个 job：编译 + 单测 + ArchUnit + 前端 typecheck/lint/build + gitleaks 密钥扫描；**集测用 `services:`（`pgvector/pgvector:pg16` + `redis:7-alpine`），compose 冒烟单独一个 job** | PR 与主干 push |
-| `workflows/e2e.yml` | Playwright 跑关键路径（注册→上传→面试→报告） | PR 标签 `needs-e2e` 或每日定时 |
+| `workflows/e2e.yml` | Playwright 跑关键路径（注册→上传→面试→报告） | PR 标签 `needs-e2e`；每日定时待 e2e/ 首批用例落地后恢复 |
 | `workflows/rag-eval.yml` | 跑 `scripts/rag-eval`，将 Recall@K/MRR 差值写成 PR 评论 | 改动 `retrieval/` 或 `knowledge/chunk/` 时 |
 | `workflows/release.yml` | 打 tag → 构建镜像 → GitHub Release + changelog | `v*` tag |
 | `workflows/publish-spi.yml` | 将 `annona-spi` 发布到 Maven Central（GPG 签名 + sources/javadoc） | spi 目录变更的 tag |
