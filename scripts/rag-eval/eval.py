@@ -51,7 +51,10 @@ class Api:
             req.data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         with self.opener.open(req, timeout=120) as resp:
             body = json.loads(resp.read().decode("utf-8"))
-        if body.get("code") not in (0, None):
+        # 只认 Result 的 code==0（Result.SUCCESS_CODE）。不把"缺 code 字段"当成功：
+        # 网关返回的 HTML 页被 json 误解析、或端点改了包装时，宁在调用点报错，
+        # 也不要到下一句 KeyError 才发现
+        if body.get("code") != 0:
             raise RuntimeError(f"{path} 返回业务错误：{body}")
         return body.get("data")
 
