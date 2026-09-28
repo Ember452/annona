@@ -101,11 +101,40 @@ public class RedissonTaskStream implements TaskStreamPort {
                     processAll(stream, spec, handler, fresh);
                 }
             } catch (RuntimeException e) {
+                if (causedByInterrupt(e)) {
+                    // 关停路径：@PreDestroy 用 interrupt 停消费者，而 CompletableFuture.get() 抛
+                    // InterruptedException 时会把中断标志清掉，循环条件就再也挡不住自己：
+                    // 不在此退出会在上下文销毁期间再取一条消息去处理（JPA/事务 bean 已关），
+                    // 并把正常关停记成一条吓人的“消费异常”。
+                    Thread.currentThread().interrupt();
+                    log.info("消费线程被中断，停止消费 streamKey={} group={}",
+                        spec.streamKey(), spec.group());
+                    return;
+                }
                 log.warn("任务流消费异常 streamKey={} group={}，{}ms 后重试",
                     spec.streamKey(), spec.group(), spec.pollIntervalMs(), e);
                 sleepQuietly(spec.pollIntervalMs());
             }
         }
+    }
+
+    /**
+     * 异常链里是否含 {@link InterruptedException}（Redisson 会把它包成 {@code RedisException}）。
+     *
+     * <p>包可见：这是关停语义的判据，有单测守住包装层级变化（升级 Redisson 后包结构一变，
+     * 判据失效就会退回“关停时刷错误日志”的老行为）。
+     */
+    static boolean causedByInterrupt(Throwable error) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof InterruptedException) {
+                return true;
+            }
+            if (cause.getCause() == cause) {
+                // 自引用的异常（少见但存在），不跳出就会死循环
+                return false;
+            }
+        }
+        return false;
     }
 
     private void ensureGroup(RStream<String, String> stream, ConsumerSpec spec) {
