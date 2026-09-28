@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 """annona 检索评测（P1a-09）。
 
-两种模式：
-  1) 默认跑一轮：注册登录 → 种方向 → 上传 corpus → 轮询 READY → 三档检索打分
-     → 写 JSON 报告到 --report-dir 并 POST /api/retrieval/eval-run 留痕。
-  2) --compare a.json b.json …：把多轮报告的头部数字按 mode 与 bucket 排成对比表。
+跑一轮：注册登录 → 种方向 → 上传 corpus → 轮询 READY → 三档检索打分
+  → 写 JSON 报告到 --report-dir 并 POST /api/retrieval/eval-run 留痕。
+  多轮对比不在本文件：见同目录的 compare.py（它还会检查各轮 provider 一致性、
+  列逐 query 命中差异）。
 
 纯标准库（CI 里不装任何包）。形状沿用 🅜 scripts/rag-eval 的"提交语料 → 逐 query 打分 →
 写报告"骨架，两处必须改掉：上游打的是 ES/自建服务且查询标注只有一个 docId（算不出 MRR），
@@ -229,32 +229,6 @@ def run(args):
     return report
 
 
-def compare(paths):
-    """按 mode 出行，列是各报告的 label；再按 bucket 出一遍。"""
-    reports = [json.loads(Path(p).read_text(encoding="utf-8")) for p in paths]
-    header = ["mode"] + [f"{r['label']}[{r['embedding_provider']}]" for r in reports]
-    for metric in ("recall_at_k", "mrr_at_k", "latency_p95_ms"):
-        rows = [header]
-        for mode in MODES:
-            rows.append([f"{mode} {metric}"] + [
-                (r["runs"].get(mode, {}).get(metric)) for r in reports])
-        _print_table(rows)
-        print()
-    buckets = sorted({b for r in reports for mode in MODES
-                      for b in r["runs"].get(mode, {}).get("buckets", {})})
-    rows = [["bucket recall", *header[1:]]]
-    for bucket in buckets:
-        rows.append([bucket] + [r["runs"].get("BOTH", {}).get("buckets", {})
-                                .get(bucket, {}).get("recall") for r in reports])
-    _print_table(rows)
-
-
-def _print_table(rows):
-    widths = [max(len(str(row[i])) for row in rows) for i in range(len(rows[0]))]
-    for row in rows:
-        print(" | ".join(str(cell).ljust(widths[i]) for i, cell in enumerate(row)))
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--base-url", default="http://localhost:8080")
@@ -273,12 +247,8 @@ def main():
                              "假向量那一轮不得当质量结论")
     parser.add_argument("--embedding-model", default="")
     parser.add_argument("--no-record", action="store_true", help="只出报告，不写 eval-run 表")
-    parser.add_argument("--compare", nargs="+", default=None, metavar="REPORT.json")
     args = parser.parse_args()
 
-    if args.compare:
-        compare(args.compare)
-        return 0
     run(args)
     return 0
 
