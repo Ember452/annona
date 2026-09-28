@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.annona.common.stream.TaskStreamPort;
 import io.annona.common.storage.ObjectStorage;
 import io.annona.modules.knowledge.dto.UploadResponse;
+import io.annona.modules.knowledge.entity.KbDocChunkEntity;
 import io.annona.modules.knowledge.entity.KbDocEntity;
 import io.annona.modules.knowledge.embed.KnowledgeVectorizeService;
 import io.annona.modules.knowledge.ingest.KnowledgeUploadService;
@@ -119,6 +120,13 @@ class KnowledgeIngestFlowIT {
         assertThat(doc.getStatus()).as("管线应推进到 READY（失败原因: %s）", doc.getError())
             .isEqualTo(KbDocEntity.STATUS_READY);
         assertThat(chunkRepository.findByDocIdOrderByChunkIndexAsc(doc.getId())).isNotEmpty();
+
+        // P1a-07：分块落库必须同时写分词结果（V5 的 tsv 生成列由它派生）。真库跑这一条
+        // 而不是靠切片：切片里 tsv 根不存在，写没写 tokens 看不出来
+        KbDocChunkEntity chunk = chunkRepository.findByDocIdOrderByChunkIndexAsc(doc.getId()).get(0);
+        assertThat(chunk.getTokens()).as("中文正文应切出非空 token 串").isNotBlank();
+        assertThat(chunk.getTokenizerVersion()).isNotBlank();
+        // tsv 不在实体里（刻意不映射），它的派生结果由 RetrievalSchemaIT 用原生 SQL 断言
 
         // hash 幂等：同用户同内容重复上传零消耗，直接复用已有文档
         UploadResponse second = uploadService.upload(userId.toString(), content,

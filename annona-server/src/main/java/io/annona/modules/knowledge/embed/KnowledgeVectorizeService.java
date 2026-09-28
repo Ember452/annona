@@ -4,6 +4,8 @@ import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
 import io.annona.common.parse.DocumentBlock;
 import io.annona.common.parse.DocumentParser;
+import io.annona.common.search.Tokenizer;
+import io.annona.common.search.VectorLiterals;
 import io.annona.common.storage.ObjectStorage;
 import io.annona.common.stream.TaskStreamPort;
 import io.annona.modules.knowledge.chunk.ChunkOptions;
@@ -63,6 +65,11 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
     private final KbDocChunkRepository chunkRepository;
     private final Optional<ObjectStorage> objectStorage;
     private final DocumentParser documentParser;
+    /**
+     * 应用层中文分词端口（P1a-07）。不包 Optional：分词是本地纯计算、无外部配置，任何
+     * 环境下都存在；写侧与读侧必须用同一个 bean（Tokenizer javadoc 的不变量）。
+     */
+    private final Tokenizer tokenizer;
     private final Optional<EmbeddingProvider> embeddingProvider;
     private final KnowledgeProgressHub progressHub;
     /**
@@ -77,6 +84,7 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
         KbDocChunkRepository chunkRepository,
         Optional<ObjectStorage> objectStorage,
         DocumentParser documentParser,
+        Tokenizer tokenizer,
         Optional<EmbeddingProvider> embeddingProvider,
         KnowledgeProgressHub progressHub,
         PlatformTransactionManager transactionManager) {
@@ -84,6 +92,7 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
         this.chunkRepository = chunkRepository;
         this.objectStorage = objectStorage;
         this.documentParser = documentParser;
+        this.tokenizer = tokenizer;
         this.embeddingProvider = embeddingProvider;
         this.progressHub = progressHub;
         this.tx = new TransactionTemplate(transactionManager);
@@ -180,7 +189,7 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
                 final UUID chunkIdFinal = chunkId;
                 final float[] vector = vectors.get(i);
                 tx.executeWithoutResult(s ->
-                    chunkRepository.updateEmbedding(chunkIdFinal, vectorLiteral(vector)));
+                    chunkRepository.updateEmbedding(chunkIdFinal, VectorLiterals.of(vector)));
             }
             processed += batch.size();
             int processedNow = processed;
@@ -204,6 +213,11 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
      * TransactionTemplate 就不必再留中间态）。embedding 调用保持在事务外（铁律）。
      * heading_path 落库前截断到列宽（畸形多级长标题 otherwise 撑爆 VARCHAR(512)，
      * 文档会以一个难懂的 DB 错误 FAILED）。
+     *
+     * <p>{@code tokens} 在本方法里随 content 一起写（V5 的 tsv 生成列从它派生）：分词与
+     * 分块同址内联执行，没放到 CPU 池——keyword ADR 修订第 4 条登记了这个偏离及其
+     * 重新评估条件。分词失败不单独报错：它是纯本地计算，报错宁叫整次处理重试
+     * 而不是写出一批无分词的行（那会静默抬高关键词通道漏召）。
      */
     private void persistChunks(UUID docId, List<KnowledgeChunk> chunks) {
         List<KbDocChunkEntity> rows = new ArrayList<>(chunks.size());
@@ -219,6 +233,8 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
             row.setCharEnd(chunk.charEnd());
             row.setContent(chunk.text());
             row.setContentHash(ContentHashes.sha256Hex(chunk.text()));
+            row.setTokens(tokenizer.tokenize(chunk.text()));
+            row.setTokenizerVersion(tokenizer.version());
             rows.add(row);
         }
         tx.executeWithoutResult(status -> {
@@ -251,17 +267,6 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
             throw new AttemptLostException();
         }
         lastHeartbeat[0] = now;
-    }
-
-    private static String vectorLiteral(float[] vector) {
-        StringBuilder builder = new StringBuilder(vector.length * 10).append('[');
-        for (int i = 0; i < vector.length; i++) {
-            if (i > 0) {
-                builder.append(',');
-            }
-            builder.append(vector[i]);
-        }
-        return builder.append(']').toString();
     }
 
     private static String rootMessage(Throwable throwable) {

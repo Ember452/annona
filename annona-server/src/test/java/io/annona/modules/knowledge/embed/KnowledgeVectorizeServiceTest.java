@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import io.annona.common.parse.DocumentBlock;
 import io.annona.common.parse.DocumentBlock.BlockType;
+import io.annona.common.search.Tokenizer;
 import io.annona.common.storage.ObjectStorage;
 import io.annona.common.stream.TaskStreamPort;
 import io.annona.modules.knowledge.entity.KbDocChunkEntity;
@@ -45,6 +46,28 @@ import org.springframework.transaction.PlatformTransactionManager;
 @DisplayName("KnowledgeVectorizeService：向量化消费")
 @ExtendWith(MockitoExtension.class)
 class KnowledgeVectorizeServiceTest {
+
+    /**
+     * 分词桩：本测试只关心状态机与落库调用，不验切词质量（那些在
+     * {@code JiebaTokenizerTest} 的 golden 快照里）。返回固定 token 以便区分
+     * "写了分词"与"忘了写分词"两种情况。
+     */
+    private static final class StubTokenizer implements Tokenizer {
+        @Override
+        public String version() {
+            return "stub-v1";
+        }
+
+        @Override
+        public String tokenize(String text) {
+            return "stub-token";
+        }
+
+        @Override
+        public String toTsQueryString(String query) {
+            return "stub-token";
+        }
+    }
 
     /** 测试用 no-op 事务管理器：TransactionTemplate 只需要 getTransaction/commit 可调，回调照常执行。 */
     private static final PlatformTransactionManager TX_MGR = new PlatformTransactionManager() {
@@ -83,8 +106,8 @@ class KnowledgeVectorizeServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new KnowledgeVectorizeService(docRepository, chunkRepository,
-            Optional.of(objectStorage), documentParser, Optional.of(embeddingProvider), progressHub,
+        service = new KnowledgeVectorizeService(docRepository, chunkRepository, 
+            Optional.of(objectStorage), documentParser, new StubTokenizer(), Optional.of(embeddingProvider), progressHub,
             TX_MGR);
         doc = new KbDocEntity();
         doc.setId(docId);
