@@ -1,6 +1,11 @@
 # RAG 检索评测。仅当 retrieval / chunk / scripts/rag-eval 变更时触发；
-# services 起 pgvector 复用 backend 环境。P1a-09 才落 scripts/rag-eval/，
-# 目前脚本不存在时优雅 skip（保留 workflow 结构，改动检索代码不会静默漂）。
+# services 起 pgvector + redis + Silo 对象存储——评测形状要 multipart 上传语料，
+# 所以 S3 是这个 job 的硬前置（批 1 只给 compose 起了 storage，services: 这边漏配
+# 会让 eval 在上传那一步炸，2026-09-28 立项时发现）。
+# P1a-09 才落 scripts/rag-eval/，脚本不存在时优雅 skip（保留 workflow 结构，改动检索代码不会静默漂）。
+# embedding 来源条件化（retrieval-hybrid-adr §决策 9）：有 EVAL_EMBEDDING_API_KEY 就出真数字，
+# 没有就退到 provider=fake 只做管道回归——fake 的召回不可读作质量，报告与
+# retrieval_eval_run.embedding_provider 必须记录本轮来源。
 # 产物走 artifact 上传，PR 里贴报告链接（AGENTS.md §2 计划维护规则 8）。
 name: RAG Eval
 
@@ -9,6 +14,7 @@ on:
     paths:
       - 'annona-server/src/main/java/io/annona/modules/retrieval/**'
       - 'annona-server/src/main/java/io/annona/modules/knowledge/chunk/**'
+      - 'annona-server/src/main/resources/db/migration/**'
       - 'scripts/rag-eval/**'
   workflow_dispatch:
 
@@ -33,8 +39,8 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20
-      # Redisson（会话/心跳时间线）在 docker profile 下是必配 bean——缺了应用起不来，
-      # 2026-09-27 补（此前只有 postgres，P1a-09 落地当天 eval job 必红）
+      # Redisson（会话/心跳时间线）在 docker profile 下是必配 bean——缺了应用起不来；
+      # Stream 消费者另见 ANNONA_KNOWLEDGE_INGEST_ENABLED
       redis:
         image: redis:7-alpine
         ports: ['6379:6379']
@@ -43,6 +49,16 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
+      # 对象存储：镜像与 docker-compose.yml 的 storage 服务同源同 pin（s3-storage-silo-adr）。
+      # 桶由应用启动时 ensureBucketExists 幂等创建，MINIO_DEFAULT_BUCKETS 在 Silo 上不生效
+      # （s3-storage-silo-adr 修订 2），所以这里不设自举变量。
+      storage:
+        image: docker.io/pgsty/silo:RELEASE.2026-09-03T13-18-01Z
+        args: server /data --console-address ":9001"
+        env:
+          MINIO_ROOT_USER: eval-ak-not-for-prod
+          MINIO_ROOT_PASSWORD: eval-sk-not-for-prod
+        ports: ['9000:9000']
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
@@ -57,6 +73,25 @@ jobs:
           if [ ! -f scripts/rag-eval/eval.py ]; then
             echo "scripts/rag-eval/eval.py arrives in P1a-09; skipping"
             echo "skip=true" >> "$GITHUB_ENV"
+          fi
+      # services: 里的容器没有 healthcheck 声明可用（Silo 镜像不保证带 curl），
+      # 所以这里显式探活并**硬失败**：存储没起来就启动应用，会在 S3 client bean
+      # 初始化阶段炸，报错信息全在误导人（compose-smoke 用 --wait 承担同一职责）
+      - name: Wait for object storage
+        if: env.skip != 'true'
+        run: |
+          ok=0
+          for i in $(seq 1 30); do
+            if curl -fsS "http://localhost:9000/minio/health/live" >/dev/null 2>&1; then
+              ok=1
+              echo "storage healthy after ${i} tries"
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::object storage did not become healthy in 60s"
+            exit 1
           fi
       - name: Build annona-server (skip tests, main CI already covers them)
         if: env.skip != 'true'
@@ -75,8 +110,7 @@ jobs:
             fi
             sleep 2
           done
-          # 探活失败必须硬失败：否则会对一个没起来的服务跑 eval，
-          # 报错信息全是误导（此前循环等满 120s 后继续往下跑）
+          # 探活失败必须硬失败：否则会对一个没起来的服务器跑 eval，报错信息全是误导
           if [ "$ok" != "1" ]; then
             echo "::error::annona-server did not become healthy in 120s"
             kill $APP_PID 2>/dev/null || true
@@ -95,6 +129,22 @@ jobs:
           REDIS_HOST: localhost
           REDIS_PORT: '6379'
           ANNONA_SECRET_KEY: ci-dummy-kek
+          # docker profile 默认把入库消费者关掉（application-docker.yaml），不开则
+          # 上传的语料永远停在 PENDING，eval 轮询 READY 直接超时
+          ANNONA_KNOWLEDGE_INGEST_ENABLED: 'true'
+          # 上传语料要真对象存储：endpoint 指 localhost（应用跑在 runner 上，不在容器里）
+          S3_ENABLED: 'true'
+          S3_ENDPOINT: http://localhost:9000
+          S3_BUCKET: annona
+          S3_ACCESS_KEY: eval-ak-not-for-prod
+          S3_SECRET_KEY: eval-sk-not-for-prod
+          # embedding 来源条件化：Secret 在 → 真模型出决策级数字；不在 → fake 只做管道回归
+          ANNONA_MODEL_EMBEDDING_PROVIDER: ${{ secrets.EVAL_EMBEDDING_API_KEY != '' && 'openai-compatible' || 'fake' }}
+          ANNONA_EMBEDDING_API_KEY: ${{ secrets.EVAL_EMBEDDING_API_KEY }}
+          ANNONA_EMBEDDING_BASE_URL: ${{ vars.EVAL_EMBEDDING_BASE_URL }}
+          ANNONA_DEFAULT_EMBEDDING_MODEL: ${{ vars.EVAL_EMBEDDING_MODEL }}
+          # 维度是 V4 向量列的冻结值，换维度属于新迁移，不在 CI 里试
+          ANNONA_EMBEDDING_DIMENSIONS: '1024'
       - name: Upload report artifact
         if: env.skip != 'true' && always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
