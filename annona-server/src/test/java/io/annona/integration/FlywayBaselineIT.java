@@ -22,8 +22,8 @@ import org.springframework.test.context.ActiveProfiles;
  * <p>断言四件事：
  * <ol>
  *   <li>{@code flyway_schema_history} 有 V1 成功记录；</li>
- *   <li>public schema 下 11 张表齐全（V1 基线八张 + V2 采集三张）；</li>
- *   <li>{@code pg_extension} 含 vector 与 citext；</li>
+ *   <li>public schema 下 14 张表齐全（V1 基线八张 + V2 采集三张 + V4 知识库两张 + V5 评测一张）；</li>
+ *   <li>{@code pg_extension} 含 vector、citext 与 pg_trgm；</li>
  *   <li>二次启动 skip 迁移（V1 记录数仍为 1）。</li>
  * </ol>
  *
@@ -51,7 +51,7 @@ class FlywayBaselineIT {
     }
 
     @Test
-    @DisplayName("public schema 下 13 张业务表齐全（V1 基线八张 + V2 采集三张 + V4 知识库两张）")
+    @DisplayName("public schema 下 14 张业务表齐全（V1 基线八张 + V2 采集三张 + V4 知识库两张 + V5 评测一张）")
     void allBaselineTablesExist() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         List<String> tables = jdbc.queryForList(
@@ -65,17 +65,17 @@ class FlywayBaselineIT {
                 "app_user", "user_profile", "user_session", "auth_token",
                 "login_attempt", "avatar_change", "user_data_request", "direction",
                 "checkin", "study_session", "study_event",
-                "kb_doc", "kb_doc_chunk");
+                "kb_doc", "kb_doc_chunk", "retrieval_eval_run");
     }
 
     @Test
-    @DisplayName("vector 与 citext 扩展已安装")
+    @DisplayName("vector、citext、pg_trgm 扩展已安装（pg_trgm 由 V5 不容错创建）")
     void requiredExtensionsInstalled() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         List<String> exts = jdbc.queryForList(
-            "SELECT extname FROM pg_extension WHERE extname IN ('vector', 'citext')",
+            "SELECT extname FROM pg_extension WHERE extname IN ('vector', 'citext', 'pg_trgm')",
             String.class);
-        assertThat(exts).containsExactlyInAnyOrder("vector", "citext");
+        assertThat(exts).containsExactlyInAnyOrder("vector", "citext", "pg_trgm");
     }
 
     @Test

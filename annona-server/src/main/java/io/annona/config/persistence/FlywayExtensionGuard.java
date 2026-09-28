@@ -6,6 +6,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -47,6 +48,11 @@ import org.springframework.context.annotation.Configuration;
  * 错误消息给出<b>可执行动作</b>（P0-08 验收：“缺 pgvector/citext 扩展时给出可执行提示”），
  * 而不是 {@code CREATE EXTENSION} SQL 抛的 "extension 'vector' is not available"——用户
  * 看到那句往往不知道该换镜像还是装扩展。
+ *
+ * <p>{@code pg_trgm} 自 P1a-07（V5）起进本清单：V5 创建它时<b>刻意不容错</b>，因为吞掉权限
+ * 错误后紧跟的 {@code gin (content gin_trgm_ops)} 会报一个与真实原因无关的语法错——守卫
+ * 在这里把那个难查的错前移成一句人话（retrieval-hybrid-adr §决策 1 与 keyword ADR 修订第 6 条）。
+ * 代价是 pg_trgm 不可用 = 启动被拦，而不是“兜底通道不可用”；这是已登记的硬依赖。
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(AnnonaStartupProperties.class)
@@ -55,7 +61,8 @@ import org.springframework.context.annotation.Configuration;
 public class FlywayExtensionGuard {
 
     private static final Logger log = LoggerFactory.getLogger(FlywayExtensionGuard.class);
-    private static final List<String> REQUIRED_EXTENSIONS = List.of("vector", "citext");
+    /** 占位符个数由本列表长度推导，不允许再出现写死的 {@code (?, ?)}（见 {@link #requireExtensions}）。 */
+    private static final List<String> REQUIRED_EXTENSIONS = List.of("vector", "citext", "pg_trgm");
 
     @Bean
     FlywayMigrationStrategy flywayExtensionGuardStrategy(Optional<DataSource> dataSource) {
@@ -72,19 +79,25 @@ public class FlywayExtensionGuard {
     }
 
     /**
-     * 用一次预编译 {@code SELECT ... WHERE name IN (?, ?)} 拿到<b>本服务器可用</b>的扩展集合，
+     * 用<b>一次</b>预编译 {@code SELECT ... WHERE name IN (?, ...)} 拿到<b>本服务器可用</b>的扩展集合，
      * 缺失即抛错（不循环查库，AGENTS.md §Never Do “不要循环调用 DB”）。
      *
      * <p>注意列名差异：{@code pg_available_extensions} 用 {@code name}，
      * {@code pg_extension} 用 {@code extname}。本方法要的是前者。
+     *
+     * <p>占位符与绑定都按 {@link #REQUIRED_EXTENSIONS} 长度生成：上一个版本这里写死了两个
+     * {@code ?}，往列表里加第三个扩展会漏查 {@code pg_trgm}、却仍报告“检查通过”——
+     * 静默少查一个比查不到更坑（slice 测试里的绑定次数断言就是这道门禁）。
      */
     private static void requireExtensions(DataSource ds) {
         Set<String> available = new HashSet<>();
-        String sql = "SELECT name FROM pg_available_extensions WHERE name IN (?, ?)";
+        String placeholders = String.join(", ", Collections.nCopies(REQUIRED_EXTENSIONS.size(), "?"));
+        String sql = "SELECT name FROM pg_available_extensions WHERE name IN (" + placeholders + ")";
         try (Connection c = ds.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setString(1, REQUIRED_EXTENSIONS.get(0));
-            ps.setString(2, REQUIRED_EXTENSIONS.get(1));
+            for (int i = 0; i < REQUIRED_EXTENSIONS.size(); i++) {
+                ps.setString(i + 1, REQUIRED_EXTENSIONS.get(i));
+            }
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     available.add(rs.getString(1));
@@ -92,7 +105,8 @@ public class FlywayExtensionGuard {
             }
         } catch (SQLException e) {
             throw new IllegalStateException(
-                "annona requires PostgreSQL 16 with pgvector + citext, but pg_available_extensions cannot be read.\n"
+                "annona requires PostgreSQL 16 with pgvector + citext + pg_trgm, but "
+                    + "pg_available_extensions cannot be read.\n"
                     + "Confirm the datasource is a PostgreSQL instance and the account has SELECT on pg_available_extensions.\n"
                     + "Root cause: " + e.getMessage(), e);
         }
@@ -104,8 +118,9 @@ public class FlywayExtensionGuard {
                     + " (not available on this server; they are not merely uninstalled).\n"
                     + "annona requires PostgreSQL 16 with pgvector. Options:\n"
                     + "  (a) Docker: use image pgvector/pgvector:pg16 (NOT postgres:16)\n"
-                    + "  (b) Native: install postgresql-16-pgvector + postgresql-contrib\n"
-                    + "  (c) Managed cloud: enable pgvector via the provider's extension console\n"
+                    + "  (b) Native: install postgresql-16-pgvector + postgresql-contrib"
+                    + " (contrib provides citext and pg_trgm)\n"
+                    + "  (c) Managed cloud: enable pgvector / citext / pg_trgm via the provider's extension console\n"
                     + "See README §Prerequisites.");
         }
         log.info("PG extension availability check passed: available={}", available);

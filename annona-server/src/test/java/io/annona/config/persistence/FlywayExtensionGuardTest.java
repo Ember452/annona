@@ -21,8 +21,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.flyway.autoconfigure.FlywayMigrationStrategy;
 
 /**
- * Mockito slice 测试（P0-08）：{@link FlywayExtensionGuard} 的 {@code FlywayMigrationStrategy}
- * 在扩展可用 / 不可用 / 无 DataSource / DB 不可达四种情境下的行为。不依赖真 PG 与 Docker。
+ * Mockito slice 测试（P0-08，P1a-07 扩展）：{@link FlywayExtensionGuard} 的
+ * {@code FlywayMigrationStrategy} 在扩展可用 / 缺 vector / 缺 pg_trgm / 绑定个数与清单不匹配 /
+ * 无 DataSource / DB 不可达六种情境下的行为。不依赖真 PG 与 Docker。
  *
  * <p>注意语义是<b>“本服务器可用”</b>而不是“已安装”：空库上扩展本该由 V1 自己创建，
  * 若查已安装集合会误拒启动（阶段总结 D23）。
@@ -35,14 +36,52 @@ import org.springframework.boot.flyway.autoconfigure.FlywayMigrationStrategy;
 class FlywayExtensionGuardTest {
 
     @Test
-    @DisplayName("vector + citext 均可用 → 不抛，flyway.migrate() 被调")
+    @DisplayName("vector + citext + pg_trgm 均可用 → 不抛，flyway.migrate() 被调")
     void allExtensionsAvailableProceeds() throws SQLException {
-        DataSource ds = mockDataSourceWithExtensions("vector", "citext");
+        DataSource ds = mockDataSourceWithExtensions("vector", "citext", "pg_trgm");
         Flyway flyway = mock(Flyway.class);
 
         strategy(ds).migrate(flyway);
 
         verify(flyway, times(1)).migrate();
+    }
+
+    @Test
+    @DisplayName("本服务器没有 pg_trgm → 抛错（V5 的 gin_trgm_ops 索引依赖它，不容错）")
+    void missingTrgmThrows() throws SQLException {
+        DataSource ds = mockDataSourceWithExtensions("vector", "citext"); // 缺 pg_trgm
+        Flyway flyway = mock(Flyway.class);
+
+        assertThatThrownBy(() -> strategy(ds).migrate(flyway))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Missing required PostgreSQL extensions")
+            .hasMessageContaining("pg_trgm")
+            .hasMessageContaining("postgresql-contrib");
+        verify(flyway, never()).migrate();
+    }
+
+    @Test
+    @DisplayName("三个扩展名逐个绑定（占位符由 REQUIRED_EXTENSIONS 长度推导，不许写死）")
+    void bindsEveryRequiredExtension() throws SQLException {
+        // 防的是这一类静默假绿：列表里加了第三个扩展、SQL 仍只写两个 ?，
+        // 结果 pg_trgm 没被查却报告“检查通过”（上一版本就是写死的 (?, ?)）。
+        DataSource ds = mock(DataSource.class);
+        Connection conn = mock(Connection.class);
+        PreparedStatement ps = mock(PreparedStatement.class);
+        ResultSet rs = mock(ResultSet.class);
+        String[] all = {"vector", "citext", "pg_trgm"};
+        AtomicInteger cursor = new AtomicInteger(-1);
+        when(ds.getConnection()).thenReturn(conn);
+        when(conn.prepareStatement(anyString())).thenReturn(ps);
+        when(ps.executeQuery()).thenReturn(rs);
+        when(rs.next()).thenAnswer(inv -> cursor.incrementAndGet() < all.length);
+        when(rs.getString(1)).thenAnswer(inv -> all[cursor.get()]);
+
+        strategy(ds).migrate(mock(Flyway.class));
+
+        verify(ps).setString(1, "vector");
+        verify(ps).setString(2, "citext");
+        verify(ps).setString(3, "pg_trgm");
     }
 
     @Test

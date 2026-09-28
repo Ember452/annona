@@ -16,7 +16,18 @@ import java.util.List;
  */
 public interface EmbeddingProvider {
 
-    /** Provider 唯一名；READY 时落 {@code kb_doc.embedding_model}，检索端按它过滤。 */
+    /**
+     * 本 provider 的<b>向量身份</b>：READY 时落 {@code kb_doc.embedding_model}，检索端按它过滤。
+     *
+     * <p>名字叫 {@code name()} 但它不是"供应商名"：OpenAI 兼容实现返回的是<b>配置的模型 id</b>
+     * （如 {@code text-embedding-v3}），因为"同一供应商换模型 = 不同向量空间"才是检索
+     * 需要排除的那个维度；仅在模型 id 未配置时退到 {@code openai-compatible}
+     * （实际不可达：{@code embed} 前置校验会先拒）。
+     *
+     * <p><b>约束：写入方与过滤方必须调同一个方法</b>。两边各自从不同地方取值（一侧从
+     * provider、一侧从 properties）时，空模型配置或退回分支会让过滤把整个库排除掉，
+     * 而表面现象是"检索没命中"（retrieval-hybrid-adr §决策 4）。
+     */
     String name();
 
     /** 本 provider 产出向量的固定维度。 */
