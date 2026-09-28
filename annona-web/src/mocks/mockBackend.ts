@@ -13,11 +13,21 @@ import type { Checkin, StudySession } from '@/types/study'
  *
  * <p>仅开发便利，不是测试基建：端到端行为规格仍由 CI 的真后端 e2e 负责
  * （后端集成测试契约见 specs/2026-09-25-dockerless-local-dev-adr.md）。
- * env 不设即完全不存在（标志恒 false，零运行时成本）；生产构建不可能带该 env。
+ *
+ * <p>不得进生产包：开关同时受 {@code DEV} 约束。原注释声称“生产构建不可能带该 env”
+ * ——那句是错的：`vite build` 同样读 `.env.local`，所以一个忘关的本机开关会把 mock 编译进
+ * 产物（2026-09-28 实测：打好的 jar 里 SPA 拦截全部 API，上传报“mock 未实现该端点”，
+ * 表面看像后端 404）。现在不依赖开发者记得改环境变量。
  */
 
-/** 是否启用纯前端模式。读 import.meta.env（构建期内联），不提供运行时开关。 */
-export const MOCK_ENABLED = import.meta.env.VITE_MOCK_BACKEND === '1'
+/**
+ * 是否启用纯前端模式。读 import.meta.env（构建期内联），不提供运行时开关。
+ *
+ * <p>必须 {@code DEV &&} ：`vite build`（包括产物直写 `annona-server` 静态目录的那次）
+ * 与 {@code vite dev} 共享同一个 `.env.local`，少了 DEV 限定，本机遗留的开关会静默把
+ * mock 打进生产 bundle。
+ */
+export const MOCK_ENABLED = import.meta.env.DEV && import.meta.env.VITE_MOCK_BACKEND === '1'
 
 if (MOCK_ENABLED) {
   console.info('[annona] VITE_MOCK_BACKEND=1 —— 所有请求返回本地 fixtures，不发网络请求')

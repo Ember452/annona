@@ -31,6 +31,21 @@ describe('mockBackend（VITE_MOCK_BACKEND 纯前端模式路由表）', () => {
       const { MOCK_ENABLED: on } = await import('./mockBackend')
       expect(on).toBe(true)
     })
+
+    it('生产构建（DEV=false）即使带开关也不启用——防本机 .env.local 静默污染产物', async () => {
+      // 复现 2026-09-28 的真实事故：`.env.local` 里的 VITE_MOCK_BACKEND=1 没关就
+      // `vite build`，mock 被编进 jar 里的 SPA，所有 API 请求本地应答，
+      // 上传看起来像后端 404。那时仅靠“记得改环境变量”拦不住。
+      const dev = import.meta.env.DEV
+      try {
+        vi.stubEnv('VITE_MOCK_BACKEND', '1')
+        import.meta.env.DEV = false
+        const { MOCK_ENABLED: prodBundle } = await import('./mockBackend')
+        expect(prodBundle).toBe(false)
+      } finally {
+        import.meta.env.DEV = dev
+      }
+    })
   })
 
   it('身份端点：me 返回 mock 用户，login/logout/register 恒成功', () => {
