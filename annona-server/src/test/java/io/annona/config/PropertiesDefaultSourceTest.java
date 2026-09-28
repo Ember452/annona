@@ -4,15 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
 import io.annona.config.async.AnnonaThreadProperties;
-import io.annona.config.properties.AnnonaStartupProperties;
-import io.annona.config.properties.RetrievalProperties;
-import io.annona.infrastructure.cache.RedisProperties;
-import io.annona.infrastructure.llm.EmbeddingProperties;
-import io.annona.infrastructure.parse.DocumentParseProperties;
-import io.annona.infrastructure.storage.StorageProperties;
-import io.annona.modules.identity.service.IdentityProperties;
-import io.annona.modules.identity.service.SessionProperties;
-import io.annona.modules.knowledge.listener.KnowledgeRecoveryProperties;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
@@ -23,7 +14,10 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.type.filter.AnnotationTypeFilter;
 
 /**
  * 配置默认值单源门禁（AGENTS.md §4）。
@@ -46,6 +40,11 @@ import org.springframework.core.io.ClassPathResource;
  * 并由下面的 {@link #COMPUTED_DEFAULT_PREFIXES} 显式登记；新增例外必须改这个列表，
  * 改列表就是一次评审。
  *
+ * 属性类清单是<b>扫出来的，不是手登的</b>：原先这里有一份 {@code List.of(...)} 手工清单，
+ * 新建一个 {@code @ConfigurationProperties} 类忘了加进来就会静默不受检——门禁自己成了那个
+ * “靠人记”的约定。扫描只依赖 {@value #BASE_PACKAGE} 根包，新类自动进入检查；
+ * 同时断言“至少扫到 N 个”，防止扫描本身空跑。
+ *
  * <p>本测试不启动 Spring 上下文（纯反射 + yaml 解析），因此本机 {@code mvn verify} 就能跑，
  * 不依赖 PG/Redis/Docker。
  */
@@ -55,11 +54,11 @@ class PropertiesDefaultSourceTest {
     /** 默认值由代码计算、yaml 无法表达的字段（camelCase 名，见 {@link #fieldKey}）。 */
     private static final List<String> COMPUTED_DEFAULT_PREFIXES = List.of("general", "aiIo", "cpu", "query");
 
-    private static final List<Class<?>> PROPERTY_CLASSES = List.of(
-        RedisProperties.class, EmbeddingProperties.class, DocumentParseProperties.class,
-        StorageProperties.class, AnnonaThreadProperties.class, AnnonaStartupProperties.class,
-        RetrievalProperties.class, IdentityProperties.class, SessionProperties.class,
-        KnowledgeRecoveryProperties.class);
+    /** 扫描根包：新增属性类只要在这个包下就会被检，不需改本文件。 */
+    private static final String BASE_PACKAGE = "io.annona";
+
+    /** 扫到的全部属性类（@BeforeAll 里填）。 */
+    private static List<Class<?>> propertyClasses;
 
     private static Properties yaml;
 
@@ -72,6 +71,25 @@ class PropertiesDefaultSourceTest {
         assertThat(yaml)
             .as("classpath 上读不到 application.yaml，本门禁无从判定")
             .isNotNull();
+
+        ClassPathScanningCandidateComponentProvider scanner =
+            new ClassPathScanningCandidateComponentProvider(false);
+        scanner.addIncludeFilter(new AnnotationTypeFilter(ConfigurationProperties.class));
+        List<Class<?>> found = new ArrayList<>();
+        for (var definition : scanner.findCandidateComponents(BASE_PACKAGE)) {
+            try {
+                found.add(Class.forName(definition.getBeanClassName(), false,
+                    Thread.currentThread().getContextClassLoader()));
+            } catch (ClassNotFoundException | NoClassDefFoundError e) {
+                throw new AssertionError("扫描到的属性类无法加载：" + definition.getBeanClassName(), e);
+            }
+        }
+        propertyClasses = List.copyOf(found);
+        // 下限而不是集合相等：今天 10 个，以后只会多不会少。这条断言防的是“扫描空跑”——
+        // 根包名写错或 classpath 没有 infra 时，for 循环一轮不跑，门禁会绿得毫无意义
+        assertThat(propertyClasses)
+            .as("扫描没拿到足够数量的 @ConfigurationProperties 类，门禁可能在空跑")
+            .hasSizeGreaterThanOrEqualTo(10);
     }
 
     @Test
@@ -81,7 +99,7 @@ class PropertiesDefaultSourceTest {
         List<String> missing = new ArrayList<>();
         List<String> computed = new ArrayList<>();
 
-        for (Class<?> type : PROPERTY_CLASSES) {
+        for (Class<?> type : propertyClasses) {
             String prefix = prefixOf(type);
             for (Field field : type.getDeclaredFields()) {
                 if (Modifier.isStatic(field.getModifiers()) || field.isSynthetic()) {

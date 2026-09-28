@@ -87,12 +87,12 @@ annona/
 | 模块 | artifactId | 职责 | 允许依赖 | 禁止 |
 |---|---|---|---|---|
 | 通用 | `annona-common` | 统一响应、异常体系、枚举、常量、工具、注解与切面基类、**跨模块端口** | 第三方库（**但本仓约定 SDK 只进 infra**：common 只放端口与契约，判据见 AGENTS.md §4） | 依赖任何业务概念、依赖 spi/infra/server |
-| 契约 | `annona-spi` | 五个扩展点接口、跨模块契约 DTO、领域事件定义 | common | 引入 Spring / MyBatis / SDK（保证可被外部实现） |
+| 契约 | `annona-spi` | 六个扩展点接口（P0 的五个 + P1a-05 新增 `EmbeddingProvider`）、跨模块契约 DTO、领域事件定义 | common | 引入 Spring / MyBatis / SDK（保证可被外部实现） |
 | 技术 | `annona-infrastructure` | SPI 实现 + 外部系统适配（PG/pgvector、Redis、S3、LLM HTTP、加密、PDF、分词） | common, spi, 各类 SDK | 含业务规则、被 server 编译期直接引用实现类 |
 | 应用 | `annona-server` | 业务模块（**现有 4 个：identity / knowledge / retrieval / study；下表与 §4 树形里的 11 个是终态规划口径**）、REST/SSE/WS 接口、启动类、CLI、prompt 与 skill 资源 | common, spi（infra 仅 runtime） | 直接 `import` infrastructure 的具体实现类 |
 | 前端 | `annona-web` | Vite 工程，`build` 产物拷贝到 server 的 `resources/static` | 无（独立） | 前端不感知 Java 结构，只依赖 `/api/*` 契约 |
 
-**装配方向是关键设计**：`annona-server` 的业务代码只 `@Autowired` SPI 接口；具体实现由 `annona-infrastructure` 通过 `@ConditionalOnProperty` + `AutoConfiguration.imports` 在运行期注入。带来的三个具体收益：
+**装配方向是关键设计**：`annona-server` 的业务代码只 `@Autowired` 端口接口；具体实现由 `annona-infrastructure` 的 `@Component` + `@ConditionalOnProperty` 在运行期注入——扫它的入口是 `AnnonaApplication`（`io.annona` 根包）的默认组件扫描，**本仓没有 `META-INF/spring/*.imports` 文件**；infra 对 server 是 runtime 依赖，所以它对 `modules/*` 编译期不可见。带来的三个具体收益：
 
 1. 换检索后端（pgvector ↔ ES）、换身份来源（本地 ↔ 平台）、换模型供应商，业务代码零改动。
 2. `annona-spi` 可单独发布，第三方能只依赖它写自己的 Retriever 或 IdentityProvider。
@@ -314,8 +314,9 @@ src/main/resources/
 ├── skills/                          # ★ 内置 SKILL.md：skills/java-concurrency/SKILL.md 等
 ├── fonts/                           # PDF 中文字体（NotoSansCJK 子集）
 ├── templates/                       # PDF/邮件模板（HTML→PDF 用）
-├── static/                          # 前端构建产物（由 annona-web 拷贝，本仓不手写）
-└── META-INF/spring/                 # AutoConfiguration.imports（infra 侧装配入口）
+└── static/                          # 前端构建产物（由 annona-web 拷贝，本仓不手写）
+# 注：这里没有 META-INF/spring/——infra 的实现靠启动类组件扫描装配（见 §3），
+# 真要改成 auto-configuration 时再建该目录并同步改 §3 与本树。
 ```
 
 测试资源：

@@ -43,7 +43,11 @@ class Api:
             urllib.request.HTTPCookieProcessor(self.jar))
 
     def _call(self, path, payload=None, method=None, headers=None, data=None):
-        req = urllib.request.Request(self.base + path, data=data, method=method or "GET")
+        # method 缺省按负载推导，**不能写 `or "GET"`**：显式传入的 method 会让 urllib
+        # 的 get_method() 不再动态推导，post() 会被硬发成 GET（首轮 CI 405 实测）
+        if method is None:
+            method = "POST" if (payload is not None or data is not None) else "GET"
+        req = urllib.request.Request(self.base + path, data=data, method=method)
         for key, value in (headers or {}).items():
             req.add_header(key, value)
         if payload is not None:

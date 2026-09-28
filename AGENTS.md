@@ -41,7 +41,7 @@
 | 仓库现在到底是什么状态、哪些命令真能跑 | `README.md`（根目录，含当前进度横幅） | 阶段切换时更新状态表 |
 | 做什么、给谁、有哪些功能、领域模型与表 | `docs/annona-项目设计文档.md` | 功能范围或数据模型变化 |
 | 代码放哪、包边界、依赖方向、命名规范 | `docs/annona-项目结构.md` | 新增/移动模块、调整包结构 |
-| 全局分层、一次请求的生命周期、五个 SPI | `docs/architecture/overview.md` | 跨模块流程变化 |
+| 全局分层、一次请求的生命周期、已确定的 SPI | `docs/architecture/overview.md` | 跨模块流程变化 |
 | 某个难懂模块的内部设计 | `docs/architecture/<module>.md`（索引见 `INDEX.md`） | 该模块内部结构调整 |
 | 某个决策为什么这么定、否决了什么 | `docs/specs/YYYY-MM-DD-<topic>-adr.md` | 见 §6 触发清单 |
 | 跨 ≥3 模块的改造方案 | `docs/plans/<TOPIC>_PLAN.md` | 计划推进或中止 |
@@ -78,7 +78,7 @@
 - 不做需求之外的功能；单使用的代码不抽抽象；不加没被要求的"灵活性/可配置性"；不为不可能的场景写异常处理。
 - 写了 200 行而它能是 50 行 → 重写。
 - 自检问一句："资深工程师会不会说这过度设计了？" 会 → 简化。
-- 本项目具体形态：一个 Service 只做编排；`planner` 的规则各自独立可关（但规则总数按需求来，不预留空规则）；SPI 只保留已定的五个，不要预感未来需要而先加。
+- 本项目具体形态：一个 Service 只做编排；`planner` 的规则各自独立可关（但规则总数按需求来，不预留空规则）；SPI 只保留已确定的那几个（现为六个；新增就是对外契约，进 §6 的 ADR 触发项），不要预感未来需要而先加。
 
 ### 3.3 Surgical Changes
 
@@ -127,9 +127,9 @@
 - **约定 → 机检的升级元规则**：任何一条本文件或代码注释里的硬约定，一旦被实际违反/踩坑一次，随修复**同一批次**给它配上机器门禁（pre-commit 检查 / ArchUnit 规则 / CI 断言）——只靠"下一个人读文档"传递的项目约定必然失守。已有先例：save/merge 语义（假绿复盘后进 §4）、迁移冻结（V1 被改两次后上 pre-commit）、pipefail（tee 吞退出码后进 validate-workflows）。新增约定时要么同时交出机检，要么写明触发升级的条件。
 
 - 依赖方向只能是 `modules → spi → common`；`modules/*` 之间禁止 import，除白名单 `interview/orchestrator → planner/advisor`。跨模块通信只有两种：只读走 `XxxQueryService` / `shared` 读模型；写走领域事件。
-- **端口放哪个模块：两条正交的判据，不要合成一条**。① **有没有外部实现方需求**（真的会有第三方写这个实现吗）：有 → 进 `annona-spi`（已定的五个：`Retriever`、`ModelProvider`、`EmbeddingProvider`、`IdentityProvider`、`LearningSignalReader`、`DecisionRule`）；没有 → 只是内部解耦，端口进 `annona-common`（先例：`DocumentParser`、`ObjectStorage`、`TaskStreamPort`、`SessionStore`、`Tokenizer`）。**“能被替换”不是判据**——按那个标准几乎所有端口都是扩展点，spi 会长到十几个且每个都变成对外发布契约（改一次就是破坏性变更）。② **带不带第三方 SDK**：带就只能在 `annona-infrastructure`（common 只放端口与契约）；`annona-spi` 永远零 SDK，它是唯一发到 Central 的 artifact。
-  不要把这条误解为运行期隔离：infra 是 `annona-server` 的 runtime 依赖，最终只有一个 fat jar，**它买到的是源码级边界**（业务代码编译期拿不到厂商类型，所以 Service 里的外部调用一定经过接口，slice 测试不用起容器），不是依赖净化。**什么时候该重新评估**（出现任一项就说明规则在造成摩擦，先讨论再继续写）：infra 实现须接受业务概念入参 ≥2 次；某个端口方法参数超过 3 个；有人为了绕开本规则在 server 里直接 import SDK。
-- **一个配置键的默认值只能有一处出处**：要么在 `application.yaml` 写成 `key: ${ENV:default}`（首选——它同时是 env 名映射表，运维与新人只看这一个文件），要么在 `@ConfigurationProperties` 字段上给初值（仅当默认值由代码计算、yaml 表达不了，如按核数推导的 cpu 池）。两处都写 = 类初值是死代码（yaml 一旦列出该键就永远提供值），改类初值不会生效；两处都不写 = 字段静默拿到类型零值（port=0、prefix=null）要到运行期才炸。机检：`PropertiesDefaultSourceTest`（纯反射 + yaml 解析，本机 `mvn verify` 就能跑，例外需登记进它的列表）。已知限制：反射看不出 `= false` / `= 0` 这类等于零值的初值，这类重复靠 review。
+- **端口放哪个模块：两条正交的判据，不要合成一条**。① **有没有外部实现方需求**（真的会有第三方写这个实现吗）：有 → 进 `annona-spi`（已确定的六个：`Retriever`、`ModelProvider`、`EmbeddingProvider`、`IdentityProvider`、`LearningSignalReader`、`DecisionRule`）；没有 → 只是内部解耦，端口进 `annona-common`（先例：`DocumentParser`、`ObjectStorage`、`TaskStreamPort`、`SessionStore`、`Tokenizer`）。**“能被替换”不是判据**——按那个标准几乎所有端口都是扩展点，spi 会长到十几个且每个都变成对外发布契约（改一次就是破坏性变更）。② **带不带第三方 SDK**：带就只能在 `annona-infrastructure`（common 只放端口与契约）；`annona-spi` 永远零 SDK，它是唯一发到 Central 的 artifact。
+  不要把这条误解为运行期隔离：infra 是 `annona-server` 的 runtime 依赖，最终只有一个 fat jar，**它买到的是源码级边界**（业务代码编译期拿不到厂商类型，所以 Service 里的外部调用一定经过接口，slice 测试不用起容器），不是依赖净化。**什么时候该重新评估**（出现任一项就说明规则在造成摩擦，先讨论再继续写）：infra 实现须接受业务概念入参 ≥2 次；某个端口方法参数超过 3 个；有人为了绕开本规则在 server 里直接 import SDK；或 infra 里出现不属于任何能力包的杂类（垃圾场信号，届时配 ArchUnit 规则而不是继续靠文档）。
+- **一个配置键的默认值只能有一处出处**：要么在 `application.yaml` 写成 `key: ${ENV:default}`（首选——它同时是 env 名映射表，运维与新人只看这一个文件），要么在 `@ConfigurationProperties` 字段上给初值（仅当默认值由代码计算、yaml 表达不了，如按核数推导的 cpu 池）。两处都写 = 类初值是死代码（yaml 一旦列出该键就永远提供值），改类初值不会生效；两处都不写 = 字段静默拿到类型零值（port=0、prefix=null）要到运行期才炸。机检：`PropertiesDefaultSourceTest`（扫描 `io.annona` 下全部 `@ConfigurationProperties` 类，不靠手工清单；纯反射 + yaml 解析，本机 `mvn verify` 就能跑）。已知限制：反射看不出 `= false` / `= 0` 这类等于零值的初值，这类重复靠 review；默认值由代码计算而无法写进 yaml 的类（如按核数推导的 cpu 池）要登记进该测试的 COMPUTED 列表，登记即评审。
 - 分层：`Controller`（路由、校验、委托）→ `Service`（编排，`@Transactional` 只在此层且范围最小）→ `Repository`（JPA，自定义查询用方法名或 `@Query`）。
 - 异常出口分两类：**业务失败**返回 HTTP 200 + `Result.error(code, msg)`；**路由/传输层错误**（404/405/400/500）返回真实 HTTP 状态码 + 同样的 `Result` 体。不得把后者也压成 200（会吞掉故障信号并伪装 SPA fallback 缺失）。
 - 新增业务模块 = 在 `annona-server` 加包 + 更新 ArchUnit 白名单，**不动 pom**；出现第二个可部署产物才新建 Maven 模块。

@@ -39,7 +39,9 @@ class ArchitectureTest {
         void modulesShouldNotDependOnInfrastructure() {
             ArchRule rule = noClasses().that().resideInAPackage("io.annona.modules..")
                 .should().dependOnClassesThat().resideInAPackage("io.annona.infrastructure..")
-                .because("annona-server 的业务代码只 @Autowired SPI 接口；具体实现由 infrastructure 通过 @ConditionalOnProperty + AutoConfiguration.imports 注入。")
+                .because("annona-server 的业务代码只 @Autowired 端口接口；具体实现由 infrastructure 的"
+                    + " @Component + @ConditionalOnProperty 经启动类的组件扫描在运行期注入（本仓无"
+                    + " AutoConfiguration.imports 文件）。")
                 .allowEmptyShould(true);
             rule.check(PRODUCTION_CLASSES);
         }
