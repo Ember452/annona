@@ -128,11 +128,9 @@
                 </configuration>
             </plugin>
 
-            <!-- 覆盖率门槛机检（AGENTS §4「其余 60%」）：BUNDLE 行覆盖 < 60% 直接构建失败。
-                 实测基线（2026-09-27，unit+slice 口径）68.0%。AGENTS 承诺的关键纯逻辑包 85%
-                 （planner/mastery、planner/guard、evaluation/structured、knowledge/chunk、
-                 infrastructure 分词与向量序列化）在各自包首个落地时（P1a-06 起）在此追加
-                 带 <includes> 的专用 check execution——现在没有的包不预置规则（YAGNI）。 -->
+            <!-- 关键纯逻辑包的 85% 机检（AGENTS §4）。具体写法为何选 CLASS 见下方 execution 注释；
+                 其余代码由上面的 BUNDLE 60% 兜底。本模块外的关键包（如 infrastructure 的分词）
+                 在各自模块 pom 里卡——测试在哪几个模块，agent 数据就在哪。 -->
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
@@ -155,12 +153,12 @@
                             </rules>
                         </configuration>
                     </execution>
-                    <!-- knowledge/chunk 是 AGENTS §4 点名的 85% 关键纯逻辑包（P1a-06 落地，
-                         按 pom 注释里的预留约定追加专用 check）。用 CLASS 元素逐类卡 85%：
-                         PACKAGE/BUNDLE 的 includes 若模式写错会匹配零元素静默通过（假通过），
-                         CLASS + 类名通配是唯一既有断言消费方（ChunkerTest/GoldenTest）能兜住的形式。 -->
+                    <!-- knowledge/chunk（P1a-06）与 retrieval/hybrid（P1a-07）都是 AGENTS §4
+                         点名的 85% 关键纯逻辑包。用 CLASS 元素逐类卡 85%：PACKAGE/BUNDLE 的
+                         includes 若模式写错会匹配零元素静默通过（假通过），而 CLASS 只有
+                         现有断言消费方（ChunkerTest / ChunkerGoldenTest / RrfFusionTest）兜得住。 -->
                     <execution>
-                        <id>chunk-coverage-check</id>
+                        <id>key-logic-coverage-check</id>
                         <goals><goal>check</goal></goals>
                         <configuration>
                             <rules>
@@ -168,6 +166,9 @@
                                     <element>CLASS</element>
                                     <includes>
                                         <include>io/annona/modules/knowledge/chunk/*</include>
+                                        <!-- P1a-07：RRF 融合是检索指标的分母，与分块器同级
+                                             （K/名次/归一化口径错一个，Recall@K 与前端置信度一起失真） -->
+                                        <include>io/annona/modules/retrieval/hybrid/*</include>
                                     </includes>
                                     <limits>
                                         <limit>

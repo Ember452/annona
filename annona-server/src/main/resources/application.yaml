@@ -55,6 +55,7 @@ annona:
     region: ${S3_REGION:us-east-1}
   # P1a-05：embedding 通道（knowledge-ingestion-adr §决策 5）。none = 不装配 provider，
   # 向量化报 2310；openai-compatible = OpenAI /embeddings 协议（DashScope 兼容模式同协议）。
+  # fake（P1a-09）= 确定性 1024 维向量，只供无 Key 环境跑通入库与评测管道，数字不可读作质量。
   model:
     embedding:
       provider: ${ANNONA_MODEL_EMBEDDING_PROVIDER:none}
@@ -68,6 +69,11 @@ annona:
   document-parse:
     pool-size: ${ANNONA_PARSE_POOL_SIZE:2}
     timeout: ${ANNONA_PARSE_TIMEOUT:2m}
+  # P1a-07：检索后端整套选择。pgvector = 语义(HNSW) + 关键词(tsv/pg_trgm) + RRF 全含；
+  # fake = 内存空命中（不接 PG 也能跑上层业务）。未知值启动即拒（RetrievalProperties），
+  # 因为拼错一个字母会让"以为在用 pgvector、实际跑的是 fake"，整批评测数字跟着失真。
+  retrieval:
+    backend: ${ANNONA_RETRIEVAL_BACKEND:pgvector}
 
 management:
   endpoints:

@@ -8,7 +8,7 @@ package io.annona.common.exception;
  *   <li>1000–1099：通用（请求/权限/系统兜底）</li>
  *   <li>1100–1199：AI 与模型调用</li>
  *   <li>1200–1299：限流与配额</li>
- *   <li>2000+：按业务模块分段（P1 起在对应模块任务里扩展）</li>
+ *   <li>2000+：按业务模块分段（一个模块一个百位段，与模块一一对应）</li>
  * </ul>
  *
  * <p>P0-03 只落通用与 AI 两组；其余模块的错误码在各自阶段任务落地时追加，
@@ -61,7 +61,11 @@ public enum ErrorCode {
     KB_DOC_ENQUEUE_FAILED(2307, "文档已保存但处理任务投递失败，可稍后重试处理"),
     KB_DOC_STATE_CONFLICT(2308, "文档正在处理中，请稍后再试"),
     KB_EMBEDDING_NOT_CONFIGURED(2310, "向量化模型未配置，无法处理文档"),
-    KB_EMBEDDING_FAILED(2311, "向量化失败，请稍后重试");
+    KB_EMBEDDING_FAILED(2311, "向量化失败，请稍后重试"),
+
+    // ========== retrieval 2400–2499（P1a-07，混合检索） ==========
+    RETRIEVAL_FAILED(2400, "检索暂时不可用，请稍后重试"),
+    RETRIEVAL_QUERY_BLANK(2401, "请输入要检索的问题");
 
     private final int code;
     private final String message;
