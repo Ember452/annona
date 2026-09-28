@@ -107,6 +107,32 @@ def miss_diff(reports: list[dict]) -> None:
         print(f"  [{mode}] {qid} {kind}：{query}")
 
 
+def hybrid_exclusive(reports: list[dict]) -> None:
+    """混合独占命中（P1a-09b 报告项）：BOTH 命中而 SEMANTIC 未命中的 query 计数与清单。
+
+    这是"混合检索相对纯向量的价值"的直接证据：数量为 0 即两档无可判读增益
+    （P1a-09 首轮结论正是如此，见 docs/benchmarks/检索基线_20260928.md）。
+    从 misses 差集推导即可：BOTH 命中且 SEMANTIC 未命中 ⇔ 该 id 在 SEMANTIC 的
+    misses 里而不在 BOTH 的 misses 里，无需报告携带完整命中清单。
+    """
+    printed_header = False
+    for r in reports:
+        runs = r.get("runs", {})
+        if "BOTH" not in runs or "SEMANTIC" not in runs:
+            continue
+        semantic_misses = {m["id"]: m for m in runs["SEMANTIC"].get("misses", [])}
+        both_misses = {m["id"] for m in runs["BOTH"].get("misses", [])}
+        exclusive = [semantic_misses[qid] for qid in sorted(semantic_misses) if qid not in both_misses]
+        if not printed_header:
+            print("混合独占命中（BOTH 命中 / SEMANTIC 未命中）：")
+            printed_header = True
+        print(f"  [{r.get('label', r['_path'])}] n={len(exclusive)}")
+        for m in exclusive:
+            print(f"    {m['id']}：{m.get('query', '')}")
+    if not printed_header:
+        print("混合独占命中：报告组中无同时含 BOTH 与 SEMANTIC 的轮次，跳过")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="对比多份 eval.py 报告")
     parser.add_argument("reports", nargs="+", help="eval.py 产出的 JSON 报告路径（≥2 份）")
@@ -118,6 +144,7 @@ def main() -> int:
     primary_mode = MODE_ORDER[0]
     bucket_table(reports, primary_mode)
     miss_diff(reports)
+    hybrid_exclusive(reports)
     return 0
 
 

@@ -204,7 +204,7 @@ P0-15（仓库设置）不计批次，需你在 GitHub 网页操作。
 | P1a-07 | `retrieval`：语义通道（HNSW）+ 关键词通道（应用层分词 + `simple` + `pg_trgm`）+ RRF + 余弦重排；`PgVectorRetriever` 实现 SPI | 检索测试接口给出命中与分数；改 `annona.retrieval.backend` 不报错（Fake ES） | 2 | P1a-05 |
 | P1a-08 | `qa`：SSE 流式问答、会话管理、源引用追溯、Markdown 净化渲染。**批 3 已落代码**（分支 `feat/p1a-08-qa-streaming`：char-v2 分块边界修复、qa-streaming ADR、common 流式端口、OpenAI 兼容 chat 双实现、V6 qa_session/qa_message、SSE 四事件 + citations JSONB、QaFlowIT、前端 /qa 页；PR CI 收口中，人工 demo 待合并后执行） | 一次提问，前端逐字输出且引用可点击跳回原文段落 | 1.5 | P1a-07 |
 | P1a-09 | `scripts/rag-eval` + `docs/tests/指标测试-检索.md`：Recall@K / MRR 基线，纯向量 vs 混合对比 | 出报告（真实数字），`retrieval_eval_run` 有记录；结论写进 `docs/benchmarks/`。**定位是选型实证（混合 vs 纯向量），不是参数调优**：阈值/TopK/RRF 权重沿用借鉴值，参数调优推迟到有真实问答数据后（触发：P1b 上线或真实问答 ≥100 次，以本基线为参照） | 1 | P1a-07 |
-| P1a-09b | 评测集提难度重跑（口径不变，只改数据）：语料扩到 15–20 篇并含 3–5 篇近重复；query ≥60 条，`symbol` / `clause` 各 ≥15 条；报告补"混合独占命中"计数 | 纯向量 Recall@3 落到 0.85 以下（否则继续加难度），`BOTH` 与 `SEMANTIC` 出现可判读的差值；结论回写同一份基线文档（不新建第二份） | 0.5 | P1a-09 |
+| P1a-09b | 评测集提难度重跑（口径不变，只改数据）：语料扩到 15–20 篇并含 3–5 篇近重复；query ≥60 条，`symbol` / `clause` 各 ≥15 条；报告补"混合独占命中"计数 | 纯向量 Recall@3 落到 0.85 以下（否则继续加难度），`BOTH` 与 `SEMANTIC` 出现可判读的差值；结论回写同一份基线文档（不新建第二份）。**工具已备（09-28）**：`queries-09b.template.json`（60 槽位预分配）+ `validate-09b.py` 准入机检 + compare.py 混合独占命中汇总；操作步骤见 [tests/P1a-人工收口清单.md](./tests/P1a-人工收口清单.md) | 0.5 | P1a-09 |
 
 **出口条件**：① 真实资料入库后可流式问答并显示引用；② 心跳与质量分级有单测与实测证据；③ 混合检索相对纯向量的 Recall@K 提升**有实测数字**（若为负，按 ADR 触发条件重开检索方案讨论）——**2026-09-28 首轮实测：`BOTH` = `SEMANTIC` = Recall@3 1.0000，天花板饱和、无差值可判读，本轮不满足此条，由 P1a-09b 继任**；④ `chunk` 包覆盖率达标；⑤ 阶段总结已写（2026-09-28 起草待定稿）。
 

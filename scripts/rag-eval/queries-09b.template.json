@@ -1,0 +1,372 @@
+{
+  "_readme": [
+    "P1a-09b 查询集模板（口径见 docs/annona-开发计划.md P1a-09b 行）：query ≥60，symbol/clause 各 ≥15。",
+    "填写规则：text 填真实问题（不是关键词堆砌）；relevant_docs 填该问题应命中的语料文件名（corpus-09b/ 下的文件名，可多个）。",
+    "预期命中的判断口径与 queries.json 现有 20 条一致：以'回答该问题必须读到这段内容'为准。",
+    "填写完成后运行：python scripts/rag-eval/validate-09b.py --queries scripts/rag-eval/queries-09b.json --corpus-dir scripts/rag-eval/corpus-09b",
+    "全部通过再烧 eval（P1a-09 教训：先机检再跑真模型）。本模板直接复制为 queries-09b.json 后填写。"
+  ],
+  "top_k": 3,
+  "queries": [
+    {
+      "id": "q001",
+      "bucket": "symbol",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q002",
+      "bucket": "symbol",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q003",
+      "bucket": "symbol",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q004",
+      "bucket": "symbol",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q005",
+      "bucket": "symbol",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q006",
+      "bucket": "symbol",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q007",
+      "bucket": "symbol",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q008",
+      "bucket": "symbol",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q009",
+      "bucket": "symbol",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q010",
+      "bucket": "symbol",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q011",
+      "bucket": "symbol",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q012",
+      "bucket": "symbol",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q013",
+      "bucket": "symbol",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q014",
+      "bucket": "symbol",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q015",
+      "bucket": "symbol",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q016",
+      "bucket": "clause",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q017",
+      "bucket": "clause",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q018",
+      "bucket": "clause",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q019",
+      "bucket": "clause",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q020",
+      "bucket": "clause",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q021",
+      "bucket": "clause",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q022",
+      "bucket": "clause",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q023",
+      "bucket": "clause",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q024",
+      "bucket": "clause",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q025",
+      "bucket": "clause",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q026",
+      "bucket": "clause",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q027",
+      "bucket": "clause",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q028",
+      "bucket": "clause",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q029",
+      "bucket": "clause",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q030",
+      "bucket": "clause",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q031",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q032",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q033",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q034",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q035",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q036",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q037",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q038",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q039",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q040",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q041",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q042",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q043",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q044",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q045",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q046",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q047",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q048",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q049",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q050",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q051",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q052",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q053",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q054",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q055",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q056",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q057",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q058",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q059",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    },
+    {
+      "id": "q060",
+      "bucket": "phrase",
+      "text": "",
+      "relevant_docs": []
+    }
+  ]
+}
