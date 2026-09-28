@@ -242,7 +242,9 @@ def run(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--base-url", default="http://localhost:8080")
+    # 默认指 compose 的对外入口（nginx : 80）——server 容器的 8080 **不发布到宿主机**，
+    # 拿 8080 会整轮连不上。CI 里应用直接跑在 runner 上，那边显式传 --base-url 覆盖。
+    parser.add_argument("--base-url", default="http://localhost")
     parser.add_argument("--queries", default=str(Path(__file__).parent / "queries.json"))
     parser.add_argument("--corpus-dir", default=str(Path(__file__).parent / "corpus"))
     parser.add_argument("--report-dir", default="out/rag-eval")

@@ -10,7 +10,7 @@
 #   down         停栈 + 清卷
 #   dev          打印本机跑（中间件 + spring-boot:run + pnpm dev）指令
 #   test         mvn verify + pnpm typecheck + pnpm build
-#   eval         scripts/rag-eval/eval.py（P1a-09 之前是 no-op）
+#   eval         scripts/rag-eval/eval.py 跑一轮（需先 `make up`；provider 口径从 .env 读）
 #   logs         docker compose logs -f
 #   reset        down + up（推倒重来）
 #   quickstart   setup + up + 探活 + 打印入口；README 首屏一条命令
@@ -20,6 +20,12 @@ PHONY := setup up down dev test eval logs reset quickstart
 
 COMPOSE      := docker compose -f docker/docker-compose.yml --env-file .env
 COMPOSE_DEV  := docker compose -f docker/docker-compose.dev.yml --env-file .env
+
+# eval 要跟着 .env 里的 embedding 口径走，否则报告与表里的数字不知道自己是真模型还是 fake。
+# `-include` 在 .env 不存在时静默跳过（setup 之前或 CI 里都不该因此报错）。
+-include .env
+EVAL_BASE_URL ?= http://localhost
+EVAL_LABEL    ?= local-$(shell date +%Y%m%d)
 
 setup:
 	@git config core.hooksPath .githooks 2>/dev/null || true
@@ -64,8 +70,12 @@ test:
 
 eval:
 	@test -f scripts/rag-eval/eval.py \
-		|| (echo "scripts/rag-eval/ 落地在 P1a-09；make eval 目前为空操作" && exit 0)
-	@python3 scripts/rag-eval/eval.py
+		|| (echo "scripts/rag-eval/eval.py 缺失，无法评测" && exit 1)
+	@python3 scripts/rag-eval/eval.py \
+		--base-url $(EVAL_BASE_URL) \
+		--label "$(EVAL_LABEL)" \
+		--embedding-provider $(if $(ANNONA_MODEL_EMBEDDING_PROVIDER),$(ANNONA_MODEL_EMBEDDING_PROVIDER),fake) \
+		--embedding-model $(ANNONA_DEFAULT_EMBEDDING_MODEL)
 
 logs:
 	$(COMPOSE) logs -f --tail=200
