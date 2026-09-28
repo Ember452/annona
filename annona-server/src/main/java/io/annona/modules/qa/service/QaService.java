@@ -32,6 +32,7 @@ import java.util.Optional;
 import java.util.StringJoiner;
 import java.util.UUID;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -63,7 +64,9 @@ public class QaService {
     /** 引用 snippet 截断长度；完整正文回查 kb_doc_chunk，300 字符够面板展示与留痕（V6 列注释）。 */
     private static final int SNIPPET_LENGTH = 300;
 
-    /** SSE 服务端超时（毫秒）：上游挂死时断开连接的兜底——流式无逐 token 超时（provider 注释的残留）。 */
+    /** SSE 服务端超时（毫秒）：上游挂死时断开连接的兜底——流式无逐 token 超时（provider
+     * 注释的残留）。取值 = 2 × chat 请求超时（{@code annona.model.chat.timeout-seconds}
+     * 默认 60）：覆盖"建连 + 首 token"的最坏静默，超过即视作上游挂死而非慢。 */
     private static final long EMITTER_TIMEOUT_MS = 120_000L;
 
     private final QaSessionRepository sessionRepository;
@@ -100,8 +103,13 @@ public class QaService {
      *
      * <p>前置条件：{@code userId} 来自已鉴权 Principal；{@code sessionId} 非 owner 一律
      * 2500（不泄露存在性）。失败语义：问题空白 → 1001；provider 未装配 → 流内 error 事件
-     * 2502（SSE 已建立后业务失败走事件，不走 HTTP 状态）。副作用：落 USER 行 + ASSISTANT
-     * 占位；异步回填在 AI-IO 线程完成。
+     * 2502（SSE 已建立后业务失败走事件，不走 HTTP 状态）；ai-io 池饱和（AbortPolicy 拒绝
+     * 提交）→ 1100，占位行保留为未完成。副作用：落 USER 行 + ASSISTANT 占位；异步回填在
+     * AI-IO 线程完成。
+     *
+     * <p>容量语义（ADR §后续修订 1）：执行器为 ai-io 池（8/32/200），与 embedding/向量化
+     * 共享；一次流式回答会占住线程直到上游吐完——排队在先（用户侧"转圈"），队列满才拒绝。
+     * 限流/配额归 P1b 的 1200 段，本服务不做。
      *
      * @return SSE 流：sources → token* → done，失败以 error 事件收尾
      */
@@ -115,7 +123,12 @@ public class QaService {
         UUID sessionId = placeholder.getSessionId();
 
         SseEmitter emitter = new SseEmitter(EMITTER_TIMEOUT_MS);
-        aiIoExecutor.execute(() -> streamAnswer(userId, sessionId, assistantId, question, emitter));
+        try {
+            aiIoExecutor.execute(() -> streamAnswer(userId, sessionId, assistantId, question, emitter));
+        } catch (RejectedExecutionException e) {
+            // AI-IO 池饱和：流尚未开始、占位已落。报业务错误而非裸 500，用户可重试
+            throw new BusinessException(ErrorCode.AI_SERVICE_UNAVAILABLE, "当前问答繁忙，请稍后重试");
+        }
         return emitter;
     }
 

@@ -31,6 +31,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -102,8 +104,12 @@ class QaServiceTest {
     }
 
     private QaService service(StreamingChatProvider provider) {
+        return service(provider, Runnable::run);
+    }
+
+    private QaService service(StreamingChatProvider provider, Executor executor) {
         return new QaService(sessionRepository, messageRepository, retrievalQueryService,
-            docQueryService, Optional.ofNullable(provider), Runnable::run, transactionManager, mapper);
+            docQueryService, Optional.ofNullable(provider), executor, transactionManager, mapper);
     }
 
     /** 确定性 provider：按给定脚本回调。占位态的观察走 states 快照，无需在流开始时再取。 */
@@ -212,6 +218,23 @@ class QaServiceTest {
             service.ask(USER, new QaAskRequest(null, "问题"));
 
             assertThat(saved).hasSize(2); // 只有 USER 行与占位
+            assertThat(saved.get(1).isCompleted()).isFalse();
+            verify(messageRepository, never()).backfill(any(UUID.class), any(), anyList(), eq(true), any());
+        }
+
+        @Test
+        @DisplayName("ai-io 池饱和（提交被拒）：报 1100 而非裸 500，占位行保留未完成")
+        void poolSaturationMapsToBusinessError() {
+            // 不打检索桩：提交在检索之前就被拒绝，打了也用不到（严格桩会报 UnnecessaryStubbing）
+            QaService service = service(new StubProvider(List.of("答"), false),
+                task -> { throw new RejectedExecutionException("pool full"); });
+
+            assertThatThrownBy(() -> service.ask(USER, new QaAskRequest(null, "问题")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(ErrorCode.AI_SERVICE_UNAVAILABLE.getCode());
+            // 占位已落库但未被回填——与流中断同一口径（用户重试不丢会话）
+            assertThat(saved).hasSize(2);
             assertThat(saved.get(1).isCompleted()).isFalse();
             verify(messageRepository, never()).backfill(any(UUID.class), any(), anyList(), eq(true), any());
         }
