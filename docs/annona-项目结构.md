@@ -164,6 +164,8 @@ io.annona
 │   │
 │   ├── retrieval/                     # 检索能力（D 模块的读侧，与 knowledge 写侧分离）
 │   │   ├── controller/ dto/           #   POST /api/retrieval/query（命中块 + 归一化分数 + 空命中诊断）
+│   │   │                             #   POST /api/retrieval/eval-run（仅评测脚本写 retrieval_eval_run 投影）
+│   │   ├── entity/ repository/        #   RetrievalEvalRunEntity：created_at 与 buckets_json 不映射（direction.meta_json 先例）
 │   │   ├── service/                    #   检索编排：入参归一（topK/mode）、计时、空命中归因
 │   │   ├── hybrid/                    #   ★ RRF 融合纯函数（与后端无关，表驱动单测 + 85% 机检）
 │   │   │  # 中文分词不在本包：端口在 common/search，jieba 实现在 infrastructure/search

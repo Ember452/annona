@@ -2,8 +2,10 @@ package io.annona.modules.retrieval.controller;
 
 import io.annona.common.result.Result;
 import io.annona.common.session.CurrentPrincipal;
+import io.annona.modules.retrieval.dto.EvalRunRequest;
 import io.annona.modules.retrieval.dto.RetrievalRequest;
 import io.annona.modules.retrieval.dto.RetrievalResponse;
+import io.annona.modules.retrieval.service.RetrievalEvalService;
 import io.annona.modules.retrieval.service.RetrievalQueryService;
 import io.annona.spi.dto.Principal;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,9 +25,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class RetrievalController {
 
     private final RetrievalQueryService queryService;
+    private final RetrievalEvalService evalService;
 
-    public RetrievalController(RetrievalQueryService queryService) {
+    public RetrievalController(RetrievalQueryService queryService, RetrievalEvalService evalService) {
         this.queryService = queryService;
+        this.evalService = evalService;
     }
 
     /**
@@ -46,5 +50,23 @@ public class RetrievalController {
     public Result<RetrievalResponse> query(@CurrentPrincipal Principal principal,
         @RequestBody RetrievalRequest request) {
         return Result.success(queryService.search(principal.id(), request));
+    }
+
+    /**
+     * {@code POST /api/retrieval/eval-run}——把一轮评测的头部数字写进
+     * {@code retrieval_eval_run}（仅 {@code scripts/rag-eval} 使用）。
+     *
+     * <p>请求：{@link EvalRunRequest}；响应：{@code Result<String>}（落库行 id）。
+     * <p>错误码：1001 入参不合法（mode 非法、provider 缺失、比率越界、字段超长）；
+     * 鉴权同检索端点（未登录 1004）。
+     *
+     * <p>为什么允许客户端上报而不服务端重算：指标的定义在脚本里（它才知道标注与分桶），
+     * 服务端再算一遍就是两处真相；本端点的职责是“这轮真跑过、数字是多少”的留痕，
+     * 因此校验从严但不做二次计算。
+     */
+    @PostMapping("/eval-run")
+    public Result<String> evalRun(@CurrentPrincipal Principal principal,
+        @RequestBody EvalRunRequest request) {
+        return Result.success(evalService.record(principal.id(), request));
     }
 }
