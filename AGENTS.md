@@ -301,7 +301,9 @@ python scripts\ci\validate-workflows.py                  # 改过 .github/workfl
 
 ### 8.3 本机确实要把应用跑起来时（P1 起才会需要）
 
-自行安装 **Windows 原生 PostgreSQL 16**（含 `vector`、`citext` 扩展）与 **Redis**，参数写进 `.env`（模板 `.env.example`），再 `.\mvnw.cmd -pl annona-server spring-boot:run`。这是调试路径，**不是日常验证手段**，也不是把测试从 CI 搬回本机的理由。
+自行安装 **Windows 原生 PostgreSQL 16**（含 `vector`、`citext` 扩展）与 **Redis**，参数写进 `.env`（模板 `.env.example`），再 `.\mvnw.cmd -q -DskipTests package -pl annona-server -am` 然后 `java -jar annona-server\target\annona-server.jar`。
+中间件也可以在另一台机器上：用 `docker/docker-compose.dev.yml --profile s3` 只起 db/cache/storage，把 `SPRING_DATASOURCE_URL` / `REDIS_HOST` / `S3_ENDPOINT` 指过去即可（dev 栈发布 5432/6379/9000；主 compose 不把 8080 发布到宿主机，走 nginx 的 80）。
+**不要用 `spring-boot:run`**：带 `-am` 时命令行目标会对 reactor 里每个模块执行一次，根聚合模块没有 main class 会立即失败；不带 `-am` 又因兄弟模块从未 `install` 到本地仓库而解析失败（2026-09-28 实测）。这是调试路径，**不是日常验证手段**，也不是把测试从 CI 搬回本机的理由。
 
 **SQL 行为验证一律走 CI 的 docker-it，不得用本机原生 PG 代替**（2026-09-28 批 2 立项时明确否决过"装本机 PG 换快反馈"这个提议，别再重提）：本机 PG 与 CI 的 `pgvector/pg16` 镜像在 pgvector 小版本、contrib 扩展可用性、collation 三处都会漂移，"本机过 ≠ CI 过"，而这类漂移比慢反馈更难查。正确做法是把同批要验的 SQL 未知数**压进一次 docker-it 推送里集中断言**（先例：`RetrievalSchemaIT` 一轮验生成列派生 / `to_tsquery` / `pg_trgm` / `ts_rank` / GIN 索引存在）。
 
