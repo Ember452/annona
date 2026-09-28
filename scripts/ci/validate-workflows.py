@@ -16,6 +16,10 @@ check run，只在 Actions 页面上给一行"file is invalid"。于是出现过
      新增 blocking job 忘写进 needs 时，该 job 红了 gate 仍绿。
   3. secrets 进 job 级 if：GitHub 的 job-level `if` 不支持 secrets 上下文，
      表达式静默为空（step 级 if 可以用，不在检查范围）。
+  4. services 的属性白名单：service container 只支持 image/credentials/env/
+     options/ports/volumes——PyYAML schema-agnostic 查不出 `args:` 这类不存在的键，
+     GitHub 会把整个文件判为 Invalid（run 建出来、零 jobs、零 check run，
+     P1a-05 eval job 实测）。注意 services **不支持**覆盖容器 CMD。
 
 用法：
     python scripts/ci/validate-workflows.py
@@ -114,6 +118,25 @@ def check_secrets_in_job_if(path: Path, jobs: dict, problems: list[str]) -> None
             )
 
 
+SERVICE_ALLOWED_KEYS = {"image", "credentials", "env", "options", "ports", "volumes"}
+
+
+def check_service_keys(path: Path, name: str, job: dict, problems: list[str]) -> None:
+    """规则 4：services.* 只支持 GitHub 白名单属性——`args:` 这类键本地 PyYAML 照样
+    解析通过，GitHub 却把整个文件判为 Invalid（零 jobs 的 failure）。"""
+    for svc_name, svc in (job.get("services") or {}).items():
+        if not isinstance(svc, dict):
+            continue
+        illegal = sorted(set(svc) - SERVICE_ALLOWED_KEYS)
+        if illegal:
+            problems.append(
+                f"{path.name}: job '{name}' 的 service '{svc_name}' 含不支持属性 "
+                f"{illegal}（service container 只支持 "
+                f"{sorted(SERVICE_ALLOWED_KEYS)}；容器命令是镜像默认 CMD，"
+                f"services 无法覆盖）"
+            )
+
+
 def main() -> int:
     files = sorted(WORKFLOW_DIR.glob("*.yml")) + sorted(WORKFLOW_DIR.glob("*.yaml"))
     if not files:
@@ -135,6 +158,7 @@ def main() -> int:
         for name, job in jobs.items():
             if isinstance(job, dict):
                 check_pipefail(path, name, job, problems)
+                check_service_keys(path, name, job, problems)
         check_gate_coverage(path, jobs, problems)
         check_secrets_in_job_if(path, jobs, problems)
 

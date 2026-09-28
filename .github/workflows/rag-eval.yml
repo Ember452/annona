@@ -50,11 +50,12 @@ jobs:
           --health-timeout 3s
           --health-retries 10
       # 对象存储：镜像与 docker-compose.yml 的 storage 服务同源同 pin（s3-storage-silo-adr）。
+      # services 不支持覆盖容器 CMD（写了 args: 会整文件判 Invalid——PyYAML 查不出，
+      # 见 validate-workflows.py 规则 4），Silo 默认 CMD 就是启动 server（:9000）；
       # 桶由应用启动时 ensureBucketExists 幂等创建，MINIO_DEFAULT_BUCKETS 在 Silo 上不生效
       # （s3-storage-silo-adr 修订 2），所以这里不设自举变量。
       storage:
         image: docker.io/pgsty/silo:RELEASE.2026-09-03T13-18-01Z
-        args: server /data --console-address ":9001"
         env:
           MINIO_ROOT_USER: eval-ak-not-for-prod
           MINIO_ROOT_PASSWORD: eval-sk-not-for-prod
