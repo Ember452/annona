@@ -1,6 +1,7 @@
 package io.annona.modules.knowledge.repository;
 
 import io.annona.modules.knowledge.entity.KbDocChunkEntity;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,6 +18,15 @@ import org.springframework.data.repository.query.Param;
 public interface KbDocChunkRepository extends JpaRepository<KbDocChunkEntity, UUID> {
 
     List<KbDocChunkEntity> findByDocIdOrderByChunkIndexAsc(UUID docId);
+
+    /**
+     * 跨模块只读批量回查（P1a-08 qa 引用组装）。检索命中已按用户过滤，这里对 owner
+     * 做二次校验：伪造 chunkId 拿不到他人正文（防御纵深，不信任上游调用方）。
+     */
+    @Query("select c from KbDocChunkEntity c join KbDocEntity d on c.docId = d.id "
+        + "where d.userId = :userId and c.id in :ids")
+    List<KbDocChunkEntity> findByIdsAndUserId(@Param("userId") UUID userId,
+        @Param("ids") Collection<UUID> ids);
 
     long countByDocId(UUID docId);
 
