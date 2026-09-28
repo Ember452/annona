@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
@@ -125,6 +126,34 @@ class QaFlowIT {
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getCode())
             .isEqualTo(ErrorCode.QA_SESSION_NOT_FOUND.getCode());
+    }
+
+    @Test
+    @DisplayName("同会话 message_order 重复被唯一约束拒绝（并发提问的兜底语义：后者报错而非错序）")
+    void duplicateMessageOrderRejected() {
+        AuthUserResponse user = registrar.register(uniqueEmail(), "GoodPass123");
+        UUID userId = UUID.fromString(user.id());
+        QaSessionEntity session = new QaSessionEntity();
+        session.setId(UUID.randomUUID());
+        session.setUserId(userId);
+        session.setTitle("并发兜底");
+        session.setUpdatedAt(Instant.now());
+        sessionRepository.save(session);
+
+        messageRepository.saveAndFlush(assistantRow(session.getId(), 1));
+        // findMaxOrder+1 的并发窗口由本约束兜底：第二个同序号写入必须失败，而不是静默错序
+        assertThatThrownBy(() -> messageRepository.saveAndFlush(assistantRow(session.getId(), 1)))
+            .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    private QaMessageEntity assistantRow(UUID sessionId, int messageOrder) {
+        QaMessageEntity row = new QaMessageEntity();
+        row.setId(UUID.randomUUID());
+        row.setSessionId(sessionId);
+        row.setMessageOrder(messageOrder);
+        row.setType(QaMessageEntity.TYPE_ASSISTANT);
+        row.setCompleted(true);
+        return row;
     }
 
     @Test
