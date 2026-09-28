@@ -22,7 +22,7 @@ import org.springframework.test.context.ActiveProfiles;
  * <p>断言四件事：
  * <ol>
  *   <li>{@code flyway_schema_history} 有 V1 成功记录；</li>
- *   <li>public schema 下 14 张表齐全（V1 基线八张 + V2 采集三张 + V4 知识库两张 + V5 评测一张）；</li>
+ *   <li>public schema 下 16 张表齐全（V1 基线八张 + V2 采集三张 + V4 知识库两张 + V5 评测一张 + V6 问答两张）；</li>
  *   <li>{@code pg_extension} 含 vector、citext 与 pg_trgm；</li>
  *   <li>二次启动 skip 迁移（V1 记录数仍为 1）。</li>
  * </ol>
@@ -51,7 +51,7 @@ class FlywayBaselineIT {
     }
 
     @Test
-    @DisplayName("public schema 下 14 张业务表齐全（V1 基线八张 + V2 采集三张 + V4 知识库两张 + V5 评测一张）")
+    @DisplayName("public schema 下 16 张业务表齐全（V1 基线八张 + V2 采集三张 + V4 知识库两张 + V5 评测一张 + V6 问答两张）")
     void allBaselineTablesExist() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         List<String> tables = jdbc.queryForList(
@@ -59,13 +59,14 @@ class FlywayBaselineIT {
                 + "WHERE table_schema = 'public' AND table_name <> 'flyway_schema_history'",
             String.class);
         // 期望清单必须随每个新迁移同步扩充：containsExactlyInAnyOrder 兼职守卫
-        // "没有迁移外的游离表"，漏登记新表会让本测试假红（V2、V4 两次踩过）。
+        // "没有迁移外的游离表"，漏登记新表会让本测试假红（V2、V4 两次踩过，V6 又踩一次）。
         assertThat(tables)
             .containsExactlyInAnyOrder(
                 "app_user", "user_profile", "user_session", "auth_token",
                 "login_attempt", "avatar_change", "user_data_request", "direction",
                 "checkin", "study_session", "study_event",
-                "kb_doc", "kb_doc_chunk", "retrieval_eval_run");
+                "kb_doc", "kb_doc_chunk", "retrieval_eval_run",
+                "qa_session", "qa_message");
     }
 
     @Test
