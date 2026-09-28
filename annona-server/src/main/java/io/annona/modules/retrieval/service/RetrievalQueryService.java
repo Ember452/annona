@@ -24,8 +24,13 @@ import org.springframework.stereotype.Service;
 @Service
 public class RetrievalQueryService {
 
-    /** 默认取 4 条（设计文档 §7：RRF 后截断 TopK=4）。配置化推迟到有真实问答数据后。 */
-    static final int DEFAULT_TOP_K = 4;
+    /**
+     * 默认取 4 条（设计文档 §7：RRF 后截断 TopK=4）。配置化推迟到有真实问答数据后。
+     *
+     * <p>public：它是端点的对外默认值（评测脚本与真库 IT 都要引用它而不是抄一个 4，
+     * 否则改了默认值只有生产代码跟着变，指标与断言还在按旧数字算）。
+     */
+    public static final int DEFAULT_TOP_K = 4;
 
     /** 上限保护：一次最多 20 条，防止把 topK 当"翻页参数"扫全库（评测脚本用的是默认值）。 */
     static final int MAX_TOP_K = 20;
