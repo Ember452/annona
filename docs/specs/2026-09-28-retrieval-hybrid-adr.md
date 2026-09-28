@@ -47,9 +47,10 @@
 
 - V5 一旦在任何真实环境应用即被 checksum 冻结（AGENTS §4），结构变更一律 V6+；`tokenizer_version` 常量升级要新增迁移重写 `tokens`，不许改 V5。
 - **P1a 期间不打 `v*` tag**：SPI 形状（`RetrievalQuery.mode`、`RetrievalHit` 字段与 score 口径）必须在 P1a 内定稿，此后只能加 default 方法。
-- `rag-eval` job 必须有对象存储 service 且显式 `ANNONA_KNOWLEDGE_INGEST_ENABLED=true`（docker profile 默认 false），否则上传文档永远 PENDING。
+- `rag-eval` job 必须有**可达的** S3 兼容对象存储，且显式 `ANNONA_KNOWLEDGE_INGEST_ENABLED=true`（docker profile 默认 false），否则上传的语料永远停在 PENDING。
+  实现形态：存储走普通 step 的 `docker run -d`而不是 `services:`——Silo 镜像需要带 `server /data` 子命令，`services:` 的 args 递不进去（2026-09-28 首次真跑时撞到）；`docker run` 起的容器没有 healthcheck，所以必须另加有界探活并**硬失败**（否则应用会在 S3 client bean 初始化阶段抛一个误导人的错）。
 - `pg_trgm` 是硬依赖：扩展不可用 = 启动被 `FlywayExtensionGuard` 拦住（不是"兜底通道不可用"），README/docker 前置条件与 `docker/postgres/init.sql` 三处必须同步。
-- `RetrievalSchemaIT`（`@Tag("docker")`）承担"一次推送撞掉全部 SQL 未知数"的职责：生成列派生、`to_tsquery` 命中、`content % q` 命中、`ts_rank` 可排序、两个 GIN 存在，五项断言常驻。
+- `RetrievalSchemaIT`（`@Tag("docker")`）承担“一次推送撞掉全部 SQL 未知数”的职责：生成列派生、`to_tsquery` 命中、**`ILIKE` 包含匹配命中且 `%` 相似度不命中**（两条谓词同表对比）、`ts_rank` 可排序、两个 GIN 存在，五项断言常驻。
 - 分词与 `Chunker.chunk` 同在 CHUNKING 步骤内联执行，违反 keyword ADR 后果 2，已在其修订第 4 条登记触发条件。
 
 ## 何时重新评估

@@ -1,7 +1,8 @@
-# RAG 检索评测。仅当 retrieval / chunk / scripts/rag-eval 变更时触发；
-# services 起 pgvector + redis + Silo 对象存储——评测形状要 multipart 上传语料，
-# 所以 S3 是这个 job 的硬前置（批 1 只给 compose 起了 storage，services: 这边漏配
-# 会让 eval 在上传那一步炸，2026-09-28 立项时发现）。
+# RAG 检索评测。仅当 retrieval / chunk / db迁移 / scripts/rag-eval 变更时触发；
+# services 只起 pgvector + redis；对象存储走普通 step 的 docker run（Silo 需要带
+# `server /data` 子命令，services: 递不进去）——评测要 multipart 上传语料，所以 S3
+# 是这个 job 的硬前置，缺它就在上传那一步爆（2026-09-28 立项时发现）。
+# 另：docker run -d 起的容器没有 healthcheck，下面有显式探活 + 硬失败。
 # P1a-09 才落 scripts/rag-eval/，脚本不存在时优雅 skip（保留 workflow 结构，改动检索代码不会静默漂）。
 # embedding 来源条件化（retrieval-hybrid-adr §决策 9）：有 EVAL_EMBEDDING_API_KEY 就出真数字，
 # 没有就退到 provider=fake 只做管道回归——fake 的召回不可读作质量，报告与
