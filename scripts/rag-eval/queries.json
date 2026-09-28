@@ -1,0 +1,25 @@
+{
+  "top_k": 3,
+  "queries": [
+    {"id": "q01", "bucket": "symbol", "text": "看门狗 续期", "relevant_docs": ["java-concurrency.md"]},
+    {"id": "q02", "bucket": "symbol", "text": "CAS 缩写", "relevant_docs": ["java-concurrency.md"]},
+    {"id": "q03", "bucket": "symbol", "text": "volatile 可见性", "relevant_docs": ["java-concurrency.md"]},
+    {"id": "q04", "bucket": "symbol", "text": "AQS 队列", "relevant_docs": ["java-concurrency.md"]},
+    {"id": "q05", "bucket": "symbol", "text": "ThreadLocal 内存泄漏", "relevant_docs": ["java-concurrency.md"]},
+    {"id": "q06", "bucket": "phrase", "text": "锁升级的过程是怎样的", "relevant_docs": ["java-concurrency.md"]},
+    {"id": "q07", "bucket": "phrase", "text": "线程池提交任务后发生什么", "relevant_docs": ["java-concurrency.md"]},
+    {"id": "q08", "bucket": "phrase", "text": "垃圾回收怎么判断对象已死", "relevant_docs": ["jvm-gc.md"]},
+    {"id": "q09", "bucket": "phrase", "text": "停顿时间怎么权衡", "relevant_docs": ["jvm-gc.md"]},
+    {"id": "q10", "bucket": "phrase", "text": "堆内存分代的原因", "relevant_docs": ["jvm-gc.md"]},
+    {"id": "q11", "bucket": "phrase", "text": "full gc 频繁怎么排查", "relevant_docs": ["jvm-gc.md"]},
+    {"id": "q12", "bucket": "phrase", "text": "自调用时事务注解不生效", "relevant_docs": ["spring-transaction.md"]},
+    {"id": "q13", "bucket": "phrase", "text": "传播行为 REQUIRED 和 REQUIRES_NEW 区别", "relevant_docs": ["spring-transaction.md"]},
+    {"id": "q14", "bucket": "phrase", "text": "事务隔离级别与并发异常", "relevant_docs": ["spring-transaction.md"]},
+    {"id": "q15", "bucket": "phrase", "text": "回滚在什么情况下不发生", "relevant_docs": ["spring-transaction.md"]},
+    {"id": "q16", "bucket": "phrase", "text": "混合检索为什么要融合两路结果", "relevant_docs": ["rag-hybrid.md"]},
+    {"id": "q17", "bucket": "phrase", "text": "重排在检索里的位置", "relevant_docs": ["rag-hybrid.md"]},
+    {"id": "q18", "bucket": "phrase", "text": "分块粒度对召回的影响", "relevant_docs": ["rag-hybrid.md"]},
+    {"id": "q19", "bucket": "clause", "text": "第十二条 格式条款", "relevant_docs": ["law-contract-clauses.md"]},
+    {"id": "q20", "bucket": "clause", "text": "违约责任 免责情形", "relevant_docs": ["law-contract-clauses.md"]}
+  ]
+}

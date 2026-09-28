@@ -119,7 +119,10 @@ jobs:
           python3 scripts/rag-eval/eval.py \
             --base-url http://localhost:8080 \
             --queries scripts/rag-eval/queries.json \
-            --report-dir out/rag-eval
+            --report-dir out/rag-eval \
+            --label "ci-${GITHUB_SHA::7}" \
+            --embedding-provider "$ANNONA_MODEL_EMBEDDING_PROVIDER" \
+            --embedding-model "$ANNONA_DEFAULT_EMBEDDING_MODEL"
           kill $APP_PID
         env:
           SPRING_PROFILES_ACTIVE: docker
