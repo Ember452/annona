@@ -53,6 +53,12 @@ public class QaMessageEntity {
     @Column(name = "citations")
     private List<QaCitation> citations;
 
+    /** 检索空命中诊断（RetrievalMissReason 名；MATCHED 与 USER 行恒为 null，DB CHECK 兜底）。
+     * 流式期间经 sources 事件透传，本列让历史视图同样回答"凭什么没找到"
+     * （V7，批 3 外审：reason 此前只在流式期可见）。 */
+    @Column(name = "miss_reason", length = 32)
+    private String missReason;
+
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private Instant createdAt;
 
@@ -110,6 +116,14 @@ public class QaMessageEntity {
 
     public void setCitations(List<QaCitation> citations) {
         this.citations = citations;
+    }
+
+    public String getMissReason() {
+        return missReason;
+    }
+
+    public void setMissReason(String missReason) {
+        this.missReason = missReason;
     }
 
     public Instant getCreatedAt() {

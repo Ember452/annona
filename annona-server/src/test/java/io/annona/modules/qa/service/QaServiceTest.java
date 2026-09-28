@@ -96,7 +96,7 @@ class QaServiceTest {
             return row;
         });
         lenient().when(messageRepository.findMaxOrder(any(UUID.class))).thenReturn(0);
-        lenient().when(messageRepository.backfill(any(UUID.class), any(), anyList(), eq(true)))
+        lenient().when(messageRepository.backfill(any(UUID.class), any(), anyList(), eq(true), any()))
             .thenReturn(1);
         lenient().when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     }
@@ -169,7 +169,7 @@ class QaServiceTest {
             assertThat(states.get(1)).containsExactly(QaMessageEntity.TYPE_ASSISTANT, "", "false");
 
             verify(messageRepository).backfill(eq(saved.get(1).getId()), eq("第一段"),
-                citationsCaptor.capture(), eq(true));
+                citationsCaptor.capture(), eq(true), isNull());
             assertThat(citationsCaptor.getValue()).hasSize(1);
             assertThat(citationsCaptor.getValue().get(0).chunkId()).isEqualTo(CHUNK_ID);
         }
@@ -200,7 +200,7 @@ class QaServiceTest {
 
             UUID assistantId = saved.get(1).getId();
             verify(messageRepository).backfill(eq(assistantId), eq("部分回答，然后断了"),
-                isNull(), eq(false));
+                isNull(), eq(false), isNull());
         }
 
         @Test
@@ -213,7 +213,7 @@ class QaServiceTest {
 
             assertThat(saved).hasSize(2); // 只有 USER 行与占位
             assertThat(saved.get(1).isCompleted()).isFalse();
-            verify(messageRepository, never()).backfill(any(UUID.class), any(), anyList(), eq(true));
+            verify(messageRepository, never()).backfill(any(UUID.class), any(), anyList(), eq(true), any());
         }
     }
 
@@ -236,7 +236,7 @@ class QaServiceTest {
 
             service(new StubProvider(List.of("答"), false)).ask(USER, new QaAskRequest(null, "问题"));
 
-            verify(messageRepository).backfill(any(UUID.class), eq("答"), citationsCaptor.capture(), eq(true));
+            verify(messageRepository).backfill(any(UUID.class), eq("答"), citationsCaptor.capture(), eq(true), isNull());
             List<QaCitation> citations = citationsCaptor.getValue();
             assertThat(citations).hasSize(2);
             assertThat(citations.get(0).chunkId()).isEqualTo(CHUNK_ID);
@@ -246,13 +246,14 @@ class QaServiceTest {
         }
 
         @Test
-        @DisplayName("空命中：仍走完整流（空上下文 + 空引用），空命中原因经 sources 事件透传")
+        @DisplayName("空命中：仍走完整流（空上下文 + 空引用），诊断 reason 随回填持久化")
         void emptyHitsStillStreamWithReason() {
             stubRetrieval(CHUNK_ID, true);
 
             service(new StubProvider(List.of("资料里没有"), false)).ask(USER, new QaAskRequest(null, "冷门问题"));
 
-            verify(messageRepository).backfill(any(UUID.class), eq("资料里没有"), eq(List.of()), eq(true));
+            verify(messageRepository).backfill(any(UUID.class), eq("资料里没有"), eq(List.of()), eq(true),
+                eq("NO_MATCH"));
             verify(docQueryService).chunkReferences(eq(USER), any());
         }
 

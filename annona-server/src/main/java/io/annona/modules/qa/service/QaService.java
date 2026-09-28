@@ -17,6 +17,7 @@ import io.annona.modules.qa.entity.QaSessionEntity;
 import io.annona.modules.qa.mapper.QaMapper;
 import io.annona.modules.qa.repository.QaMessageRepository;
 import io.annona.modules.qa.repository.QaSessionRepository;
+import io.annona.modules.retrieval.dto.RetrievalMissReason;
 import io.annona.modules.retrieval.dto.RetrievalRequest;
 import io.annona.modules.retrieval.service.RetrievalQueryService;
 import io.annona.modules.retrieval.dto.RetrievalResponse;
@@ -213,6 +214,8 @@ public class QaService {
                 chunk.headingPath(), snippet(chunk.content()), hit.score()));
             context.add("资料[" + citations.size() + "]：" + chunk.content());
         }
+        String missReason = retrieval.diagnostics().reason() == RetrievalMissReason.MATCHED
+            ? null : retrieval.diagnostics().reason().name();
         send(emitter, "sources", new SourcesPayload(citations, retrieval.diagnostics().reason().name()));
 
         if (chatProvider.isEmpty()) {
@@ -239,7 +242,7 @@ public class QaService {
 
                     @Override
                     public void onComplete(String fullText) {
-                        backfill(assistantId, fullText, citations, !state.clientGone);
+                        backfill(assistantId, fullText, citations, !state.clientGone, missReason);
                         send(emitter, "done", Map.of("messageId", assistantId.toString()));
                         emitter.complete();
                     }
@@ -247,14 +250,14 @@ public class QaService {
                     @Override
                     public void onError(Throwable cause) {
                         log.warn("问答流失败 sessionId={} messageId={}", sessionId, assistantId, cause);
-                        backfill(assistantId, full.toString(), null, false);
+                        backfill(assistantId, full.toString(), null, false, missReason);
                         fail(emitter, assistantId, cause);
                     }
                 });
         } catch (Exception e) {
-            // 提交被拒（AI-IO 池 AbortPolicy 满）等提交期失败：占位行保留为未完成
-            log.warn("问答任务提交失败 sessionId={} messageId={}", sessionId, assistantId, e);
-            backfill(assistantId, full.toString(), null, false);
+            // 流式调用本身失败（网络/上游/解析）：占位行保留为未完成
+            log.warn("问答流调用失败 sessionId={} messageId={}", sessionId, assistantId, e);
+            backfill(assistantId, full.toString(), null, false, missReason);
             fail(emitter, assistantId, e);
         }
     }
@@ -263,11 +266,14 @@ public class QaService {
      * 短事务②：条件回填占位行（{@code completed=false} 才更新）。占位被并发级联删除、
      * 或重复终态回调时影响 0 行，记 debug 跳过——merge 版回填的 UPDATE 打到已消失的行
      * 会抛 StaleObjectStateException（CI docker-it 实测），条件 UPDATE 与 knowledge
-     * 状态机同一取舍。citations 只随 completed=true 落库（中断行保持无引用口径）。
+     * 状态机同一取舍。citations 只随 completed=true 落库（中断行保持无引用口径）；
+     * missReason 为检索诊断名（MATCHED 传 null），中断与完整回答都落（描述检索结果而非
+     * 回答完成度）。
      */
-    private void backfill(UUID assistantId, String content, List<QaCitation> citations, boolean completed) {
+    private void backfill(UUID assistantId, String content, List<QaCitation> citations,
+        boolean completed, String missReason) {
         Integer updated = tx.execute(status ->
-            messageRepository.backfill(assistantId, content, completed ? citations : null, completed));
+            messageRepository.backfill(assistantId, content, completed ? citations : null, completed, missReason));
         if (updated == null || updated == 0) {
             log.debug("回填跳过：占位行已消失或已回填 messageId={}", assistantId);
         }

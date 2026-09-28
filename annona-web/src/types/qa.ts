@@ -29,6 +29,8 @@ export interface QaMessage {
   citations: QaCitation[] | null
   messageOrder: number
   createdAt: string
+  /** 检索空命中诊断（MATCHED / USER 行为 null）——历史视图的"凭什么没找到"（V7）。 */
+  missReason: QaMissReason | null
 }
 
 /** 空命中原因（后端 RetrievalMissReason；MATCHED = 有命中，无诊断含义）。 */

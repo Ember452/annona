@@ -28,11 +28,12 @@ public interface QaMessageRepository extends JpaRepository<QaMessageEntity, UUID
      * 并发级联删除）或已被回填过（重复终态回调）时影响 0 行，调用方记日志后跳过。
      * **刻意不走 findById+save**：merge 发出的 UPDATE 打到并发删除后的行会抛
      * StaleObjectStateException（CI docker-it 实测）——写竞争用条件语句表达而非乐观锁重试，
-     * 与 knowledge 状态机的条件 UPDATE 同一取舍。
+     * 与 knowledge 状态机的条件 UPDATE 同一取舍。missReason 为检索诊断名（MATCHED 传 null）。
      */
     @Modifying
     @Query("update QaMessageEntity m set m.content = :content, m.citations = :citations, "
-        + "m.completed = :completed where m.id = :id and m.completed = false")
+        + "m.completed = :completed, m.missReason = :missReason where m.id = :id and m.completed = false")
     int backfill(@Param("id") UUID id, @Param("content") String content,
-        @Param("citations") List<QaCitation> citations, @Param("completed") boolean completed);
+        @Param("citations") List<QaCitation> citations, @Param("completed") boolean completed,
+        @Param("missReason") String missReason);
 }

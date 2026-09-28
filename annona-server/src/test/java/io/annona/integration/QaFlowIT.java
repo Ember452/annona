@@ -74,8 +74,9 @@ class QaFlowIT {
         assertThat(messages.get(0).content()).isEqualTo("知识库里有什么？");
         assertThat(messages.get(1).type()).isEqualTo(QaMessageEntity.TYPE_ASSISTANT);
         assertThat(messages.get(1).completed()).isTrue();
-        // 无文档 → 空命中 → 空引用列表（reason 透传在 SSE 事件里，此处验落库口径）
+        // 无文档 → 空命中 → 空引用列表；诊断 reason 随消息持久化（V7），历史视图同样可解释
         assertThat(messages.get(1).citations()).isEmpty();
+        assertThat(messages.get(1).missReason()).isEqualTo("NO_READY_DOC");
         assertThat(messages.get(1).content()).isEqualTo(FakeStreamingChatProvider.RESPONSE);
     }
 

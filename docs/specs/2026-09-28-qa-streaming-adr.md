@@ -50,3 +50,10 @@
 - reasoning 增量 / tool-call 分片 / 多模态分块任一进需求 → 在 `token` 事件上**加字段**而非换事件语义；若需新事件类型，走本 ADR 修订。
 - JSONB 往返在 Hibernate 7 上受阻 → 降级 `TEXT` + 显式转换器（`QaFlowIT` 是证伪点）。
 - 同会话并发提问成为真实场景 → 会话级锁或 ask 幂等键。
+
+## 后续修订
+
+1. **2026-09-28 外审修复批（`fix/p1a-08-review-fixes`）**：
+   - **miss_reason 持久化（V7）**：外审发现空命中诊断只在流式期可见，历史视图无法回答"凭什么没找到"。选 **additive 加列**而非把 citations 包成 `{citations, reason}` 对象——后者改变 JSONB 形状、破坏已落库行（V6 已进真实环境即 checksum 冻结）；V7 的 CHECK 保证 USER 行与 MATCHED 恒为 NULL。触发重新评估：诊断种类扩展（如加"权限不足"）时 IN 列表随枚举同步。
+   - **ai-io 池饱和语义**：ask 提交被 AbortPolicy 拒绝时报 AI_SERVICE_UNAVAILABLE(1100)（此前是裸 500），占位行保留未完成。**已知容量语义（不改参不加池）**：aiIo 8/32/200 与 embedding/向量化共享，流式回答占线程至上游吐完（最坏 = emitter 120s），排队即用户侧"转圈"——限流/配额归 P1b 的 1200 段。触发重新评估：真实并发问答出现排队投诉。
+   - **并发序号**：同会话并发提问由 `uq_qa_message_session_order` 兜底（后者报错非错序），QaFlowIT 直接钉约束行为。
