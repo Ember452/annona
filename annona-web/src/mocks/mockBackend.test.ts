@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { InternalAxiosRequestConfig } from 'axios'
 
-import { createMockAdapter, MOCK_ENABLED, mockRespond } from './mockBackend'
+import { createMockAdapter, mockRespond } from './mockBackend'
 
 function cfg(method: string, url: string, data?: unknown): InternalAxiosRequestConfig {
   // adapter 收到的 config 已过 transformRequest（data 为序列化串、headers 就位）；
@@ -10,10 +10,27 @@ function cfg(method: string, url: string, data?: unknown): InternalAxiosRequestC
 }
 
 describe('mockBackend（VITE_MOCK_BACKEND 纯前端模式路由表）', () => {
-  it('未设 env 时标志恒为 false（CI/生产构建不含该开关）', () => {
-    // 本测试文件运行于未设 VITE_MOCK_BACKEND 的环境；若有人未来在测试环境注入该
-    // env，此断言会提醒他去检查 adapter 接入路径
-    expect(MOCK_ENABLED).toBe(false)
+  // MOCK_ENABLED 是模块级常量（读构建期内联的 import.meta.env），所以本用例不能
+  // 靠“测试环境恰好没设这个变量”来断言：annona-web/.env.local 里开 VITE_MOCK_BACKEND=1
+  // 做纯前端开发时，同一个断言会在本机红、在 CI 绿（环境耦合的测试等于没有测试）。
+  // 因此两种状态都显式 stub，并 resetModules 重读常量。
+  describe('开关语义（不依赖本机 .env.local）', () => {
+    beforeEach(() => {
+      vi.resetModules()
+      vi.unstubAllEnvs()
+    })
+
+    it('未设 VITE_MOCK_BACKEND 时不启用（CI / 生产构建不含该开关）', async () => {
+      vi.stubEnv('VITE_MOCK_BACKEND', '')
+      const { MOCK_ENABLED: off } = await import('./mockBackend')
+      expect(off).toBe(false)
+    })
+
+    it('只有显式置 1 才启用纯前端模式', async () => {
+      vi.stubEnv('VITE_MOCK_BACKEND', '1')
+      const { MOCK_ENABLED: on } = await import('./mockBackend')
+      expect(on).toBe(true)
+    })
   })
 
   it('身份端点：me 返回 mock 用户，login/logout/register 恒成功', () => {
