@@ -250,7 +250,7 @@ direction
 | `mastery` | 方向掌握度 | user_id, **direction_id**, mastery, confidence, last_practiced_at, sample_size, updated_at |
 | `kb_doc` | 文档元数据 + 入库状态机（V4 实际表名，原写 `knowledge_doc`） | user_id, direction_id, name, original_filename, file_hash, storage_key, status, processed_chunks/total_chunks, attempt_id, recovery_count, analyzer_version, embedding_model, chunk_count |
 | `kb_doc_chunk` | 切片与向量（V4 建表 + V5 关键词列，原写 `doc_chunk`） | doc_id, chunk_index, heading_path, char_start/char_end, content, content_hash, embedding vector(1024), **tokens**, **tsv**（`GENERATED ALWAYS AS (to_tsvector('simple', tokens)) STORED`）, **tokenizer_version** |
-| `qa_session` / `qa_message` | 知识问答会话与消息（V6，P1a-08） | session_id, type(USER/ASSISTANT), content, message_order, completed, citations(jsonb)——**与 `user_session`/`study_session` 不同构**，见表注释 |
+| `qa_session` / `qa_message` | 知识问答会话与消息（V6 + V7 miss_reason，P1a-08） | session_id, type(USER/ASSISTANT), content, message_order, completed, citations(jsonb), miss_reason——**与 `user_session`/`study_session` 不同构**，见表注释 |
 | `question_bank_item` | 题库 | direction_id, difficulty, stem, ref_answer, key_points, rubric, followups, source_chunk_id, status, hit_rate |
 | `interview_session` | 面试会话 | user_id, direction_id, stage_plan, status, total_score, **chat_model, evaluator_model, prompt_hash, evaluator_version** |
 | `interview_message` | 问答流水 | session_id, role, content, question_id, turn_no, followup_depth |

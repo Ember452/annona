@@ -182,7 +182,7 @@ io.annona
 │   │   ├── controller/                #   POST /api/qa/messages（SSE 四事件 token/sources/done/error）+
 │   │   │                             #   GET sessions / sessions/{id}/messages；置顶/归档/多库关联 ⏸ 未做
 │   │   ├── service/                   #   占位→回填两短事务、流式编排（ai-io 池）、空命中诊断透传
-│   │   ├── entity/ repository/ dto/   #   QaSession / QaMessage（citations JSONB，V6）
+│   │   ├── entity/ repository/ dto/   #   QaSession / QaMessage（citations JSONB V6 + miss_reason V7）
 │   │   │  # 跨模块只读经 RetrievalQueryService（检索）与 KnowledgeDocQueryService.chunkReferences
 │   │   │  # （正文回查）——全仓首批跨模块消费（qa-streaming-adr §决策 7）；chat 端口在
 │   │   │  # common/model、实现在 infrastructure/llm；prompt 资源 prompts/qa-*.st（rewrite ⏸ 未接）

@@ -35,6 +35,8 @@ interface ChatEntry {
   content: string
   completed?: boolean
   citations?: QaCitation[] | null
+  /** 仅历史 ASSISTANT 行携带（V7 持久化）；流式期间走 sources 事件。 */
+  missReason?: QaMissReason | null
 }
 
 export default function QaPage() {
@@ -152,6 +154,7 @@ export default function QaPage() {
       content: message.content,
       completed: message.completed,
       citations: message.citations,
+      missReason: message.missReason,
     })),
   ]
   if (pendingQuestion != null) {
@@ -217,6 +220,9 @@ export default function QaPage() {
                   )}
                   {entry.kind === 'history' && entry.completed === false && (
                     <p className="mt-2 text-xs text-amber-600">回答中断，以上为已生成的部分内容。</p>
+                  )}
+                  {entry.kind === 'history' && entry.missReason != null && entry.missReason !== 'MATCHED' && (
+                    <p className="mt-2 text-xs text-muted-foreground">{REASON_HINTS[entry.missReason]}</p>
                   )}
                   {entry.citations != null && entry.citations.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5">
