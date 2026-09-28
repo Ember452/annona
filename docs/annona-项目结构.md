@@ -110,7 +110,10 @@ annona/
 io.annona
 ├── AnnonaApplication.java             # 启动类：仅 @SpringBootApplication + @EnableConfigurationProperties 汇总
 │
-├── config/                            # 【全局装配】所有 @Configuration 的家
+├── config/                            # 【应用侧装配】跨模块的 @Configuration：MVC、线程池、安全、属性类、可观测性
+│   #                                  #   （不是“所有 @Configuration 的家”：SDK 能力的装配跟实现一起留在
+│   #                                  #    infrastructure——ParseConfig / StorageConfig / RedissonConfig /
+│   #                                  #    EmbeddingConfig；判据 = 这个 bean 跨不跨模块，见 §3）
 │   ├── web/                           #   MVC 定制、CORS、静态资源、SSE 超时、OpenAPI/Swagger 分组
 │   ├── async/                         #   四类线程池（通用/AI-IO/CPU/查询）+ Redis Stream 容器注册
 │   ├── persistence/                   #   JPA/事务/审计字段/pgvector 类型注册、Flyway callback

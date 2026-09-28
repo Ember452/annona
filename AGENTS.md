@@ -127,7 +127,8 @@
 - **约定 → 机检的升级元规则**：任何一条本文件或代码注释里的硬约定，一旦被实际违反/踩坑一次，随修复**同一批次**给它配上机器门禁（pre-commit 检查 / ArchUnit 规则 / CI 断言）——只靠"下一个人读文档"传递的项目约定必然失守。已有先例：save/merge 语义（假绿复盘后进 §4）、迁移冻结（V1 被改两次后上 pre-commit）、pipefail（tee 吞退出码后进 validate-workflows）。新增约定时要么同时交出机检，要么写明触发升级的条件。
 
 - 依赖方向只能是 `modules → spi → common`；`modules/*` 之间禁止 import，除白名单 `interview/orchestrator → planner/advisor`。跨模块通信只有两种：只读走 `XxxQueryService` / `shared` 读模型；写走领域事件。
-- **端口放哪个模块的判据**：问"第三方能否在**不改数据库结构**的前提下替换这个实现"。能 → 真扩展点，进 `annona-spi`（`Retriever`、`ModelProvider`、`EmbeddingProvider`）；不能 → 只是内部解耦（让 `modules` 不必 import infra），端口进 `annona-common`、SDK 实现进 `annona-infrastructure`（先例：`DocumentParser`、`ObjectStorage`、`TaskStreamPort`；分词器属后者——它的输出被 V5 的 `tsv` 生成列表达式冻结，换分词器 = 改 DDL）。**不要因为某个 javadoc 写了"预留扩展点"就往 spi 塞端口**：`annona-spi` 是唯一发到 Central 的 artifact，进去即对外契约。
+- **端口放哪个模块：两条正交的判据，不要合成一条**。① **有没有外部实现方需求**（真的会有第三方写这个实现吗）：有 → 进 `annona-spi`（已定的五个：`Retriever`、`ModelProvider`、`EmbeddingProvider`、`IdentityProvider`、`LearningSignalReader`、`DecisionRule`）；没有 → 只是内部解耦，端口进 `annona-common`（先例：`DocumentParser`、`ObjectStorage`、`TaskStreamPort`、`SessionStore`、`Tokenizer`）。**“能被替换”不是判据**——按那个标准几乎所有端口都是扩展点，spi 会长到十几个且每个都变成对外发布契约（改一次就是破坏性变更）。② **带不带第三方 SDK**：带就只能在 `annona-infrastructure`（common 只放端口与契约）；`annona-spi` 永远零 SDK，它是唯一发到 Central 的 artifact。
+  不要把这条误解为运行期隔离：infra 是 `annona-server` 的 runtime 依赖，最终只有一个 fat jar，**它买到的是源码级边界**（业务代码编译期拿不到厂商类型，所以 Service 里的外部调用一定经过接口，slice 测试不用起容器），不是依赖净化。**什么时候该重新评估**（出现任一项就说明规则在造成摩擦，先讨论再继续写）：infra 实现须接受业务概念入参 ≥2 次；某个端口方法参数超过 3 个；有人为了绕开本规则在 server 里直接 import SDK。
 - 分层：`Controller`（路由、校验、委托）→ `Service`（编排，`@Transactional` 只在此层且范围最小）→ `Repository`（JPA，自定义查询用方法名或 `@Query`）。
 - 异常出口分两类：**业务失败**返回 HTTP 200 + `Result.error(code, msg)`；**路由/传输层错误**（404/405/400/500）返回真实 HTTP 状态码 + 同样的 `Result` 体。不得把后者也压成 200（会吞掉故障信号并伪装 SPA fallback 缺失）。
 - 新增业务模块 = 在 `annona-server` 加包 + 更新 ArchUnit 白名单，**不动 pom**；出现第二个可部署产物才新建 Maven 模块。
