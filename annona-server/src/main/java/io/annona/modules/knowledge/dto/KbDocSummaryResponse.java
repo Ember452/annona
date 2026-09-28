@@ -15,9 +15,11 @@ import java.util.UUID;
  * @param totalChunks     分块总数
  * @param chunkCount      READY 后的实际分块数
  * @param error           FAILED 时的可读原因
+ * @param analyzerVersion 产生当前分块的算法版本（{@code kb_doc.analyzer_version}），前端比对
+ *                        {@code currentAnalyzerVersion} 提示重建
  * @param createdAt       上传时间
  */
 public record KbDocSummaryResponse(UUID id, String name, UUID directionId, long fileSize,
                                    String status, int processedChunks, int totalChunks,
-                                   int chunkCount, String error, Instant createdAt) {
+                                   int chunkCount, String error, String analyzerVersion, Instant createdAt) {
 }

@@ -2,6 +2,7 @@ package io.annona.modules.knowledge.ops;
 
 import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
+import io.annona.modules.knowledge.chunk.Chunker;
 import io.annona.modules.knowledge.dto.KbDocChunkView;
 import io.annona.modules.knowledge.dto.KbDocDetailResponse;
 import io.annona.modules.knowledge.dto.KbDocStatusResponse;
@@ -47,7 +48,7 @@ public class KnowledgeDocQueryService {
             .findByDocIdOrderByChunkIndexAsc(doc.getId()).stream()
             .map(mapper::toChunkView)
             .toList();
-        return new KbDocDetailResponse(mapper.toSummary(doc), chunks);
+        return new KbDocDetailResponse(mapper.toSummary(doc), Chunker.VERSION, chunks);
     }
 
     public KbDocStatusResponse status(String userId, String docId) {

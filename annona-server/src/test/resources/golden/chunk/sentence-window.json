@@ -1,5 +1,5 @@
 {
-  "description": "超长节窗口化：自定义小参数 40/5/0.6 放大窗口行为——句末断点提前收口、重叠推进、偏移精确",
+  "description": "超长节窗口化：自定义小参数 40/5/0.6 放大窗口行为——句末断点提前收口、重叠推进、偏移精确。第二片起点 28 落在 cccc 原子串（22-31）中间，char-v2 边界回退到标识符起点 22",
   "options": { "sectionChunkSize": 40, "overlap": 5, "sentenceBreakRatio": 0.6 },
   "blocks": [
     { "type": "PARAGRAPH", "text": "aaaaaaaaaa。bbbbbbbbbb。cccccccccc。dddddddddd。", "charStart": 0, "charEnd": 44 }
@@ -15,9 +15,9 @@
     {
       "index": 1,
       "headingPath": "",
-      "charStart": 28,
+      "charStart": 22,
       "charEnd": 44,
-      "text": "cccc。dddddddddd。"
+      "text": "cccccccccc。dddddddddd。"
     }
   ]
 }

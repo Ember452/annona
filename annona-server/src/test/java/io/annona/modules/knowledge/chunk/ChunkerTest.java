@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.annona.common.parse.DocumentBlock;
 import io.annona.common.parse.DocumentBlock.BlockType;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -206,6 +207,114 @@ class ChunkerTest {
             assertThat(chunks.get(0).charStart()).isEqualTo(100);
             assertThat(chunks.get(0).charEnd()).isEqualTo(204);
             assertThat(chunks.get(0).text()).isEqualTo("甲块内容\n\n乙块内容");
+        }
+    }
+
+    @Nested
+    @DisplayName("ASCII 标识符边界（char-v2）")
+    class AtomicIdentifierBoundaries {
+
+        @Test
+        @DisplayName("跨窗口边界的配置项与命令保持完整，不出现半截标识符")
+        void identifiersStayWholeAcrossWindows() {
+            String config = "x".repeat(30) + "application.properties" + "。" + "y".repeat(50);
+            assertThat(Chunker.chunk(List.of(para(config, 0, config.length())), new ChunkOptions(40, 5, 0.6)))
+                .extracting(KnowledgeChunk::text)
+                .allSatisfy(text -> {
+                    if (text.contains("application")) {
+                        assertThat(text).contains("application.properties");
+                    }
+                });
+
+            String command = "x".repeat(35) + "-Dserver.port=8888" + "。" + "y".repeat(30);
+            assertThat(Chunker.chunk(List.of(para(command, 0, command.length())), new ChunkOptions(40, 5, 0.6)))
+                .extracting(KnowledgeChunk::text)
+                .allSatisfy(text -> {
+                    if (text.contains("-Dserver")) {
+                        assertThat(text).contains("-Dserver.port=8888");
+                    }
+                });
+        }
+
+        @Test
+        @DisplayName("超长原子串（>32）不迁移边界：仍按窗口硬切，片数与尺寸不劣化")
+        void oversizedAtomicRunStillHardSplits() {
+            String text = "x".repeat(100) + "。尾巴";
+
+            List<String> pieces = Chunker.splitText(text, 40, 5);
+
+            assertThat(pieces).hasSize(3);
+            assertThat(pieces.get(0)).hasSize(40);
+            assertThat(pieces).allSatisfy(piece -> assertThat(piece.length()).isLessThanOrEqualTo(40));
+            // 100 字的 x 串不是标识符，MAX_ATOMIC_SHIFT 不迁移：第 2/3 片起点落在串中间是接受的硬切
+            assertThat(pieces.get(0)).endsWith("x");
+            assertThat(pieces.get(1)).startsWith("x");
+        }
+
+        @Test
+        @DisplayName("不变量表驱动：片首不切原子串、且每个 ≤32 的原子串至少在一片中完整可见（双路径）")
+        void pieceStartsNeverSplitAtomicRuns() {
+            List<String> samples = List.of(
+                "配置项application.properties控制端口。-Dserver.port=8888是启动参数。路径/usr/local/bin已存在。",
+                "联系support@example.com，文档见https://example.com/docs，配置键为annona.model.chat。",
+                "aaaaaaaaaa。bbbbbbbbbb。cccccccccc。dddddddddd。eeeeeeeeee。"
+            );
+            for (String text : samples) {
+                List<String> chunkTexts = Chunker.chunk(
+                    List.of(para(text, 0, text.length())), new ChunkOptions(40, 5, 0.6))
+                    .stream().map(KnowledgeChunk::text).toList();
+                assertStartsAtRunBoundary(text);
+                assertRunsVisibleSomewhere(text, chunkTexts);
+                assertRunsVisibleSomewhere(text, Chunker.splitText(text, 40, 5));
+            }
+        }
+
+        /** 精确口径：chunk 带 charStart，直接对原文偏移断言"片首原子 ⇒ 前一字非原子"。
+         * 已知残余边界（retreatStart 注释）：串起点不晚于上一窗口起点时无法再退，>32 串不迁移——
+         * 表数据不含这两类构造。 */
+        private void assertStartsAtRunBoundary(String text) {
+            List<KnowledgeChunk> chunks = Chunker.chunk(
+                List.of(para(text, 0, text.length())), new ChunkOptions(40, 5, 0.6));
+            for (KnowledgeChunk chunk : chunks) {
+                if (chunk.charStart() > 0 && Chunker.isAtomic(text.charAt(chunk.charStart()))) {
+                    assertThat(Chunker.isAtomic(text.charAt(chunk.charStart() - 1)))
+                        .as("片首 %d 切开了原子串：%s", chunk.charStart(), chunk.text())
+                        .isFalse();
+                }
+            }
+        }
+
+        /**
+         * 行为口径：缺陷的真实危害是"标识符在任何一片里都不完整"（char-v1 实测的
+         * {@code lication.properties} 块）。断言每个长度 ≥4 且 ≤32 的原子串至少完整出现在
+         * 一片中。相邻片因回退而重叠是设计接受的代价，故不能用"上一片末字非原子"这类
+         * 相邻串口径——splitText 无偏移，该口径在回退发生时本身就是错的。
+         */
+        private void assertRunsVisibleSomewhere(String text, List<String> pieces) {
+            List<String> runs = atomicRuns(text);
+            for (String run : runs) {
+                assertThat(pieces).as("原子串 %s 在所有片中都不完整", run)
+                    .anySatisfy(piece -> assertThat(piece).contains(run));
+            }
+        }
+
+        private List<String> atomicRuns(String text) {
+            List<String> runs = new ArrayList<>();
+            int i = 0;
+            while (i < text.length()) {
+                if (Chunker.isAtomic(text.charAt(i))) {
+                    int start = i;
+                    while (i < text.length() && Chunker.isAtomic(text.charAt(i))) {
+                        i++;
+                    }
+                    if (i - start >= 4 && i - start <= 32) {
+                        runs.add(text.substring(start, i));
+                    }
+                } else {
+                    i++;
+                }
+            }
+            return runs;
         }
     }
 
