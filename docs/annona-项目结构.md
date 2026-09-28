@@ -89,7 +89,7 @@ annona/
 | 通用 | `annona-common` | 统一响应、异常体系、枚举、常量、工具、注解与切面基类、**跨模块端口** | 第三方库（**但本仓约定 SDK 只进 infra**：common 只放端口与契约，判据见 AGENTS.md §4） | 依赖任何业务概念、依赖 spi/infra/server |
 | 契约 | `annona-spi` | 五个扩展点接口、跨模块契约 DTO、领域事件定义 | common | 引入 Spring / MyBatis / SDK（保证可被外部实现） |
 | 技术 | `annona-infrastructure` | SPI 实现 + 外部系统适配（PG/pgvector、Redis、S3、LLM HTTP、加密、PDF、分词） | common, spi, 各类 SDK | 含业务规则、被 server 编译期直接引用实现类 |
-| 应用 | `annona-server` | 11 个业务模块、REST/SSE/WS 接口、启动类、CLI、prompt 与 skill 资源 | common, spi（infra 仅 runtime） | 直接 `import` infrastructure 的具体实现类 |
+| 应用 | `annona-server` | 业务模块（**现有 4 个：identity / knowledge / retrieval / study；下表与 §4 树形里的 11 个是终态规划口径**）、REST/SSE/WS 接口、启动类、CLI、prompt 与 skill 资源 | common, spi（infra 仅 runtime） | 直接 `import` infrastructure 的具体实现类 |
 | 前端 | `annona-web` | Vite 工程，`build` 产物拷贝到 server 的 `resources/static` | 无（独立） | 前端不感知 Java 结构，只依赖 `/api/*` 契约 |
 
 **装配方向是关键设计**：`annona-server` 的业务代码只 `@Autowired` SPI 接口；具体实现由 `annona-infrastructure` 通过 `@ConditionalOnProperty` + `AutoConfiguration.imports` 在运行期注入。带来的三个具体收益：
