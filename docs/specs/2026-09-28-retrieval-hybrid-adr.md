@@ -56,6 +56,7 @@
 ## 何时重新评估
 
 - P1a-09 实测显示混合检索相对纯向量为负 → 走 keyword ADR 的重新评估分支，先于批 3 验收收口。
+  **2026-09-28 首轮实测：`BOTH` 与 `SEMANTIC` 的 Recall@3 同为 1.0000**（5 篇语料太分散，纯向量已饱到天花板），既不为正也不为负 → **不触发本条重评估，但也不构成混合收益的证据**；必须先由 P1a-09b 造出有分辨力的评测集（目标：纯向量 Recall@3 降到 0.85 以下）再判。数字与判读：[benchmarks/检索基线_20260928.md](../benchmarks/检索基线_20260928.md)。
 - `top4_miss_type` 以"术语相近"为主（而非"完全无关"）→ 提 rerank ADR（`🅜` 的 `RerankService/CosineRerankFallback/DashScopeRerankService` 是现成扫描对象）。
 - 真实问答 ≥100 次或用户讲义出现自定义术语 → 评估 jieba 用户词典与 `tokenizer_version` 多版本共存。
 - 文档规模到千万级向量、或 PG 关键词通道 Recall 成为瓶颈 → `EsRetriever` 从可选提为托管版默认。
