@@ -249,9 +249,24 @@ export default function KnowledgePage() {
                         分块预览
                       </Button>
                     )}
-                    {doc.status === 'FAILED' && (
-                      <Button size="sm" variant="outline" onClick={() => void handleRetrigger(doc)}>
-                        重新处理
+                    {/* 终态文档都可重建：FAILED 是重试，READY 是“重跑解析→分块→向量化”。
+                       后者不是装饰：V5 之前入库的行 tokens 为空，关键词通道永不命中，
+                       而用户从表面上看不出来（语义能搜到，换几个术语就搜不到）。
+                       列表不区分“已建关键词索引”与“没建”：要区分就得给 summary 加一个
+                       子查询字段，而开发期这类存量只有几份——先给入口不给判断，
+                       真实用户出现存量时再补状态位。 */}
+                    {isTerminal(doc.status) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        title={
+                          doc.status === 'READY'
+                            ? '重新解析并重切重嵌（V5 之前入库的文档需要它补上关键词索引）'
+                            : '重新走一遍解析→分块→向量化'
+                        }
+                        onClick={() => void handleRetrigger(doc)}
+                      >
+                        {doc.status === 'READY' ? '重建' : '重新处理'}
                       </Button>
                     )}
                     <Button
