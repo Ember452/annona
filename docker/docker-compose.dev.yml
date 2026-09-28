@@ -33,3 +33,12 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
+
+# 命名卷必须在每个 compose 项目里各自声明：`extends` 只继承 service 配置，
+# 不会把主文件顶层的 `volumes:` 定义带过来。少了这一段，`up` 会直接报
+# “service storage refers to undefined volume storage_data: invalid compose project”
+# （2026-09-28 首次真跑 dev 栈时撞到；CI 的结构校验此前只跑主文件，见 ci.yml
+# compose-smoke 的 config 步骤）。db_data 同一原因一并声明。
+volumes:
+  db_data:
+  storage_data:

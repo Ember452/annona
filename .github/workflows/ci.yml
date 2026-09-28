@@ -179,7 +179,11 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Compose config (structural validation, incl. extends graph)
-        run: docker compose --env-file .env.example -f docker/docker-compose.yml config -q
+        run: |
+          docker compose --env-file .env.example -f docker/docker-compose.yml config -q
+          # dev 栈也校一遍：它用 extends 复用主文件的 service，但顶层命名卷必须在
+          # 本项目自己声明。只校主文件时这类错根本看不见（2026-09-28 首次真跑 dev 栈撞到）
+          docker compose --env-file .env.example -f docker/docker-compose.dev.yml --profile s3 config -q
       - name: Prepare .env with CI-only secrets
         run: |
           cp .env.example .env
