@@ -2,6 +2,8 @@ package io.annona.modules.knowledge.ops;
 
 import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
+import io.annona.modules.knowledge.chunk.Chunker;
+import io.annona.modules.knowledge.dto.KbChunkReference;
 import io.annona.modules.knowledge.dto.KbDocChunkView;
 import io.annona.modules.knowledge.dto.KbDocDetailResponse;
 import io.annona.modules.knowledge.dto.KbDocStatusResponse;
@@ -47,7 +49,27 @@ public class KnowledgeDocQueryService {
             .findByDocIdOrderByChunkIndexAsc(doc.getId()).stream()
             .map(mapper::toChunkView)
             .toList();
-        return new KbDocDetailResponse(mapper.toSummary(doc), chunks);
+        return new KbDocDetailResponse(mapper.toSummary(doc), Chunker.VERSION, chunks);
+    }
+
+    /**
+     * 分块跨模块只读批量回查（P1a-08：qa 引用组装）。入参 id 解析失败/查不到的静默跳过
+     * （命中到回查之间文档可能被删除，引用缺一条比报错合理）；owner 过滤在 SQL 层。
+     */
+    public List<KbChunkReference> chunkReferences(String userId, List<String> chunkIds) {
+        if (chunkIds.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> ids = chunkIds.stream()
+            .map(KnowledgeDocQueryService::optionalUuid)
+            .flatMap(Optional::stream)
+            .toList();
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return chunkRepository.findByIdsAndUserId(uuid(userId), ids).stream()
+            .map(mapper::toChunkReference)
+            .toList();
     }
 
     public KbDocStatusResponse status(String userId, String docId) {

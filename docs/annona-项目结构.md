@@ -89,7 +89,7 @@ annona/
 | 通用 | `annona-common` | 统一响应、异常体系、枚举、常量、工具、注解与切面基类、**跨模块端口** | 第三方库（**但本仓约定 SDK 只进 infra**：common 只放端口与契约，判据见 AGENTS.md §4） | 依赖任何业务概念、依赖 spi/infra/server |
 | 契约 | `annona-spi` | 六个扩展点接口（P0 的五个 + P1a-05 新增 `EmbeddingProvider`）、跨模块契约 DTO、领域事件定义 | common | 引入 Spring / MyBatis / SDK（保证可被外部实现） |
 | 技术 | `annona-infrastructure` | SPI 实现 + 外部系统适配（PG/pgvector、Redis、S3、LLM HTTP、加密、PDF、分词） | common, spi, 各类 SDK | 含业务规则、被 server 编译期直接引用实现类 |
-| 应用 | `annona-server` | 业务模块（**现有 4 个：identity / knowledge / retrieval / study；下表与 §4 树形里的 11 个是终态规划口径**）、REST/SSE/WS 接口、启动类、CLI、prompt 与 skill 资源 | common, spi（infra 仅 runtime） | 直接 `import` infrastructure 的具体实现类 |
+| 应用 | `annona-server` | 业务模块（**现有 5 个：identity / knowledge / retrieval / study / qa；下表与 §4 树形里的 11 个是终态规划口径**）、REST/SSE/WS 接口、启动类、CLI、prompt 与 skill 资源 | common, spi（infra 仅 runtime） | 直接 `import` infrastructure 的具体实现类 |
 | 前端 | `annona-web` | Vite 工程，`build` 产物拷贝到 server 的 `resources/static` | 无（独立） | 前端不感知 Java 结构，只依赖 `/api/*` 契约 |
 
 **装配方向是关键设计**：`annona-server` 的业务代码只 `@Autowired` 端口接口；具体实现由 `annona-infrastructure` 的 `@Component` + `@ConditionalOnProperty` 在运行期注入——扫它的入口是 `AnnonaApplication`（`io.annona` 根包）的默认组件扫描，**本仓没有 `META-INF/spring/*.imports` 文件**；infra 对 server 是 runtime 依赖，所以它对 `modules/*` 编译期不可见。带来的三个具体收益：
@@ -178,10 +178,14 @@ io.annona
 │   │   │                             #   上下文压缩、联网兜底与来源标注）
 │   │   │  # 触发条件＝P1a-09 基线显示召回不足，或真实问答 ≥100 次（开发计划 §P1a-09 定位）
 │   │
-│   ├── qa/                            # RAG 问答会话（D 模块的交互层）
-│   │   ├── controller/                #   SSE 流式问答、会话管理、置顶、多库关联
-│   │   ├── service/                   #   引用组装、消息持久化、流式编排
-│   │   └── entity/ repository/ dto/   #   Conversation、ConversationMessage
+│   ├── qa/                            # RAG 问答会话（D 模块的交互层；P1a-08 已落地）
+│   │   ├── controller/                #   POST /api/qa/messages（SSE 四事件 token/sources/done/error）+
+│   │   │                             #   GET sessions / sessions/{id}/messages；置顶/归档/多库关联 ⏸ 未做
+│   │   ├── service/                   #   占位→回填两短事务、流式编排（ai-io 池）、空命中诊断透传
+│   │   ├── entity/ repository/ dto/   #   QaSession / QaMessage（citations JSONB，V6）
+│   │   │  # 跨模块只读经 RetrievalQueryService（检索）与 KnowledgeDocQueryService.chunkReferences
+│   │   │  # （正文回查）——全仓首批跨模块消费（qa-streaming-adr §决策 7）；chat 端口在
+│   │   │  # common/model、实现在 infrastructure/llm；prompt 资源 prompts/qa-*.st（rewrite ⏸ 未接）
 │   │
 │   ├── questionbank/                  # 题库（E 模块）
 │   │   ├── controller/ service/ repository/ entity/ dto/

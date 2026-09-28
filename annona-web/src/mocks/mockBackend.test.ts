@@ -83,4 +83,28 @@ describe('mockBackend（VITE_MOCK_BACKEND 纯前端模式路由表）', () => {
     expect(response.status).toBe(200)
     expect(response.data).toMatchObject({ code: 0 })
   })
+
+  it('qa 路由（P1a-08）：会话与历史给空列表；未实现端点仍 1002', () => {
+    expect(mockRespond('get', '/api/qa/sessions', undefined)).toMatchObject({ code: 0, data: [] })
+    expect(mockRespond('get', '/api/qa/sessions/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/messages', undefined))
+      .toMatchObject({ code: 0, data: [] })
+    // 流式提问不走本路由表（SSE 用 fetch，mock 短路在 api/qa.ts），这里保持 1002
+    expect(mockRespond('post', '/api/qa/messages', { question: 'hi' }).code).toBe(1002)
+  })
+
+  it('DEV=false 时路由表整体不可达：request 管线不装 mock adapter，qa 路由同样打不进去', async () => {
+    // c5ea142 的门禁语义落在装配点：adapter 只在 MOCK_ENABLED（DEV && 开关）时安装。
+    // 本用例把"不可达"做成行为断言——带开关但 DEV=false 时，请求走真实网络路径
+    // （jsdom 无服务器 → 网络失败 reject），而不是被路由表本地应答。
+    vi.resetModules()
+    const dev = import.meta.env.DEV
+    try {
+      vi.stubEnv('VITE_MOCK_BACKEND', '1')
+      import.meta.env.DEV = false
+      const { request } = await import('@/api/request')
+      await expect(request.get('/api/qa/sessions')).rejects.toThrow()
+    } finally {
+      import.meta.env.DEV = dev
+    }
+  })
 })

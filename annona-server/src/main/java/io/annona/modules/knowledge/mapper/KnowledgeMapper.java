@@ -1,5 +1,6 @@
 package io.annona.modules.knowledge.mapper;
 
+import io.annona.modules.knowledge.dto.KbChunkReference;
 import io.annona.modules.knowledge.dto.KbDocChunkView;
 import io.annona.modules.knowledge.dto.KbDocSummaryResponse;
 import io.annona.modules.knowledge.entity.KbDocChunkEntity;
@@ -16,4 +17,6 @@ public interface KnowledgeMapper {
     KbDocSummaryResponse toSummary(KbDocEntity entity);
 
     KbDocChunkView toChunkView(KbDocChunkEntity entity);
+
+    KbChunkReference toChunkReference(KbDocChunkEntity entity);
 }

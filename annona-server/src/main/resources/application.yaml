@@ -65,6 +65,16 @@ annona:
       dimensions: ${ANNONA_EMBEDDING_DIMENSIONS:1024}
       batch-size: ${ANNONA_EMBEDDING_BATCH_SIZE:10}
       timeout-seconds: ${ANNONA_EMBEDDING_TIMEOUT_SECONDS:60}
+    # P1a-08：chat 通道（qa-streaming-adr）。none = 不装配 provider，提问报 2502；
+    # openai-compatible = OpenAI 兼容 /chat/completions（同步 + 流式同一实现）；
+    # fake = 确定性流式回答（无 Key 环境跑通链路，内容与语义不可读作质量）。
+    # 错误后移到使用点，启动不拦（同 embedding，knowledge-ingestion-adr §决策 9）。
+    chat:
+      provider: ${ANNONA_MODEL_CHAT_PROVIDER:none}
+      base-url: ${ANNONA_CHAT_BASE_URL:}
+      api-key: ${ANNONA_CHAT_API_KEY:}
+      model: ${ANNONA_DEFAULT_CHAT_MODEL:}
+      timeout-seconds: ${ANNONA_CHAT_TIMEOUT_SECONDS:60}
   # P1a-05：文档解析线程池（借 🅖 实测值；重 CPU/IO 小池 + 超时防损坏文件死循环）
   document-parse:
     pool-size: ${ANNONA_PARSE_POOL_SIZE:2}

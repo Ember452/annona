@@ -30,6 +30,8 @@ public enum ErrorCode {
     AI_SERVICE_TIMEOUT(1101, "AI 服务响应超时"),
     AI_SERVICE_ERROR(1102, "AI 服务调用失败"),
     AI_API_KEY_INVALID(1103, "AI 服务密钥无效"),
+    AI_STREAM_FAILED(1104, "AI 流式响应失败"),
+    AI_STREAM_INTERRUPTED(1105, "AI 流式响应中断"),
 
     // ========== 限流与配额 1200–1299 ==========
     RATE_LIMIT_EXCEEDED(1200, "请求过于频繁，请稍后再试"),
@@ -65,7 +67,11 @@ public enum ErrorCode {
 
     // ========== retrieval 2400–2499（P1a-07，混合检索） ==========
     RETRIEVAL_FAILED(2400, "检索暂时不可用，请稍后重试"),
-    RETRIEVAL_QUERY_BLANK(2401, "请输入要检索的问题");
+    RETRIEVAL_QUERY_BLANK(2401, "请输入要检索的问题"),
+
+    // ========== qa 2500–2599（P1a-08，流式问答） ==========
+    QA_SESSION_NOT_FOUND(2500, "问答会话不存在"),
+    QA_MODEL_NOT_CONFIGURED(2502, "问答模型未配置，请先在环境中配置 chat 模型");
 
     private final int code;
     private final String message;

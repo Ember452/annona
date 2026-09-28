@@ -9,7 +9,10 @@ import java.util.List;
  * 模型网关扩展点。屏蔽供应商差异（OpenAI 兼容 / DashScope / 本地推理），
  * 业务侧统一走本接口。
  *
- * <p>流式响应、Embedding、Rerank 是<b>独立</b>扩展点（P1a/P1b 时再补），
+ * <p>流式响应已按 docs/specs/2026-09-28-qa-streaming-adr.md 落在 annona-common 的
+ * {@code StreamingChatProvider}（内部解耦端口：无外部实现方需求，且本 SPI 是对外发布的
+ * 契约 jar，不冻结易变的流式协议；本模块不依赖 common，故无法写 {@code @link}）。
+ * Embedding 是独立 SPI 扩展点（{@code EmbeddingProvider}），Rerank 属 P1b 候选。
  * 本 SPI 只承诺<b>同步非流式</b> chat 语义。
  */
 public interface ModelProvider {

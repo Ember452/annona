@@ -237,7 +237,7 @@ export default function KnowledgePage() {
                     </div>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {directionName(doc.directionId)} · {formatBytes(doc.fileSize)} ·{' '}
-                      {new Date(doc.createdAt).toLocaleString()}
+                      {new Date(doc.createdAt).toLocaleString()} · {doc.analyzerVersion}
                     </p>
                     {doc.status === 'FAILED' && doc.error && (
                       <p className="mt-1 text-xs text-destructive">{doc.error}</p>
