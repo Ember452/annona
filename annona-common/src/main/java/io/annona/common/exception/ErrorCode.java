@@ -30,6 +30,8 @@ public enum ErrorCode {
     AI_SERVICE_TIMEOUT(1101, "AI 服务响应超时"),
     AI_SERVICE_ERROR(1102, "AI 服务调用失败"),
     AI_API_KEY_INVALID(1103, "AI 服务密钥无效"),
+    AI_STREAM_FAILED(1104, "AI 流式响应失败"),
+    AI_STREAM_INTERRUPTED(1105, "AI 流式响应中断"),
 
     // ========== 限流与配额 1200–1299 ==========
     RATE_LIMIT_EXCEEDED(1200, "请求过于频繁，请稍后再试"),
