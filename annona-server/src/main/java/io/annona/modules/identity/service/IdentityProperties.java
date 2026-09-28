@@ -28,13 +28,13 @@ public class IdentityProperties {
     }
 
     /** 默认 {@code local}：自部署的常规形态。 */
-    private Mode mode = Mode.LOCAL;
+    private Mode mode;
 
     /**
      * platform 模式的受信请求头名。<b>信任边界</b>：反代必须剥离客户端同名头，
      * 且实例不得被直连（见 ADR §后果与约束）。
      */
-    private String platformHeader = "X-Auth-Request-Email";
+    private String platformHeader;
 
     /**
      * platform 模式的<b>代码强制代理来源证明</b>共享密钥（可选）。为空则退回“仅靠文档约定
@@ -42,10 +42,10 @@ public class IdentityProperties {
      * {@code SessionAuthFilter} 会要求请求携带匹配的 {@link #platformSecretHeader} 头（常数时间比较），
      * 不匹配即凭据按空处理（未认证），使“实例被直连”也无法伪造身份。
      */
-    private String platformSecret = "";
+    private String platformSecret;
 
     /** 共享密钥所在的请求头名（反代注入，与 {@link #platformHeader} 同样必须剥离客户端自带）。 */
-    private String platformSecretHeader = "X-Auth-Request-Access-Token";
+    private String platformSecretHeader;
 
     public Mode getMode() {
         return mode;

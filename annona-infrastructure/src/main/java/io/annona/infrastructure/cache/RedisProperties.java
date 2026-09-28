@@ -13,11 +13,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class RedisProperties {
 
     /** Redis 主机名（compose 内网为 {@code cache}）。 */
-    private String host = "localhost";
-    private int port = 6379;
+    private String host;
+    private int port;
     /** 无密码时留空串/null（本机开发常无密码）。 */
     private String password;
-    private int database = 0;
+    private int database;
 
     public String getHost() {
         return host;

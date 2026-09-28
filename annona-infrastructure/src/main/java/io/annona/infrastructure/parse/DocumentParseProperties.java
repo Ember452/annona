@@ -12,10 +12,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class DocumentParseProperties {
 
     /** 解析线程池大小；解析任务每文档一个，2 个并行足够（消费侧本就是单消费者）。 */
-    private int poolSize = 2;
+    private int poolSize;
 
     /** 单文档解析超时；超时后取消解析任务并报 KB_DOC_PARSE_TIMEOUT。 */
-    private Duration timeout = Duration.ofMinutes(2);
+    private Duration timeout;
 
     public int getPoolSize() {
         return poolSize;

@@ -47,6 +47,10 @@ class LoginServiceSliceTest {
     void setUp() {
         PasswordHasher hasher = new PasswordHasher();
         SessionProperties props = new SessionProperties();
+        // 默认值现在只在 application.yaml（PropertiesDefaultSourceTest 机检），
+        // 切片测试自己把输入说清：cookie 名与会话 TTL
+        props.setCookie("ANNONA_SESSION");
+        props.setTtl(Duration.ofDays(7));
         loginService = new LoginService(userRepository, hasher, attemptStore, sessionStore,
             projectionWriter, props);
     }

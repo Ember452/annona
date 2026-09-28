@@ -19,7 +19,7 @@ public class RetrievalProperties {
 
     private static final List<String> VALID_BACKENDS = List.of(BACKEND_PGVECTOR, BACKEND_FAKE);
 
-    private String backend = BACKEND_PGVECTOR;
+    private String backend;
 
     /**
      * 未知值启动即拒（fail-fast），而不是静默回落到默认后端。

@@ -11,16 +11,16 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class StorageProperties {
 
     /** S3 兼容端点（Silo：http://storage:9000）；空串 = 本机未启用对象存储。 */
-    private String endpoint = "";
+    private String endpoint;
 
-    private String bucket = "annona";
+    private String bucket;
 
-    private String accessKey = "";
+    private String accessKey;
 
-    private String secretKey = "";
+    private String secretKey;
 
     /** Silo/MinIO 语义上无真实区域，占位 us-east-1（AWS SDK 必填）。 */
-    private String region = "us-east-1";
+    private String region;
 
     public String getEndpoint() {
         return endpoint;

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import io.annona.common.exception.BusinessException;
 import io.annona.common.parse.DocumentBlock;
 import java.io.ByteArrayOutputStream;
+import java.time.Duration;
 import java.util.List;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -28,9 +29,22 @@ class TikaDocumentParserTest {
 
     @BeforeAll
     static void setUp() {
+        DocumentParseProperties properties = properties();
         parser = new TikaDocumentParser(
-            new ParseConfig().documentParseExecutor(new DocumentParseProperties()),
-            new DocumentParseProperties());
+            new ParseConfig().documentParseExecutor(properties), properties);
+    }
+
+    /**
+     * 测试自带的解析配置。默认值现在只存在 {@code application.yaml} 一处
+     * （{@code PropertiesDefaultSourceTest} 机检），单测不再依赖类的字段初值：
+     * 它测的是解析行为，不测配置装配。超时给 2 分钟与原默认值一致；线程池与解析器
+     * 共用同一个实例（旧写法是两个独立实例，一旦值不同就会悄悄分叉）。
+     */
+    private static DocumentParseProperties properties() {
+        DocumentParseProperties properties = new DocumentParseProperties();
+        properties.setPoolSize(2);
+        properties.setTimeout(Duration.ofMinutes(2));
+        return properties;
     }
 
     @Test

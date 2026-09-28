@@ -15,23 +15,23 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class EmbeddingProperties {
 
     /** none = 关闭向量化能力；openai-compatible = OpenAI 兼容 /embeddings 协议。 */
-    private String provider = "none";
+    private String provider;
 
-    private String baseUrl = "";
+    private String baseUrl;
 
-    private String apiKey = "";
+    private String apiKey;
 
     /** 模型 id；同时是 {@code kb_doc.embedding_model} 的落库口径（检索过滤依据）。 */
-    private String model = "";
+    private String model;
 
     /** 产出向量维度；必须与向量列 DDL 一致。 */
-    private int dimensions = 1024;
+    private int dimensions;
 
     /** 单批嵌入文本数（供应商上限约束）。 */
-    private int batchSize = 10;
+    private int batchSize;
 
     /** 单次 HTTP 调用超时（秒）。 */
-    private int timeoutSeconds = 60;
+    private int timeoutSeconds;
 
     public String getProvider() {
         return provider;

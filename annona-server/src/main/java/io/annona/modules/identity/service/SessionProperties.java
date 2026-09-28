@@ -14,14 +14,14 @@ import org.springframework.stereotype.Component;
 public class SessionProperties {
 
     /** 会话 TTL（滑动）。 */
-    private Duration ttl = Duration.ofDays(7);
+    private Duration ttl;
     /** 会话 Cookie 名（HttpOnly）。 */
-    private String cookie = "ANNONA_SESSION";
+    private String cookie;
     /**
      * Cookie 的 Secure 标志。默认 false 以保住“clone 下来 http 就能跑”；
      * TLS 部署（prod / 反代 https）必须置 true，否则会话 Cookie 可被明文信道传输。
      */
-    private boolean cookieSecure = false;
+    private boolean cookieSecure;
 
     public Duration getTtl() {
         return ttl;

@@ -50,8 +50,28 @@ class SessionAuthFilterTest {
     @Mock
     private FilterChain chain;
 
-    private final IdentityProperties identityProperties = new IdentityProperties();
-    private final SessionProperties sessionProperties = new SessionProperties();
+    /**
+     * 测试自带的配置。默认值现在只存在 {@code application.yaml} 一处
+     * （{@code PropertiesDefaultSourceTest} 机检），所以这里必须显式给头名、空密钥
+     * 与 cookie 名，不能再依赖类的字段初值。
+     */
+    private final IdentityProperties identityProperties = identityProperties();
+
+    private static IdentityProperties identityProperties() {
+        IdentityProperties properties = new IdentityProperties();
+        properties.setPlatformHeader("X-Auth-Request-Email");
+        properties.setPlatformSecretHeader("X-Auth-Request-Access-Token");
+        properties.setPlatformSecret("");
+        return properties;
+    }
+
+    private final SessionProperties sessionProperties = sessionProperties();
+
+    private static SessionProperties sessionProperties() {
+        SessionProperties properties = new SessionProperties();
+        properties.setCookie("ANNONA_SESSION");
+        return properties;
+    }
 
     private SessionAuthFilter filter;
 
