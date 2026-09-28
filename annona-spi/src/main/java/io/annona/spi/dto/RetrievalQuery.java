@@ -11,8 +11,12 @@ import java.util.Objects;
  * @param userId   发起方；用于按用户隔离知识库可见性
  * @param kbDocIds 可选：将检索限定在指定文档集合（{@code null} 或空表示全域；
  *                 构造时归一为不可变空列表，避免实现方各自判 null）
+ * @param mode     通道开关（{@code null} 归一为 {@link RetrievalMode#BOTH}）；评测靠它
+ *                 跑"混合 vs 纯向量"的对照组，本字段趁 spi 尚未发布的窗口定稿
+ *                 （retrieval-hybrid-adr §决策 3）
  */
-public record RetrievalQuery(String text, int topK, String userId, List<String> kbDocIds) {
+public record RetrievalQuery(String text, int topK, String userId, List<String> kbDocIds,
+                             RetrievalMode mode) {
 
     /**
      * 紧凑构造器：归一化 + 防御性拷贝。
@@ -28,10 +32,11 @@ public record RetrievalQuery(String text, int topK, String userId, List<String> 
                 + "；要空结果请直接不要调用检索");
         }
         kbDocIds = kbDocIds == null ? List.of() : List.copyOf(kbDocIds);
+        mode = mode == null ? RetrievalMode.BOTH : mode;
     }
 
-    /** 全域检索的便捷构造（不限定文档集合）。 */
+    /** 全域检索的便捷构造（不限定文档集合、走默认档 BOTH）。 */
     public static RetrievalQuery global(String text, int topK, String userId) {
-        return new RetrievalQuery(text, topK, userId, List.of());
+        return new RetrievalQuery(text, topK, userId, List.of(), RetrievalMode.BOTH);
     }
 }

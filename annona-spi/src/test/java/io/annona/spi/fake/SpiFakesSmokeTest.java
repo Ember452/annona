@@ -11,6 +11,7 @@ import io.annona.spi.dto.ModelChatMessage;
 import io.annona.spi.dto.ModelOptions;
 import io.annona.spi.dto.ModelResponse;
 import io.annona.spi.dto.Principal;
+import io.annona.spi.dto.RetrievalMode;
 import io.annona.spi.dto.RetrievalQuery;
 import io.annona.spi.dto.SignalSnapshot;
 import java.time.Duration;
@@ -71,7 +72,7 @@ class SpiFakesSmokeTest {
     void fakeRetrieverSupportsPreset() {
         FakeRetriever empty = new FakeRetriever();
         assertEquals("fake", empty.backend());
-        RetrievalQuery q = new RetrievalQuery("anything", 5, "u-1", List.of());
+        RetrievalQuery q = new RetrievalQuery("anything", 5, "u-1", List.of(), RetrievalMode.BOTH);
         assertTrue(empty.retrieve(q).isEmpty());
 
         FakeRetriever withHits = new FakeRetriever(
