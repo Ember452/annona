@@ -66,7 +66,9 @@ class FlywayBaselineIT {
                 "login_attempt", "avatar_change", "user_data_request", "direction",
                 "checkin", "study_session", "study_event",
                 "kb_doc", "kb_doc_chunk", "retrieval_eval_run",
-                "qa_session", "qa_message");
+                "qa_session", "qa_message",
+                // V8（P1b-02 出题链）：后续迁移新增表在此追加，保持全库清单断言成立
+                "qb_question", "qb_generation_task");
     }
 
     @Test
