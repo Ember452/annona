@@ -67,6 +67,11 @@ class InterviewSessionFlowIT {
     void fixture() {
         jdbc = new JdbcTemplate(dataSource);
         userId = UUID.randomUUID();
+        // FK 链根：direction.user_id / interview_session.user_id / qb_question.user_id 都指向
+        // app_user——USER_CUSTOM 夹具必须先造真实用户行（email 带随机后缀避开活跃唯一索引）
+        jdbc.update("insert into app_user (id, email, password_hash, status, role)"
+            + " values (?, ?, 'it-not-a-real-hash', 'ACTIVE', 'USER')",
+            userId, "it-batch2-" + userId + "@annona.test");
         DirectionEntity direction = new DirectionEntity();
         direction.setId(UUID.randomUUID());
         direction.setUserId(userId);
@@ -84,6 +89,7 @@ class InterviewSessionFlowIT {
         jdbc.update("delete from interview_session where user_id = ?", userId);
         jdbc.update("delete from qb_question where user_id = ?", userId);
         jdbc.update("delete from direction where id = ?", directionId);
+        jdbc.update("delete from app_user where id = ?", userId);
     }
 
     private void insertQuestions(int count) {
