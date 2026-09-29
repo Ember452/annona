@@ -90,3 +90,6 @@ classpath 静态技能 + 题库全量替换的形态，与 annona 的多租户 d
 - 2026-09-29（V8 实现时）：§决策 3 的在途任务唯一索引从 `(direction_id)` 细化为
   `(user_id, direction_id)`——内置方向（user_id NULL）被多用户共享，按 direction 单列
   会让两个用户不能同时给同一内置方向出题；任务隔离本就按用户语义设计。
+- 2026-09-29（实现时）：§决策 6 的 Invoker 落点从 `common/ai` 改为 `shared/ai`——
+  依赖方向 modules→spi→common，common 看不见 spi 的 ModelProvider；shared 允许依赖
+  spi + common，消费方不变。

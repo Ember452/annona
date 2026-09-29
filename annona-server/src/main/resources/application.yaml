@@ -75,6 +75,11 @@ annona:
       api-key: ${ANNONA_CHAT_API_KEY:}
       model: ${ANNONA_DEFAULT_CHAT_MODEL:}
       timeout-seconds: ${ANNONA_CHAT_TIMEOUT_SECONDS:60}
+  # P1b-02：结构化输出重试（出题/评估共用，StructuredOutputInvoker）。
+  # 3 次是上游同款起点：多数 JSON 形状错误在第二次带反馈重试即修复。
+  ai:
+    structured-output:
+      max-attempts: ${ANNONA_STRUCTURED_MAX_ATTEMPTS:3}
   # P1a-05：文档解析线程池（借 🅖 实测值；重 CPU/IO 小池 + 超时防损坏文件死循环）
   document-parse:
     pool-size: ${ANNONA_PARSE_POOL_SIZE:2}
