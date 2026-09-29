@@ -108,27 +108,39 @@ def miss_diff(reports: list[dict]) -> None:
 
 
 def hybrid_exclusive(reports: list[dict]) -> None:
-    """混合独占命中（P1a-09b 报告项）：BOTH 命中而 SEMANTIC 未命中的 query 计数与清单。
+    """混合独占命中（P1a-09b 报告项）：BOTH 比 SEMANTIC 多召回相关文档的 query 计数与清单。
 
     这是"混合检索相对纯向量的价值"的直接证据：数量为 0 即两档无可判读增益
     （P1a-09 首轮结论正是如此，见 docs/benchmarks/检索基线_20260928.md）。
-    从 misses 差集推导即可：BOTH 命中且 SEMANTIC 未命中 ⇔ 该 id 在 SEMANTIC 的
-    misses 里而不在 BOTH 的 misses 里，无需报告携带完整命中清单。
+
+    口径 = 逐 query 比较 recall（recall_BOTH > recall_SEMANTIC），不是"全空命中"
+    的差集——部分召回（relevant_docs 多篇、BOTH 多捞回 1 篇但未满分）同样是混合
+    增益，全空口径会系统性低估（0929 外审复盘修正）。recall 取自 eval.py 的
+    misses[].recall（miss 口径 = recall < 1.0）；不在 misses 里的 query 记满分。
+    旧报告（0929 之前）的 miss 条目没有 recall 字段，缺省按 0.0——恰好复刻旧的
+    "SEMANTIC miss 而 BOTH 非 miss"差集结果，新旧两代报告都能读。
     """
     printed_header = False
     for r in reports:
         runs = r.get("runs", {})
         if "BOTH" not in runs or "SEMANTIC" not in runs:
             continue
-        semantic_misses = {m["id"]: m for m in runs["SEMANTIC"].get("misses", [])}
-        both_misses = {m["id"] for m in runs["BOTH"].get("misses", [])}
-        exclusive = [semantic_misses[qid] for qid in sorted(semantic_misses) if qid not in both_misses]
+        semantic = {m["id"]: (float(m.get("recall", 0.0)), m)  # 旧条目无 recall → 0.0 = 旧全空口径
+                    for m in runs["SEMANTIC"].get("misses", [])}
+        both = {m["id"]: (float(m.get("recall", 0.0)), m)
+                for m in runs["BOTH"].get("misses", [])}
+        exclusive = []
+        for qid in sorted(set(semantic) | set(both)):
+            s_recall, s_entry = semantic.get(qid, (1.0, None))
+            b_recall, _ = both.get(qid, (1.0, None))
+            if b_recall > s_recall:
+                exclusive.append((qid, s_recall, b_recall, s_entry or {}))
         if not printed_header:
-            print("混合独占命中（BOTH 命中 / SEMANTIC 未命中）：")
+            print("混合独占命中（逐 query recall：BOTH > SEMANTIC）：")
             printed_header = True
         print(f"  [{r.get('label', r['_path'])}] n={len(exclusive)}")
-        for m in exclusive:
-            print(f"    {m['id']}：{m.get('query', '')}")
+        for qid, s_recall, b_recall, entry in exclusive:
+            print(f"    {qid}：{entry.get('query', '')}（SEMANTIC {s_recall} → BOTH {b_recall}）")
     if not printed_header:
         print("混合独占命中：报告组中无同时含 BOTH 与 SEMANTIC 的轮次，跳过")
 
