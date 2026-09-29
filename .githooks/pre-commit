@@ -1,7 +1,7 @@
 #!/bin/sh
 # annona pre-commit hook
 #
-# 四个动作：Flyway 迁移冻结检查 → workflow YAML 结构自检 → 测试侧配置遮蔽检查 → gitleaks 密钥扫描。
+# 五个动作：Flyway 迁移冻结检查 → workflow YAML 结构自检 → 测试侧配置遮蔽检查 → 迁移↔基线清单登记守卫 → gitleaks 密钥扫描。
 # 权威门禁在 CI（.github/workflows/ci.yml 的 gitleaks job + branch protection）；
 # 这里是**本地第一道**，让开发者在 commit 前就看到，而不是等 CI 红。
 #
@@ -46,6 +46,17 @@ if git diff --cached --name-only | grep -qE '^annona-server/src/test/resources/a
     exit 1
   fi
   python scripts/ci/check-test-config-shadowing.py || exit 1
+fi
+
+# 第五道：迁移↔基线清单登记守卫。FlywayBaselineIT 的 containsExactlyInAnyOrder 是全库
+# 清单断言，新表漏登记会让 CI docker 组假红（V2/V4/V6 三连踩，AGENTS §4 约定→机检元规则）。
+# 改任一侧都触发同跑：只改迁移能拦漏登记；只改清单能拦“删登记造成清单与迁移脱钩”。
+if git diff --cached --name-only | grep -qE '^annona-server/src/(main/resources/db/migration/|test/java/io/annona/integration/FlywayBaselineIT)'; then
+  if ! command -v python >/dev/null 2>&1; then
+    printf '%s\n' "pre-commit: 本次改了迁移或基线清单，需要 python 跑登记一致性检查。" >&2
+    exit 1
+  fi
+  python scripts/ci/check-migration-inventory.py || exit 1
 fi
 
 if ! command -v gitleaks >/dev/null 2>&1; then
