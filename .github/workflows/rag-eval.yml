@@ -8,6 +8,8 @@
 # 没有就退到 provider=fake 只做管道回归——fake 的召回不可读作质量，报告与
 # retrieval_eval_run.embedding_provider 必须记录本轮来源。
 # 产物走 artifact 上传，PR 里贴报告链接（AGENTS.md §2 计划维护规则 8）。
+# workflow_dispatch 可带 inputs（queries / corpus_dir / label）：09b 这类"换评测集"
+# 的决策级重跑用 dispatch 指向新集合；PR 触发的回归门仍钉默认集，互不干扰。
 name: RAG Eval
 
 on:
@@ -18,6 +20,22 @@ on:
       - 'annona-server/src/main/resources/db/migration/**'
       - 'scripts/rag-eval/**'
   workflow_dispatch:
+    inputs:
+      queries:
+        description: 'Query set JSON path (repo-relative, PR runs keep the default)'
+        required: false
+        default: 'scripts/rag-eval/queries.json'
+        type: string
+      corpus_dir:
+        description: 'Corpus directory path (repo-relative)'
+        required: false
+        default: 'scripts/rag-eval/corpus'
+        type: string
+      label:
+        description: 'Report label (empty falls back to ci-<sha>)'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -125,13 +143,18 @@ jobs:
           fi
           python3 scripts/rag-eval/eval.py \
             --base-url http://localhost:8080 \
-            --queries scripts/rag-eval/queries.json \
+            --queries "$EVAL_QUERIES" \
+            --corpus-dir "$EVAL_CORPUS_DIR" \
             --report-dir out/rag-eval \
-            --label "ci-${GITHUB_SHA::7}" \
+            --label "${EVAL_LABEL:-ci-${GITHUB_SHA::7}}" \
             --embedding-provider "$ANNONA_MODEL_EMBEDDING_PROVIDER" \
             --embedding-model "$ANNONA_DEFAULT_EMBEDDING_MODEL"
           kill $APP_PID
         env:
+          # PR 触发时 inputs 为空 → 回落默认集；dispatch 时按输入指向评测集（如 09b）
+          EVAL_QUERIES: ${{ inputs.queries || 'scripts/rag-eval/queries.json' }}
+          EVAL_CORPUS_DIR: ${{ inputs.corpus_dir || 'scripts/rag-eval/corpus' }}
+          EVAL_LABEL: ${{ inputs.label }}
           SPRING_PROFILES_ACTIVE: docker
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/annona
           SPRING_DATASOURCE_USERNAME: annona
