@@ -38,4 +38,14 @@ public interface QbQuestionRepository extends JpaRepository<QbQuestionEntity, UU
                                   @Param("status") String status,
                                   @Param("difficulty") Short difficulty,
                                   @Param("keyword") String keyword);
+
+    /**
+     * 题干向量回填（V9 M3，best-effort）：实体刻意不映射 embedding 列（kb_doc_chunk 先例），
+     * 写入走字面量 CAST。逐行而非批量 CASE：一次出题 N≤20、向量字面量拼 CASE 既难读又有
+     * 注入面，N 大了（池生成）再改 COPY 子命令——现在不值得。
+     */
+    @Modifying
+    @Query(value = "UPDATE qb_question SET embedding = CAST(:vec AS vector) WHERE id = :id",
+        nativeQuery = true)
+    int updateEmbedding(@Param("id") UUID id, @Param("vec") String vectorLiteral);
 }
