@@ -28,7 +28,8 @@ public class QuestionQueryServiceImpl implements QuestionQueryService {
     @Transactional(readOnly = true)
     public List<QuestionCandidate> activePool(UUID userId, UUID directionId) {
         return questionRepository
-            .search(userId, directionId, QbQuestionEntity.STATUS_ACTIVE, null, null)
+            .findByUserIdAndDirectionIdAndStatusOrderByCreatedAtDescIdDesc(
+                userId, directionId, QbQuestionEntity.STATUS_ACTIVE)
             .stream()
             .map(q -> new QuestionCandidate(q.getId(), q.getQuestion(), q.getDifficulty(),
                 q.getFollowUps().size()))

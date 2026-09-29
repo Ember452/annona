@@ -8,6 +8,7 @@ import io.annona.common.exception.ErrorCode;
 import io.annona.modules.interview.orchestrator.controller.CreateSessionRequest;
 import io.annona.modules.interview.orchestrator.session.InterviewSessionFacade;
 import io.annona.modules.interview.orchestrator.session.InterviewSessionStateService;
+import io.annona.modules.questionbank.repository.QbQuestionRepository;
 import io.annona.shared.direction.entity.DirectionEntity;
 import io.annona.shared.direction.repository.DirectionRepository;
 import jakarta.persistence.EntityManager;
@@ -48,6 +49,9 @@ class InterviewSessionFlowIT {
 
     @Autowired
     private InterviewSessionFacade facade;
+
+    @Autowired
+    private QbQuestionRepository questionRepository;
 
     @Autowired
     private DirectionRepository directionRepository;
@@ -182,6 +186,15 @@ class InterviewSessionFlowIT {
         } finally {
             pool.shutdownNow();
         }
+    }
+
+    @Test
+    @DisplayName("search 允许全空过滤（PG 对 null keyword 推断成 bytea 的批 2 CI 实炸回归）")
+    void searchAllowsEmptyFilters() {
+        insertQuestions(2);
+        assertThat(questionRepository.search(userId, directionId, null, null, null)).hasSize(2);
+        assertThat(questionRepository.search(userId, directionId, null, null, "唯一标识"))
+            .hasSize(2);
     }
 
     /** 0 = 交卷成功，1 = 拿到 2702（幂等败者）；其余异常直接失败。 */

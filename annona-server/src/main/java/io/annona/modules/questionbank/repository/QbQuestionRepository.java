@@ -26,18 +26,28 @@ public interface QbQuestionRepository extends JpaRepository<QbQuestionEntity, UU
     List<String> findRecentQuestions(@Param("userId") UUID userId,
                                      @Param("directionId") UUID directionId, Pageable pageable);
 
-    /** 题库列表（可空过滤：状态 / 难度 / 题干关键词），时间倒序。 */
+    /**
+     * 题库列表（可空过滤：状态 / 难度 / 题干关键词），时间倒序。
+     * keyword 必须 cast：null 绑定时 PG 无法从 {@code lower(concat('%',?,'%'))} 推断参数类型，
+     * 默认按 bytea 报 {@code function lower(bytea) does not exist}（P1b 批 2 CI 实炸）；
+     * 等值比较的 status/difficulty 可从列类型推断，不需 cast。
+     */
     @Query("select q from QbQuestionEntity q where q.userId = :userId"
         + " and q.directionId = :directionId"
         + " and (:status is null or q.status = :status)"
         + " and (:difficulty is null or q.difficulty = :difficulty)"
-        + " and (:keyword is null or lower(q.question) like lower(concat('%', :keyword, '%')))"
+        + " and (:keyword is null or lower(q.question) like"
+        + "     lower(concat('%', cast(:keyword as string), '%')))"
         + " order by q.createdAt desc, q.id desc")
     List<QbQuestionEntity> search(@Param("userId") UUID userId,
                                   @Param("directionId") UUID directionId,
                                   @Param("status") String status,
                                   @Param("difficulty") Short difficulty,
                                   @Param("keyword") String keyword);
+
+    /** 组卷池读取的专用查询：三参全非空，不碰 search 的可选过滤分支。 */
+    List<QbQuestionEntity> findByUserIdAndDirectionIdAndStatusOrderByCreatedAtDescIdDesc(
+        UUID userId, UUID directionId, String status);
 
     /**
      * 题干向量回填（V9 M3，best-effort）：实体刻意不映射 embedding 列（kb_doc_chunk 先例），
