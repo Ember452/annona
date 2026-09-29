@@ -164,15 +164,23 @@
                             <rules>
                                 <rule>
                                     <element>CLASS</element>
+                                    <!-- 形态陷阱（2026-09-29 P1b-04 用 1.05 探针实证）：CLASS 的 includes
+                                         只认点分隔 FQN 通配（io.x.Y.*）；斜杠路径形态匹配零元素且
+                                         静默报“All checks met”——旧四条规则因此从未生效过，全部改点形态 -->
                                     <includes>
-                                        <include>io/annona/modules/knowledge/chunk/*</include>
+                                        <include>io.annona.modules.knowledge.chunk.*</include>
                                         <!-- P1a-07：RRF 融合是检索指标的分母，与分块器同级
                                              （K/名次/归一化口径错一个，Recall@K 与前端置信度一起失真） -->
-                                        <include>io/annona/modules/retrieval/hybrid/*</include>
+                                        <include>io.annona.modules.retrieval.hybrid.*</include>
                                         <!-- P1b-01：SKILL 解析与查询服务承载"缺字段有明确报错"验收，
                                              fail-fast 分支必须全测（skill-questionbank-adr §决策 1） -->
-                                        <include>io/annona/modules/interview/skill/service/*</include>
-                                        <include>io/annona/modules/interview/skill/model/*</include>
+                                        <include>io.annona.modules.interview.skill.service.*</include>
+                                        <include>io.annona.modules.interview.skill.model.*</include>
+                                        <!-- P1b-04：组卷抽取与阈值常量是决策算法（AGENTS §4 关键纯逻辑包），
+                                             golden + 单测必须覆盖全部分支；QuestionDedupService 在同包——
+                                             它的真行为在 native SQL，行覆盖率数字对它解释力弱，
+                                             但 slice 测试已盖住判定分支 -->
+                                        <include>io.annona.modules.interview.orchestrator.pack.*</include>
                                     </includes>
                                     <limits>
                                         <limit>
