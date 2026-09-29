@@ -225,10 +225,10 @@ public record InterviewPlan(int totalCount, List<Integer> difficulties, int foll
 **Interfaces:**
 - Consumes: V9 列名。
 - Produces（T4/T5 依赖的确切签名）：
-  - `InterviewSessionStateService.create(UUID userId, UUID directionId, InterviewPlan plan, List<UUID> questionIds) -> InterviewSessionEntity`（事务内：旧 RESUMABLE 自动置 ABANDONED + 落 session + answer 占位）
-  - `boolean submitAnswer(UUID sessionId, UUID userId, int index, String text)`
-  - `Optional<FinalizeResult> finalizeSession(UUID sessionId, String userId)`，`record FinalizeResult(UUID sessionId, int answeredCount, String evaluatorVersion)`
-  - `boolean abandon(UUID sessionId, String userId)`
+  - `InterviewSessionStateService.create(UUID userId, UUID directionId, InterviewPlan plan, List<AnswerSlot> slots) -> InterviewSessionEntity`（事务内：旧 RESUMABLE 自动置 ABANDONED + 落 session + answer 占位；`AnswerSlot(questionId, followUpIndex)` 由调用方展平，槽数与 plan 不符拒 1001）
+  - `boolean submitAnswer(UUID sessionId, UUID userId, UUID questionId, int followUpIndex, String text)`
+  - `FinalizeResult finalizeSession(UUID sessionId, UUID userId)`（实落对计划的修正：败者/终态统一抛 2702 走异常出口，不用 Optional——否则控制器要另判“empty 但非异常”这个第三态），`record FinalizeResult(UUID sessionId, int answeredCount, String evaluatorVersion)`
+  - `boolean abandon(UUID sessionId, UUID userId)`
   - `ErrorCode` 追加：`SESSION_NOT_FOUND(2701, "面试会话不存在或已过期")`、`SESSION_ALREADY_COMPLETED(2702, "该面试已交卷，请从面试中心查看")`、`SESSION_SLOT_MISMATCH(2703, "作答位置与会话进度不一致，请刷新")`
 
 - [ ] **Step 1: 借鉴扫描**（🅖 `modules/interview/service/InterviewSessionService.java`、🅜 `interview/application/flow/InterviewFlowStateMachine.java`），commit 正文四行说明。

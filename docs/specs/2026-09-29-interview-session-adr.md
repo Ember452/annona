@@ -20,7 +20,10 @@
 1. **两张表**（V9）：`interview_session`（status `RESUMABLE/COMPLETED/ABANDONED`、`plan JSONB`
    存服务端校验后的组卷定稿、`current_index` 恢复位、`evaluator_version` 批 2 写 `'v1'` 只作幂等
    契约）+ `interview_answer`（建会话时按组卷整排 PENDING 占位，作答=条件 UPDATE；
-   `uq(session_id, question_id, follow_up_index)` 是幂等的 DB 级兜底）。
+   `uq(session_id, question_id, follow_up_index)` 是幂等的 DB 级兜底）。追问不是独立题目行
+   （🅢 同构：`follow_ups` 在 `qb_question` JSONB 内），所以作答寻址 = 会话内的
+   `(question_id, follow_up_index)`（uq 已保证唯一）；`current_index` 只按主问题推进
+   （追问展平在评估侧，展示层不暴露层间导航）。
 2. **InterviewPlan 契约**：`record InterviewPlan(int totalCount, List<Integer> difficulties, int followUpDepth)`，
    服务端校验上限 `totalCount ∈ [1,20]`、`difficulties ⊆ [1,5]` 且长度==totalCount、`followUpDepth ∈ [0,3]`；
    越界 `1001`，容量不足**复用 2604**（M7：与批 1 容量校验同一失败语义，不开双码）。快照结构版本
