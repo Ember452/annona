@@ -33,7 +33,12 @@ class MigrationShapeIT {
         String def = jdbc.queryForObject(
             "select indexdef from pg_indexes where indexname = 'idx_session_resumable'",
             String.class);
-        assertThat(def).containsIgnoringCase("WHERE (status)::text = 'RESUMABLE'::text");
+        // PG 规范化会给表达式套括号（((status)::text = ...)）——只断言"部分索引三要素"
+        // 各自在场：WHERE + 状态列 + 字面量。全表 idx_session_user_direction_status 不含
+        // RESUMABLE 字面量，误冒充会被这三条一起拦下
+        assertThat(def).containsIgnoringCase("where")
+            .containsIgnoringCase("status")
+            .contains("'RESUMABLE'");
     }
 
     @Test
