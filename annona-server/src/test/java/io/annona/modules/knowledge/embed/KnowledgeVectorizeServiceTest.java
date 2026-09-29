@@ -18,7 +18,7 @@ import io.annona.common.storage.ObjectStorage;
 import io.annona.common.stream.TaskStreamPort;
 import io.annona.modules.knowledge.entity.KbDocChunkEntity;
 import io.annona.modules.knowledge.entity.KbDocEntity;
-import io.annona.modules.knowledge.progress.KnowledgeProgressHub;
+import io.annona.shared.progress.SseProgressHub;
 import io.annona.modules.knowledge.repository.KbDocChunkRepository;
 import io.annona.modules.knowledge.repository.KbDocRepository;
 import io.annona.spi.model.EmbeddingProvider;
@@ -97,7 +97,7 @@ class KnowledgeVectorizeServiceTest {
     @Mock
     private EmbeddingProvider embeddingProvider;
     @Mock
-    private KnowledgeProgressHub progressHub;
+    private SseProgressHub progressHub;
 
     private KnowledgeVectorizeService service;
 

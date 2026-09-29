@@ -1,0 +1,13 @@
+displayName: Java 后端
+display:
+  icon: "☕"
+  gradient: "from-orange-400 to-rose-500"
+categories:
+  - key: JAVA_CORE
+    label: 语言核心与集合
+    priority: CORE
+    ref: java.md
+    shared: true
+  - key: CONCURRENCY
+    label: 并发基础
+    priority: NORMAL

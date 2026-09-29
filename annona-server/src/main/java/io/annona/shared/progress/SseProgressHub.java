@@ -1,7 +1,7 @@
-package io.annona.modules.knowledge.progress;
+package io.annona.shared.progress;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.annona.modules.knowledge.dto.ProgressEvent;
+import io.annona.shared.progress.ProgressEvent;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -13,15 +13,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * 入库进度 SSE 枢纽（仓库首个 SSE 先例）：消费者线程 publish，controller 订阅。
+ * 进度 SSE 枢纽（knowledge 入库先用，P1b-02 出题复用；仓库首个 SSE 先例）：消费者线程 publish，controller 订阅。
  * SseEmitter 在 controller 请求内创建（无 web 专属 bean，NONE 上下文连坐风险为零，
  * SessionAuthFilter 先例口径）；发送失败（客户端断开）即移除，不重连不缓存——
  * 断线降级由前端轮询 status 接口承担（决策 10）。
  */
 @Service
-public class KnowledgeProgressHub {
+public class SseProgressHub {
 
-    private static final Logger log = LoggerFactory.getLogger(KnowledgeProgressHub.class);
+    private static final Logger log = LoggerFactory.getLogger(SseProgressHub.class);
 
     private final Map<UUID, List<SseEmitter>> emitters = new ConcurrentHashMap<>();
     private final ObjectMapper mapper = new ObjectMapper();

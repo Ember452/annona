@@ -9,7 +9,7 @@ import io.annona.modules.knowledge.dto.UploadResponse;
 import io.annona.modules.knowledge.ingest.KnowledgeUploadService;
 import io.annona.modules.knowledge.ops.KnowledgeDocLifecycleService;
 import io.annona.modules.knowledge.ops.KnowledgeDocQueryService;
-import io.annona.modules.knowledge.progress.KnowledgeProgressHub;
+import io.annona.shared.progress.SseProgressHub;
 import io.annona.spi.dto.Principal;
 import java.util.List;
 import org.springframework.http.MediaType;
@@ -36,11 +36,11 @@ public class KnowledgeDocController {
     private final KnowledgeUploadService uploadService;
     private final KnowledgeDocQueryService queryService;
     private final KnowledgeDocLifecycleService lifecycleService;
-    private final KnowledgeProgressHub progressHub;
+    private final SseProgressHub progressHub;
 
     public KnowledgeDocController(KnowledgeUploadService uploadService,
         KnowledgeDocQueryService queryService, KnowledgeDocLifecycleService lifecycleService,
-        KnowledgeProgressHub progressHub) {
+        SseProgressHub progressHub) {
         this.uploadService = uploadService;
         this.queryService = queryService;
         this.lifecycleService = lifecycleService;

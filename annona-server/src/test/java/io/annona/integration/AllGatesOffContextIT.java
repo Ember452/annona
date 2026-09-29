@@ -31,6 +31,8 @@ import org.springframework.test.context.ActiveProfiles;
     "annona.storage.enabled=false",
     "annona.knowledge.ingest.enabled=false",
     "annona.knowledge.recovery.enabled=false",
+    "annona.questionbank.generate.enabled=false",
+    "annona.questionbank.recovery.enabled=false",
     "annona.model.embedding.provider=none",
 })
 @ActiveProfiles("docker")

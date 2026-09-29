@@ -5,6 +5,7 @@ import io.annona.shared.direction.entity.DirectionEntity;
 import io.annona.shared.direction.mapper.DirectionMapper;
 import io.annona.shared.direction.repository.DirectionRepository;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -41,5 +42,20 @@ public class DirectionQueryService {
             return false;
         }
         return repository.countVisible(id, UUID.fromString(userId)) > 0;
+    }
+
+    /**
+     * 单方向可见读取（questionbank 出题需要 kbDocId 等明细，列表接口不够用）：
+     * 口径与 {@link #existsVisibleTo} 一致——ACTIVE 且（内置或本人），不可见统一 empty，
+     * 不泄露他人方向的存在性。
+     */
+    public Optional<DirectionResponse> findVisible(String userId, String directionId) {
+        UUID id;
+        try {
+            id = UUID.fromString(directionId);
+        } catch (IllegalArgumentException | NullPointerException e) {
+            return Optional.empty();
+        }
+        return repository.findVisibleById(id, UUID.fromString(userId)).map(mapper::toResponse);
     }
 }

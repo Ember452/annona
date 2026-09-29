@@ -71,7 +71,17 @@ public enum ErrorCode {
 
     // ========== qa 2500–2599（P1a-08，流式问答） ==========
     QA_SESSION_NOT_FOUND(2500, "问答会话不存在"),
-    QA_MODEL_NOT_CONFIGURED(2502, "问答模型未配置，请先在环境中配置 chat 模型");
+    QA_MODEL_NOT_CONFIGURED(2502, "问答模型未配置，请先在环境中配置 chat 模型"),
+
+    // ========== questionbank 2600–2699（P1b-02，知识库出题） ==========
+    QB_GENERATION_TASK_IN_FLIGHT(2600, "该方向已有出题任务进行中，请等待完成后再试"),
+    QB_GENERATION_FAILED(2601, "题目生成失败，请稍后重试"),
+    QB_DIRECTION_KB_NOT_READY(2602, "该方向绑定的知识库文档尚未就绪，无法出题"),
+    QB_QUESTION_NOT_FOUND(2603, "题目不存在"),
+    QB_QUESTION_CAPACITY_INSUFFICIENT(2604, "题目容量不足，无法按当前条件开始面试"),
+
+    // ========== interview 2700–2799（P1b-01，技能注册表） ==========
+    SKILL_NOT_FOUND(2700, "技能不存在");
 
     private final int code;
     private final String message;

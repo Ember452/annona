@@ -75,6 +75,11 @@ annona:
       api-key: ${ANNONA_CHAT_API_KEY:}
       model: ${ANNONA_DEFAULT_CHAT_MODEL:}
       timeout-seconds: ${ANNONA_CHAT_TIMEOUT_SECONDS:60}
+  # P1b-02：结构化输出重试（出题/评估共用，StructuredOutputInvoker）。
+  # 3 次是上游同款起点：多数 JSON 形状错误在第二次带反馈重试即修复。
+  ai:
+    structured-output:
+      max-attempts: ${ANNONA_STRUCTURED_MAX_ATTEMPTS:3}
   # P1a-05：文档解析线程池（借 🅖 实测值；重 CPU/IO 小池 + 超时防损坏文件死循环）
   document-parse:
     pool-size: ${ANNONA_PARSE_POOL_SIZE:2}
@@ -84,6 +89,20 @@ annona:
   # 因为拼错一个字母会让"以为在用 pgvector、实际跑的是 fake"，整批评测数字跟着失真。
   retrieval:
     backend: ${ANNONA_RETRIEVAL_BACKEND:pgvector}
+  # P1b-01：内置技能根目录（Spring 资源语法，classpath:/file: 均可）。
+  # 子目录 = 一个技能（SKILL.md 必填 key/name/description），_shared 是公共参考池；
+  # 新增内置方向 = 加目录后重启，不改代码（skill-questionbank-adr §决策 1）。
+  interview:
+    skill:
+      root: ${ANNONA_SKILL_ROOT:classpath:skills}
+  # P1b-02：出题后台机器（Stream 消费 + 恢复调度）。门控理由同 knowledge：
+  # SmartLifecycle/@Scheduled 会被强制实例化，无 Redis 的冒烟上下文必须能关掉。
+  questionbank:
+    generate:
+      enabled: ${ANNONA_QUESTIONBANK_GENERATE_ENABLED:true}
+    recovery:
+      enabled: ${ANNONA_QUESTIONBANK_RECOVERY_ENABLED:true}
+      interval-ms: ${ANNONA_QUESTIONBANK_RECOVERY_INTERVAL_MS:60000}
 
 management:
   endpoints:

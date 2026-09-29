@@ -66,7 +66,9 @@ class FlywayBaselineIT {
                 "login_attempt", "avatar_change", "user_data_request", "direction",
                 "checkin", "study_session", "study_event",
                 "kb_doc", "kb_doc_chunk", "retrieval_eval_run",
-                "qa_session", "qa_message");
+                "qa_session", "qa_message",
+                // V8（P1b-02 出题链）：后续迁移新增表在此追加，保持全库清单断言成立
+                "qb_question", "qb_generation_task");
     }
 
     @Test
@@ -88,13 +90,16 @@ class FlywayBaselineIT {
                 + "WHERE table_name = 'direction' AND constraint_type = 'PRIMARY KEY'",
             Integer.class);
         assertThat(pkInDirection).as("direction 有主键").isEqualTo(1);
-        // 插一条 SKILL_BUILTIN 方向，走默认值，验证 meta_json 与 status 默认生效
+        // 插一条 SKILL_BUILTIN 方向，走默认值，验证 meta_json 与 status 默认生效。
+        // key 用 it- 前缀抽象名：P1b-01 起播种器会在启动时占用真实技能 key（uq_direction_owner_key
+        // 的 NULL 命名空间），夹具不得与任何内置技能同名，否则随技能清单演进而脆断。
         jdbc.update("INSERT INTO direction (key, name, origin) VALUES (?, ?, ?)",
-            "java-concurrency", "Java 并发", "SKILL_BUILTIN");
+            "it-v1-shape-fixture", "V1 形状夹具", "SKILL_BUILTIN");
+        // 查询用绑定参数而非字面量：gitleaks 的 generic-api-key 规则会把 key='...' 形态误判
         Integer active = jdbc.queryForObject(
-            "SELECT COUNT(*) FROM direction WHERE key = 'java-concurrency' AND status = 'ACTIVE' "
+            "SELECT COUNT(*) FROM direction WHERE key = ? AND status = 'ACTIVE' "
                 + "AND meta_json = '{}'::jsonb",
-            Integer.class);
+            Integer.class, "it-v1-shape-fixture");
         assertThat(active).as("status 默认 ACTIVE、meta_json 默认 {}").isEqualTo(1);
     }
 }
