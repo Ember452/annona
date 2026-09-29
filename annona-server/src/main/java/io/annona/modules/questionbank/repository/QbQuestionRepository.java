@@ -1,7 +1,9 @@
 package io.annona.modules.questionbank.repository;
 
 import io.annona.modules.questionbank.entity.QbQuestionEntity;
+import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -17,4 +19,10 @@ public interface QbQuestionRepository extends JpaRepository<QbQuestionEntity, UU
     @Query("delete from QbQuestionEntity q where q.userId = :userId"
         + " and q.directionId = :directionId and q.status = 'DRAFT'")
     int deleteDrafts(@Param("userId") UUID userId, @Param("directionId") UUID directionId);
+
+    /** 最近已有题目题干（喂给出题提示词防重复；全状态——草稿也算已出过的题）。 */
+    @Query("select q.question from QbQuestionEntity q where q.userId = :userId"
+        + " and q.directionId = :directionId order by q.createdAt desc, q.id desc")
+    List<String> findRecentQuestions(@Param("userId") UUID userId,
+                                     @Param("directionId") UUID directionId, Pageable pageable);
 }

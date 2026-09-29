@@ -6,7 +6,7 @@ import io.annona.common.result.Result;
 import io.annona.modules.interview.skill.dto.SkillDetailResponse;
 import io.annona.modules.interview.skill.dto.SkillSummaryResponse;
 import io.annona.modules.interview.skill.model.SkillDefinition;
-import io.annona.modules.interview.skill.service.SkillRegistry;
+import io.annona.modules.interview.skill.service.SkillQueryService;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,9 +23,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/interview/skills")
 public class InterviewSkillController {
 
-    private final SkillRegistry registry;
+    private final SkillQueryService registry;
 
-    public InterviewSkillController(SkillRegistry registry) {
+    public InterviewSkillController(SkillQueryService registry) {
         this.registry = registry;
     }
 

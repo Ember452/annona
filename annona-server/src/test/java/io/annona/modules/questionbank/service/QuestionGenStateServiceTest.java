@@ -42,6 +42,7 @@ class QuestionGenStateServiceTest {
     @DisplayName("创建任务：无在途时落 QUEUED 并带参数快照")
     void createTaskQueued() {
         when(repository.existsByUserIdAndDirectionIdAndStatusIn(any(), any(), any())).thenReturn(false);
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.createTask(USER, DIRECTION, CONFIG);
 

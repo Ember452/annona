@@ -2,6 +2,7 @@ package io.annona.modules.questionbank.repository;
 
 import io.annona.modules.questionbank.entity.QbGenerationTaskEntity;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,6 +16,10 @@ import org.springframework.data.repository.query.Param;
  * （借 🅖 tryMarkProcessing 的原子领取语义；知识库状态机同款约定）。
  */
 public interface QbGenerationTaskRepository extends JpaRepository<QbGenerationTaskEntity, UUID> {
+
+    /** 最近一次任务（generation-status 轮询；无历史时 empty）。 */
+    Optional<QbGenerationTaskEntity> findTopByUserIdAndDirectionIdOrderByCreatedAtDesc(
+        UUID userId, UUID directionId);
 
     /** 在途任务预检查（友好报错）；并发竞态由 uq_generation_task_inflight 兜底。 */
     boolean existsByUserIdAndDirectionIdAndStatusIn(UUID userId, UUID directionId,
@@ -49,4 +54,11 @@ public interface QbGenerationTaskRepository extends JpaRepository<QbGenerationTa
     @Query("update QbGenerationTaskEntity t set t.status = 'QUEUED', t.updatedAt = :now"
         + " where t.id = :id and t.status = 'PROCESSING'")
     int resetForRetry(@Param("id") UUID id, @Param("now") Instant now);
+
+    /** 恢复调度扫描：按状态 + updated_at 找 stale（双阈值见 QuestionGenRecoveryScheduler）。 */
+    @Query("select t from QbGenerationTaskEntity t where t.status = :status"
+        + " and t.updatedAt < :threshold order by t.updatedAt asc")
+    List<QbGenerationTaskEntity> findStale(@Param("status") String status,
+                                           @Param("threshold") Instant threshold,
+                                           org.springframework.data.domain.Pageable pageable);
 }

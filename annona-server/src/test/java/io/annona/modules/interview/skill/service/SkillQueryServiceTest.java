@@ -14,12 +14,12 @@ import org.junit.jupiter.api.Test;
  * 注册表的启动扫描与 fail-fast（P1b-01 验收："目录放一个 .md 即被识别；缺字段有明确报错"）。
  * 根目录可注入，测试用 src/test/resources 下的专用夹具，与主资源 skills/ 互不干扰。
  */
-class SkillRegistryTest {
+class SkillQueryServiceTest {
 
-    private SkillRegistry registryWith(String root) {
+    private SkillQueryService registryWith(String root) {
         SkillProperties properties = new SkillProperties();
         properties.setRoot(root);
-        return new SkillRegistry(properties);
+        return new SkillQueryService(properties);
     }
 
     @Nested
@@ -29,7 +29,7 @@ class SkillRegistryTest {
         @Test
         @DisplayName("扫描全部技能目录并按 key 排序；meta 与 parent 正确关联")
         void loadsAllAndSorts() {
-            SkillRegistry registry = registryWith("classpath:skill-fixtures-ok");
+            SkillQueryService registry = registryWith("classpath:skill-fixtures-ok");
             registry.load();
             List<SkillDefinition> all = registry.list();
             assertThat(all).extracting(SkillDefinition::key)
@@ -43,7 +43,7 @@ class SkillRegistryTest {
         @Test
         @DisplayName("目录放一个新 .md 即被识别——清单由目录驱动而非代码")
         void catalogDrivenByDirectory() {
-            SkillRegistry registry = registryWith("classpath:skill-fixtures-ok");
+            SkillQueryService registry = registryWith("classpath:skill-fixtures-ok");
             registry.load();
             assertThat(registry.builtinDirections())
                 .extracting(SkillDirectionCatalog.BuiltinDirectionSpec::key)
@@ -53,7 +53,7 @@ class SkillRegistryTest {
         @Test
         @DisplayName("参考解析：shared 优先公共池，本地优先技能目录，缺失返回空串，不安全路径拒绝")
         void referenceResolution() {
-            SkillRegistry registry = registryWith("classpath:skill-fixtures-ok");
+            SkillQueryService registry = registryWith("classpath:skill-fixtures-ok");
             registry.load();
             assertThat(registry.resolveReference("java-backend", "java.md", true))
                 .contains("公共参考池样例");
@@ -74,7 +74,7 @@ class SkillRegistryTest {
         @Test
         @DisplayName("key 重复报出冲突目录")
         void duplicateKeyFails() {
-            SkillRegistry registry = registryWith("classpath:skill-fixtures-dup");
+            SkillQueryService registry = registryWith("classpath:skill-fixtures-dup");
             assertThatThrownBy(registry::load)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("key 重复").hasMessageContaining("dup-key");
@@ -83,7 +83,7 @@ class SkillRegistryTest {
         @Test
         @DisplayName("parent 悬空点名缺失的父技能")
         void orphanParentFails() {
-            SkillRegistry registry = registryWith("classpath:skill-fixtures-orphan-parent");
+            SkillQueryService registry = registryWith("classpath:skill-fixtures-orphan-parent");
             assertThatThrownBy(registry::load)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("parent 悬空").hasMessageContaining("no-such-parent");
@@ -92,7 +92,7 @@ class SkillRegistryTest {
         @Test
         @DisplayName("目录里没有任何 SKILL.md")
         void emptyDirectoryFails() {
-            SkillRegistry registry = registryWith("classpath:skill-fixtures-empty");
+            SkillQueryService registry = registryWith("classpath:skill-fixtures-empty");
             assertThatThrownBy(registry::load)
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("没有找到任何");
         }

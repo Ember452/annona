@@ -95,6 +95,14 @@ annona:
   interview:
     skill:
       root: ${ANNONA_SKILL_ROOT:classpath:skills}
+  # P1b-02：出题后台机器（Stream 消费 + 恢复调度）。门控理由同 knowledge：
+  # SmartLifecycle/@Scheduled 会被强制实例化，无 Redis 的冒烟上下文必须能关掉。
+  questionbank:
+    generate:
+      enabled: ${ANNONA_QUESTIONBANK_GENERATE_ENABLED:true}
+    recovery:
+      enabled: ${ANNONA_QUESTIONBANK_RECOVERY_ENABLED:true}
+      interval-ms: ${ANNONA_QUESTIONBANK_RECOVERY_INTERVAL_MS:60000}
 
 management:
   endpoints:

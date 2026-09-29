@@ -44,4 +44,8 @@ public interface DirectionRepository extends JpaRepository<DirectionEntity, UUID
     @Query("select count(d) from DirectionEntity d where d.id = :id"
         + " and d.status = 'ACTIVE' and (d.userId is null or d.userId = :userId)")
     long countVisible(@Param("id") UUID id, @Param("userId") UUID userId);
+    /** 单方向可见读取（questionbank 出题取 kbDocId 用）：ACTIVE 且（内置或本人）；不可见为 empty。 */
+    @Query("select d from DirectionEntity d where d.id = :id and d.status = 'ACTIVE'"
+        + " and (d.userId is null or d.userId = :userId)")
+    Optional<DirectionEntity> findVisibleById(@Param("id") UUID id, @Param("userId") UUID userId);
 }

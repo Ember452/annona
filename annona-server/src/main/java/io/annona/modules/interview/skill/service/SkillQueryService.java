@@ -19,7 +19,7 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Service;
 
 /**
- * 技能注册表（skill-questionbank-adr §决策 1）：启动扫描技能根目录下各子目录的 SKILL.md，
+ * 技能查询服务（skill-questionbank-adr §决策 1；跨模块只读门面——questionbank 出题经本类取 persona，遵循 XxxQueryService 惯例）：：启动扫描技能根目录下各子目录的 SKILL.md，
  * 解析结果按 front-matter key 索引；缺必填字段、key 重复、parent 悬空、目录为空 →
  * {@link IllegalStateException} 拒绝启动（报错带文件路径）。加载完成后只读（TreeMap 排序、
  * @PostConstruct 内写入对 refresh 后的其他线程可见），无热更新——内置技能变更伴随发版。
@@ -29,9 +29,9 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @EnableConfigurationProperties(SkillProperties.class)
-public class SkillRegistry implements SkillDirectionCatalog {
+public class SkillQueryService implements SkillDirectionCatalog {
 
-    private static final Logger log = LoggerFactory.getLogger(SkillRegistry.class);
+    private static final Logger log = LoggerFactory.getLogger(SkillQueryService.class);
 
     /** 上游同款：单参考文件截断预算（参考正文只进提示词、不出产品面，超长段落尾部静默截断）。 */
     static final int MAX_REFERENCE_CHARS = 3000;
@@ -43,7 +43,7 @@ public class SkillRegistry implements SkillDirectionCatalog {
     private final String root;
     private final Map<String, SkillDefinition> registry = new TreeMap<>();
 
-    public SkillRegistry(SkillProperties properties) {
+    public SkillQueryService(SkillProperties properties) {
         this.root = properties.getRoot();
     }
 

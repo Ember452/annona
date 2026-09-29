@@ -2,10 +2,12 @@ package io.annona.modules.questionbank.service;
 
 import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
+import io.annona.modules.questionbank.dto.QuestionGenStatusResponse;
 import io.annona.modules.questionbank.entity.QbGenerationTaskEntity;
 import io.annona.modules.questionbank.model.QuestionGenConfig;
 import io.annona.modules.questionbank.repository.QbGenerationTaskRepository;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -30,8 +32,8 @@ public class QuestionGenStateService {
 
     /** 创建 QUEUED 任务；同 (user, direction) 已有在途任务即 2600（前端禁用提交按钮的正常路径）。 */
     @Transactional
-    public QbGenerationTaskEntity createTask(UUID userId, UUID directionId,
-                                             QuestionGenConfig config) {
+    public QuestionGenStatusResponse createTask(UUID userId, UUID directionId,
+                                                QuestionGenConfig config) {
         if (repository.existsByUserIdAndDirectionIdAndStatusIn(userId, directionId,
             List.of(QbGenerationTaskEntity.STATUS_QUEUED, QbGenerationTaskEntity.STATUS_PROCESSING))) {
             throw new BusinessException(ErrorCode.QB_GENERATION_TASK_IN_FLIGHT);
@@ -43,7 +45,23 @@ public class QuestionGenStateService {
         task.setStatus(QbGenerationTaskEntity.STATUS_QUEUED);
         task.setConfig(config);
         task.setUpdatedAt(Instant.now());
-        return repository.save(task);
+        return toStatus(repository.save(task));
+    }
+
+    /** 最近一次任务状态（无历史为 empty）；entity→DTO 在服务层收口，controller 不触碰 entity。 */
+    public Optional<QuestionGenStatusResponse> latestStatus(UUID userId, UUID directionId) {
+        return repository.findTopByUserIdAndDirectionIdOrderByCreatedAtDesc(userId, directionId)
+            .map(this::toStatus);
+    }
+
+    private QuestionGenStatusResponse toStatus(QbGenerationTaskEntity task) {
+        QuestionGenConfig config = task.getConfig();
+        return new QuestionGenStatusResponse(task.getId().toString(), task.getStatus(),
+            config.difficulty(), config.questionCount(), config.followUpCount(),
+            task.getSavedCount(), task.getSkippedCount(),
+            task.getMessage() == null ? "" : task.getMessage(),
+            task.getError() == null ? "" : task.getError(),
+            task.getUpdatedAt() == null ? Instant.EPOCH : task.getUpdatedAt());
     }
 
     /** 原子领取；false = 任务已被其他实例领取或状态已变，消费侧安静放弃本条消息。 */

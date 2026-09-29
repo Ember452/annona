@@ -36,3 +36,9 @@ annona:
   direction:
     seed:
       enabled: false
+  # 出题 Stream 消费与恢复调度同属强制实例化的后台机器，无 DB/Redis 冒烟上下文一并关
+  questionbank:
+    generate:
+      enabled: false
+    recovery:
+      enabled: false

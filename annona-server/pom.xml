@@ -169,7 +169,7 @@
                                         <!-- P1a-07：RRF 融合是检索指标的分母，与分块器同级
                                              （K/名次/归一化口径错一个，Recall@K 与前端置信度一起失真） -->
                                         <include>io/annona/modules/retrieval/hybrid/*</include>
-                                        <!-- P1b-01：SKILL 解析与注册表承载"缺字段有明确报错"验收，
+                                        <!-- P1b-01：SKILL 解析与查询服务承载"缺字段有明确报错"验收，
                                              fail-fast 分支必须全测（skill-questionbank-adr §决策 1） -->
                                         <include>io/annona/modules/interview/skill/service/*</include>
                                         <include>io/annona/modules/interview/skill/model/*</include>

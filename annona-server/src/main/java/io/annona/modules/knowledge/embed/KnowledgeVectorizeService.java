@@ -11,11 +11,11 @@ import io.annona.common.stream.TaskStreamPort;
 import io.annona.modules.knowledge.chunk.ChunkOptions;
 import io.annona.modules.knowledge.chunk.Chunker;
 import io.annona.modules.knowledge.chunk.KnowledgeChunk;
-import io.annona.modules.knowledge.dto.ProgressEvent;
+import io.annona.shared.progress.ProgressEvent;
 import io.annona.modules.knowledge.entity.KbDocChunkEntity;
 import io.annona.modules.knowledge.entity.KbDocEntity;
 import io.annona.modules.knowledge.ingest.ContentHashes;
-import io.annona.modules.knowledge.progress.KnowledgeProgressHub;
+import io.annona.shared.progress.SseProgressHub;
 import io.annona.modules.knowledge.repository.KbDocChunkRepository;
 import io.annona.modules.knowledge.repository.KbDocRepository;
 import io.annona.spi.model.EmbeddingProvider;
@@ -71,7 +71,7 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
      */
     private final Tokenizer tokenizer;
     private final Optional<EmbeddingProvider> embeddingProvider;
-    private final KnowledgeProgressHub progressHub;
+    private final SseProgressHub progressHub;
     /**
      * 条件 UPDATE 的事务来源：每个状态迁移经 {@link TransactionTemplate} 自成一个短事务
      * （LoginAttemptStore 先例）。@Modifying 查询没有调用方事务时 Hibernate 会抛
@@ -86,7 +86,7 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
         DocumentParser documentParser,
         Tokenizer tokenizer,
         Optional<EmbeddingProvider> embeddingProvider,
-        KnowledgeProgressHub progressHub,
+        SseProgressHub progressHub,
         PlatformTransactionManager transactionManager) {
         this.docRepository = docRepository;
         this.chunkRepository = chunkRepository;
