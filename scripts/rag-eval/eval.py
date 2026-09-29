@@ -161,9 +161,14 @@ def score_run(api, queries, doc_ids, top_k, mode):
         stats["n"] += 1
         stats["recall"] += recall
         stats["mrr"] += mrr
-        if not found:
+        # miss 口径 = recall < 1.0（部分召回也算），条目带 recall/expected_n：
+        # compare.py 的混合独占命中按逐 query recall 比较，若 miss 只记全空命中，
+        # "relevant_docs 多篇、BOTH 多捞回一篇但未满分"的增益会被系统性低估
+        if recall < 1.0:
             details.append({"id": item["id"], "mode": mode, "bucket": bucket,
-                            "query": item["text"], "reason": (data.get("diagnostics") or {}).get("reason"),
+                            "query": item["text"], "recall": round(recall, 4),
+                            "expected_n": len(expected),
+                            "reason": (data.get("diagnostics") or {}).get("reason"),
                             "top_docs": hit_docs[:top_k]})
 
     n = len(queries) or 1
