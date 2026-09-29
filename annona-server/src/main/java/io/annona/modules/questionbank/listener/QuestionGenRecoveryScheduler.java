@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -32,10 +33,11 @@ public class QuestionGenRecoveryScheduler {
     static final int SWEEP_LIMIT = 10;
 
     private final QbGenerationTaskRepository taskRepository;
-    private final QuestionGenStream stream;
+    /** stream 与本调度器的门控键不同（generate vs recovery），组合存在缺席可能——禁止硬注入。 */
+    private final ObjectProvider<QuestionGenStream> stream;
 
     public QuestionGenRecoveryScheduler(QbGenerationTaskRepository taskRepository,
-                                        QuestionGenStream stream) {
+                                        ObjectProvider<QuestionGenStream> stream) {
         this.taskRepository = taskRepository;
         this.stream = stream;
     }
@@ -48,7 +50,8 @@ public class QuestionGenRecoveryScheduler {
             PageRequest.of(0, SWEEP_LIMIT));
         for (QbGenerationTaskEntity task : stuckQueued) {
             log.info("恢复调度：补投 QUEUED 任务 {}", task.getId());
-            stream.send(task.getId());
+            streamIfAvailable().ifPresentOrElse(s -> s.send(task.getId()),
+                () -> log.warn("出题流未启用，跳过补投（任务 {} 留待下次）", task.getId()));
         }
         List<QbGenerationTaskEntity> stuckProcessing = taskRepository.findStale(
             QbGenerationTaskEntity.STATUS_PROCESSING, now.minusMillis(PROCESSING_STALE_MS),
@@ -56,8 +59,13 @@ public class QuestionGenRecoveryScheduler {
         for (QbGenerationTaskEntity task : stuckProcessing) {
             log.info("恢复调度：PROCESSING 超时，重置并重投任务 {}", task.getId());
             if (taskRepository.resetForRetry(task.getId(), now) > 0) {
-                stream.send(task.getId());
+                streamIfAvailable().ifPresentOrElse(s -> s.send(task.getId()),
+                    () -> log.warn("出题流未启用，跳过重投（任务 {} 留待下次）", task.getId()));
             }
         }
+    }
+
+    private java.util.Optional<QuestionGenStream> streamIfAvailable() {
+        return java.util.Optional.ofNullable(stream.getIfAvailable());
     }
 }

@@ -31,8 +31,7 @@ class StructuredOutputInvokerTest {
         when(objectProvider.getIfAvailable()).thenReturn(provider);
         StructuredOutputProperties properties = new StructuredOutputProperties();
         properties.setMaxAttempts(maxAttempts);
-        return new StructuredOutputInvoker(objectProvider, properties,
-            new com.fasterxml.jackson.databind.ObjectMapper());
+        return new StructuredOutputInvoker(objectProvider, properties);
     }
 
     @Test

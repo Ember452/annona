@@ -21,6 +21,8 @@ import org.springframework.stereotype.Component;
  * common 看不见 spi 的 {@link ModelProvider}（skill-questionbank-adr §后续修订）。
  * ModelProvider 经 {@link ObjectProvider} 注入（条件装配顺序陷阱，本仓惯例）：
  * 模型未配置时调用即抛 AI_SERVICE_UNAVAILABLE，由消费方翻译成安全文案。
+ * ObjectMapper 不注入而是自建——docker-it / compose 的 NONE 上下文没有 Boot 的
+ * ObjectMapper bean（SseProgressHub 同款先例），而解析 LLM 输出不依赖 spring.jackson.* 定制。
  */
 @Component
 @EnableConfigurationProperties(StructuredOutputProperties.class)
@@ -31,16 +33,15 @@ public class StructuredOutputInvoker {
         "。请严格只输出符合约定结构的 JSON 正文：不要 markdown 代码块、不要解释文字、"
             + "不要在字符串值里出现未转义的引号或换行。";
 
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     private final ObjectProvider<ModelProvider> provider;
     private final StructuredOutputProperties properties;
-    private final ObjectMapper objectMapper;
 
     public StructuredOutputInvoker(ObjectProvider<ModelProvider> provider,
-                                   StructuredOutputProperties properties,
-                                   ObjectMapper objectMapper) {
+                                   StructuredOutputProperties properties) {
         this.provider = provider;
         this.properties = properties;
-        this.objectMapper = objectMapper;
     }
 
     /**
@@ -63,7 +64,7 @@ public class StructuredOutputInvoker {
         for (int attempt = 1; attempt <= properties.getMaxAttempts(); attempt++) {
             String content = chat.chat(messages, ModelOptions.defaults()).content();
             try {
-                return objectMapper.readValue(extractJson(content), type);
+                return OBJECT_MAPPER.readValue(extractJson(content), type);
             } catch (Exception e) {
                 lastError = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
                 messages = new ArrayList<>(messages);

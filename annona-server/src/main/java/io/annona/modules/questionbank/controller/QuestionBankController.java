@@ -13,6 +13,7 @@ import io.annona.shared.direction.service.DirectionQueryService;
 import io.annona.shared.progress.ProgressEvent;
 import io.annona.shared.progress.SseProgressHub;
 import io.annona.spi.dto.Principal;
+import org.springframework.beans.factory.ObjectProvider;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.http.MediaType;
@@ -35,11 +36,13 @@ public class QuestionBankController {
 
     private final QuestionGenStateService stateService;
     private final DirectionQueryService directionQuery;
-    private final QuestionGenStream stream;
+    /** 门控 bean（generate.enabled）——常驻 bean 禁止硬注入，守卫 IT 的约定。 */
+    private final ObjectProvider<QuestionGenStream> stream;
     private final SseProgressHub progressHub;
 
     public QuestionBankController(QuestionGenStateService stateService,
-                                  DirectionQueryService directionQuery, QuestionGenStream stream,
+                                  DirectionQueryService directionQuery,
+                                  ObjectProvider<QuestionGenStream> stream,
                                   SseProgressHub progressHub) {
         this.stateService = stateService;
         this.directionQuery = directionQuery;
@@ -68,7 +71,7 @@ public class QuestionBankController {
             new ProgressEvent("QUEUED", "任务已提交", 0, questionCount, ""));
         // 先落库后投递（借 🅖）；投递失败判 FAILED，恢复调度不会救"从未存在过的消息"——
         // 直接把错误还给用户重试，比静默等调度更可解释
-        if (!stream.send(UUID.fromString(task.taskId()))) {
+        if (!streamProvider().send(UUID.fromString(task.taskId()))) {
             stateService.markFailed(UUID.fromString(task.taskId()), "任务投递失败（Redis 不可用）");
             throw new BusinessException(ErrorCode.QB_GENERATION_FAILED);
         }
@@ -98,6 +101,15 @@ public class QuestionBankController {
                                @PathVariable String directionId) {
         requireVisible(principal, directionId);
         return progressHub.subscribe(UUID.fromString(directionId));
+    }
+
+    /** 出题后台机器被门控关闭时给出可理解错误，而不是 NoSuchBean 硬崩。 */
+    private QuestionGenStream streamProvider() {
+        QuestionGenStream streamBean = stream.getIfAvailable();
+        if (streamBean == null) {
+            throw new BusinessException(ErrorCode.QB_GENERATION_FAILED, "出题服务未启用");
+        }
+        return streamBean;
     }
 
     private void requireVisible(Principal principal, String directionId) {
