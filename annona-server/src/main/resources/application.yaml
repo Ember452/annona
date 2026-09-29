@@ -75,6 +75,15 @@ annona:
       api-key: ${ANNONA_CHAT_API_KEY:}
       model: ${ANNONA_DEFAULT_CHAT_MODEL:}
       timeout-seconds: ${ANNONA_CHAT_TIMEOUT_SECONDS:60}
+  # P1b-10：计量与配额（llmprovider-metering-adr）。daily-token-limit 每用户每日 token 上限
+  # （0=不限；自部署默认宽松，托管收紧）；model-prices 单价在部署侧 yaml 手改（无 env 映射），
+  # 缺键=成本列隐藏，只供面板估算不是对账单。
+  usage:
+    daily-token-limit: ${ANNONA_USAGE_DAILY_TOKEN_LIMIT:200000}
+  # KEK 主密钥材料（model-api-key-adr §决策 2）：base 统一 env 映射，profile yaml 只覆
+  # 回退值（dev 的占位 fallback / prod 强制非空由 StartupValidator 把关）。
+  kek:
+    secret: ${ANNONA_SECRET_KEY:}
   # P1b-02：结构化输出重试（出题/评估共用，StructuredOutputInvoker）。
   # 3 次是上游同款起点：多数 JSON 形状错误在第二次带反馈重试即修复。
   ai:

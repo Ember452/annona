@@ -4,6 +4,7 @@ import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
 import io.annona.common.search.VectorLiterals;
 import io.annona.common.stream.TaskStreamPort;
+import io.annona.common.usage.UsageContext;
 import io.annona.modules.interview.skill.model.SkillDefinition;
 import io.annona.modules.interview.skill.service.SkillQueryService;
 import io.annona.modules.knowledge.ops.KnowledgeDocQueryService;
@@ -129,13 +130,23 @@ public class QuestionGenerationService implements TaskStreamPort.TaskMessageHand
         }
     }
 
-    /** 领取后的完整执行：取任务 → 校验方向与文档 → 组上下文 → LLM → 落库 → 完成落账。 */
+    /** 领取后的完整执行：取任务 → 校验方向与文档 → 组上下文 → LLM → 落库 → 完成落账。
+     * 线程内 bind 用量归属（MeteredModelProvider 在 chat 出口读）：消费线程复用，
+     * try-with-resources 保证不串场景。 */
     void run(UUID taskId) {
         QbGenerationTaskEntity task = taskRepository.findById(taskId).orElse(null);
         if (task == null) {
             log.warn("出题任务 {} 不存在（可能已被清理），跳过", taskId);
             return;
         }
+        try (UsageContext.Scope ignored = UsageContext.bind(
+            task.getUserId().toString(), "QUESTION_GEN", null, null)) {
+            runInternal(task);
+        }
+    }
+
+    private void runInternal(QbGenerationTaskEntity task) {
+        UUID taskId = task.getId();
         QuestionGenConfig config = task.getConfig();
         publish(task.getDirectionId(), "PROCESSING", "正在出题", 0, config.questionCount(), "");
 
