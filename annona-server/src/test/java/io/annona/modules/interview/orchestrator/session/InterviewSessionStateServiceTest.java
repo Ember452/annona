@@ -149,6 +149,23 @@ class InterviewSessionStateServiceTest {
     }
 
     @Test
+    @DisplayName("题内追问少于计划 depth 是合法输入（结构校验不按固定公式误杀）")
+    void createAcceptsFewerFollowUpsThanDepth() {
+        service = newService();
+        when(sessionRepository.abandonAllResumable(eq(USER), eq(DIRECTION), any())).thenReturn(0);
+        when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(answerRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        var plan = new InterviewPlan(2, List.of(3, 4), 2);   // depth=2，但 q1 只有 1 层追问
+        var q1 = UUID.randomUUID();
+        var q2 = UUID.randomUUID();
+
+        var created = service.create(USER, DIRECTION, plan, List.of(
+            new AnswerSlot(q1, 0), new AnswerSlot(q1, 1), new AnswerSlot(q2, 0)));
+
+        assertThat(created.getStatus()).isEqualTo(InterviewSessionEntity.STATUS_RESUMABLE);
+    }
+
+    @Test
     @DisplayName("会话不存在/非本人：统一 2701，不泄漏归属差异")
     void missingSessionIs2701() {
         service = newService();

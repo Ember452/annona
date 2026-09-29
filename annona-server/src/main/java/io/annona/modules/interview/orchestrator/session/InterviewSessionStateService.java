@@ -6,7 +6,11 @@ import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
 import io.annona.modules.interview.orchestrator.plan.InterviewPlan;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,22 +48,19 @@ public class InterviewSessionStateService {
 
     /**
      * 建会话：同方向旧 RESUMABLE 自动置 ABANDONED（ADR 决策 5/M6），落会话行与整排 PENDING
-     * 占位。{@code slots} 必须是组卷结果按主问题+追问展平的原文——数量与 plan 的组合不符即
-     * {@code 1001}（防客户端拼装越界造出"计划 2 题占位 50 槽"的会话）。
+     * 占位。槽位结构校验（T4 发现固定公式会误杀“题内追问少于 depth”的合法输入，改结构性）：
+     * 主问题槽（followUpIndex==0）数 == totalCount；每题追问索引连续且不超 depth；槽位不重复。
+     * 不符即 1001（防客户端拼装越界造会话）。
      *
      * <p>返回实体的 {@code createdAt} 为 null：DB default 列未回读（save/merge 语义，
      * AGENTS §4）；批 2 消费方（视图/缓存）不需要它，历史面板要时在此接返回值 refresh。
      *
-     * @throws BusinessException 1001（槽数不符）
+     * @throws BusinessException 1001（槽位结构不符）
      */
     @Transactional
     public InterviewSessionEntity create(UUID userId, UUID directionId, InterviewPlan plan,
                                          List<AnswerSlot> slots) {
-        int expected = plan.totalCount() * (plan.followUpDepth() + 1);
-        if (slots.size() != expected) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST,
-                "占位槽数 " + slots.size() + " 与计划不符（期望 " + expected + "）");
-        }
+        validateSlots(plan, slots);
         Instant now = Instant.now();
         sessionRepository.abandonAllResumable(userId, directionId, now);
 
@@ -136,5 +137,38 @@ public class InterviewSessionStateService {
             // 计划由 record 定字段，序列化失败只可能是环境级 Jackson 故障，不静默降级
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "组卷计划快照失败", e);
         }
+    }
+
+    private static void validateSlots(InterviewPlan plan, List<AnswerSlot> slots) {
+        int mainCount = 0;
+        Map<UUID, Integer> maxFollowLayer = new HashMap<>();
+        Map<UUID, Integer> nonMainCount = new HashMap<>();
+        Set<AnswerSlot> distinct = new HashSet<>();
+        for (AnswerSlot slot : slots) {
+            if (!distinct.add(slot)) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "占位槽位重复：" + slot);
+            }
+            if (slot.followUpIndex() == 0) {
+                mainCount++;
+            } else if (slot.followUpIndex() > plan.followUpDepth()) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "追问层 " + slot.followUpIndex() + " 超过计划深度 " + plan.followUpDepth());
+            } else {
+                maxFollowLayer.merge(slot.questionId(), (int) slot.followUpIndex(), Math::max);
+                nonMainCount.merge(slot.questionId(), 1, Integer::sum);
+            }
+        }
+        if (mainCount != plan.totalCount()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                "主问题槽数 " + mainCount + " 与计划 " + plan.totalCount() + " 不符");
+        }
+        // 追问索引连续性：每题最大层号 == 该题非主槽数（1..k 无空洞；重复已在 distinct 拦下）
+        maxFollowLayer.forEach((questionId, maxLayer) -> {
+            if (!nonMainCount.get(questionId).equals(maxLayer)) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "题目 " + questionId + " 的追问层不连续（最大 " + maxLayer + " 层，实有 "
+                        + nonMainCount.get(questionId) + " 槽）");
+            }
+        });
     }
 }

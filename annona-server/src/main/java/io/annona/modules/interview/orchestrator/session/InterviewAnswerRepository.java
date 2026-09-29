@@ -39,4 +39,34 @@ public interface InterviewAnswerRepository extends JpaRepository<InterviewAnswer
         + " a.submittedAt = :now, a.updatedAt = :now"
         + " where a.sessionId = :sessionId and a.answerStatus = 'PENDING'")
     int markAllSubmitted(@Param("sessionId") UUID sessionId, @Param("now") Instant now);
+
+    /**
+     * 去重向量判（interview-session-adr §决策 4，M3）：候选 ACTIVE 行×该用户窗口内出现过
+     * 的题目行库内 cosine，返回 (candidateId, maxCos) 原始相似值（阈值判定在
+     * QuestionDedupService，SQL 不定口径）。任一侧 embedding 为 NULL 的行不参与——降级
+     * 关键词判的路径就长在这条条件里；真库行为由 docker 组 InterviewSessionFlowIT 钉死。
+     */
+    @Query(value = "SELECT c.id, MAX(1 - (c.embedding <=> h.embedding)) AS max_cos"
+        + " FROM qb_question c"
+        + " JOIN qb_question h ON h.id IN ("
+        + "   SELECT ia.question_id FROM interview_answer ia"
+        + "   JOIN interview_session s ON s.id = ia.session_id"
+        + "   WHERE s.user_id = :userId AND s.direction_id = :directionId"
+        + "     AND s.started_at >= :since)"
+        + " WHERE c.user_id = :userId AND c.direction_id = :directionId"
+        + "   AND c.status = 'ACTIVE' AND c.embedding IS NOT NULL AND h.embedding IS NOT NULL"
+        + " GROUP BY c.id", nativeQuery = true)
+    List<Object[]> maxCosineToAnswered(@Param("userId") UUID userId,
+                                       @Param("directionId") UUID directionId,
+                                       @Param("since") Instant since);
+
+    /** 窗口内出现过的题干（关键词判的历史集；含 PENDING 占位——建会话即“见过”）。 */
+    @Query(value = "SELECT DISTINCT h.question FROM interview_answer ia"
+        + " JOIN interview_session s ON s.id = ia.session_id"
+        + " JOIN qb_question h ON h.id = ia.question_id"
+        + " WHERE s.user_id = :userId AND s.direction_id = :directionId"
+        + "   AND s.started_at >= :since", nativeQuery = true)
+    List<String> recentAnsweredStems(@Param("userId") UUID userId,
+                                     @Param("directionId") UUID directionId,
+                                     @Param("since") Instant since);
 }
