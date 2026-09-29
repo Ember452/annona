@@ -169,7 +169,7 @@ CREATE TABLE interview_session (
     CONSTRAINT chk_session_index_bounds CHECK (current_index >= 0 AND current_index <= total_count)
 );
 COMMENT ON TABLE interview_session IS '面试会话：DB 为冷真值，Redis 快照仅作热路径（interview-session-adr §冷热分层）；状态转移全部走条件 UPDATE（fencing，questionbank 先例）';
-COMMENT ON COLUMN interview_session.plan IS 'InterviewPlan 快照 JSONB（服务端校验后的定稿，非客户端原文）；批 3 评估消费，schema 版本随 plan JSON 内 v 字段';
+COMMENT ON COLUMN interview_session.plan IS 'InterviewPlan 快照 JSONB（服务端校验后的定稿，非客户端原文）；批 3 评估消费，快照结构版本由校验器类常量持有';
 COMMENT ON COLUMN interview_session.evaluator_version IS '交卷时写 ''v1''（批 2 语义），幂等键 = session_id + evaluator_version；真正评分批 3 落地';
 COMMENT ON COLUMN interview_session.current_index IS '续面恢复位：0..total_count（等于 total_count 表示全部作答完待交卷）';
 CREATE INDEX idx_session_user_direction_status ON interview_session (user_id, direction_id, status);
@@ -207,10 +207,10 @@ CREATE INDEX idx_qb_question_embedding ON qb_question USING hnsw (embedding vect
 必含小节：背景（批 2 范围、批 3 消费面）；决策——数据模型（上面三件事）、**InterviewPlan record 契约与服务端校验上限**：
 
 ```java
-public record InterviewPlan(int v, int totalCount, List<Integer> difficulties, int followUpDepth) {}
+public record InterviewPlan(int totalCount, List<Integer> difficulties, int followUpDepth) {}
 ```
-校验：`v==1`；`totalCount ∈ [1, 20]`；`difficulties ⊆ [1,5]` 非空且长度==totalCount；`followUpDepth ∈ [0,3]`。客户端越界 → `1001`；容量不足 → `2604`（M7，复用批 1）。
-**组卷算法**：方向 ACTIVE 题池 → 按 plan.difficulties 逐槽抽取 → 去重双判（向量 cosine ≥ **0.92** 排除，候选×历史窗口 = 该用户近 **90 天**已作答 ∪ 本方向 ACTIVE 池已在池中题；关键词判 = Tokenizer 切词 top-5 实词 ILIKE 全包含排除；embedding 为 NULL 仅关键词判）→ 主问题 + `follow_up_index` 展开追问占位；阈值取值依据写进 `QuestionPackService` Javadoc。**状态机**：RESUMABLE→COMPLETED/ABANDONED 条件 UPDATE；ABANDONED 两入口（M6）。**幂等**（M8 顺序）。**冷热分层**（Redis miss 回落 DB）。否决的备选表（至少四条）：单列密文存 Key（→T12）、题池全文检索判重（Recall 不可控）、新建独立 question_embedding 表（多一个 join 与一致性点，列直加更简）、SingleFlight 用于交卷（写路径不进，批 1 硬约束）。后果与约束：批 3 evaluator 消费 `evaluator_version`；plan JSON 的 `v` 字段是快照版本唯一支点。何时重新评估：题目池 >10 万行时 HNSW 参数；embedding 模型换维时 V<n+1> 重建。
+校验：`totalCount ∈ [1, 20]`；`difficulties ⊆ [1,5]` 非空且长度==totalCount；`followUpDepth ∈ [0,3]`。客户端越界 → `1001`；容量不足 → `2604`（M7，复用批 1）。快照结构版本由校验器类常量持有，不入 plan JSON（运行期无人按版本分支）。
+**组卷算法**：方向 ACTIVE 题池 → 按 plan.difficulties 逐槽抽取 → 去重双判（向量 cosine ≥ **0.92** 排除，候选×历史窗口 = 该用户近 **90 天**已作答 ∪ 本方向 ACTIVE 池已在池中题；关键词判 = Tokenizer 切词 top-5 实词 ILIKE 全包含排除；embedding 为 NULL 仅关键词判）→ 主问题 + `follow_up_index` 展开追问占位；阈值取值依据写进 `QuestionPackService` Javadoc。**状态机**：RESUMABLE→COMPLETED/ABANDONED 条件 UPDATE；ABANDONED 两入口（M6）。**幂等**（M8 顺序）。**冷热分层**（Redis miss 回落 DB）。否决的备选表（至少四条）：单列密文存 Key（→T12）、题池全文检索判重（Recall 不可控）、新建独立 question_embedding 表（多一个 join 与一致性点，列直加更简）、SingleFlight 用于交卷（写路径不进，批 1 硬约束）。后果与约束：批 3 evaluator 消费 `evaluator_version`；plan 结构变更 = 新校验分支 + ADR 修订。何时重新评估：题目池 >10 万行时 HNSW 参数；embedding 模型换维时 V<n+1> 重建。
 
 - [ ] **Step 5: `docs/README.md` 登记 ADR；Commit（待授权）**：`feat(interview): add V9 interview session/answer schema with plan ADR` + `Task: P1b-04`。
 
@@ -288,7 +288,7 @@ int finalizeIfResumable(@Param("id") UUID id, @Param("userId") UUID userId,
 @DisplayName("难度槽位无足量候选时按相邻难度回填，缺口记 skippedReasons")
 void difficultyFallback() {
     var pool = List.of(candidate(1, "q1"), candidate(2, "q2"));
-    var plan = new InterviewPlan(1, 3, List.of(5, 5, 5), 0);
+    var plan = new InterviewPlan(3, List.of(5, 5, 5), 0);
     var result = packService.pack(plan, pool, Map.of());
     assertThat(result.questionIds()).hasSize(2);   // 宁缺毋滥：缺 1 题不硬凑
     assertThat(result.skippedReasons()).anyMatch(r -> r.contains("难度5"));
@@ -303,7 +303,7 @@ void dedupRejects() {
     var hits = Map.of(
         b.id(), new StemSimilarity(b.id(), 0.95, false),
         c.id(), new StemSimilarity(c.id(), 0.40, true));
-    var plan = new InterviewPlan(1, 2, List.of(1, 1), 0);
+    var plan = new InterviewPlan(2, List.of(1, 1), 0);
     var result = packService.pack(plan, List.of(a, b, c), hits);
     assertThat(result.questionIds()).containsExactly(a.id());
     assertThat(result.skippedReasons()).anyMatch(r -> r.contains("重复"));
