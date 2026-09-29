@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { API_BASE_URL } from '@/api/request'
 import { questionbankApi } from '@/api/questionbank'
 import DirectionSelector from '@/components/direction/DirectionSelector'
+import InterviewCenter from '@/pages/interview/InterviewCenter'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -288,6 +289,8 @@ export default function InterviewPage() {
           {actionError && <p className="text-sm text-destructive">{actionError}</p>}
         </CardContent>
       </Card>
+
+      <InterviewCenter directionId={directionId} />
 
       <Card>
         <CardHeader>
