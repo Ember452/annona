@@ -60,7 +60,8 @@ class FlywayBaselineIT {
                 + "WHERE table_schema = 'public' AND table_name <> 'flyway_schema_history'",
             String.class);
         // 期望清单必须随每个新迁移同步扩充：containsExactlyInAnyOrder 兼职守卫
-        // "没有迁移外的游离表"，漏登记新表会让本测试假红（V2、V4 两次踩过，V6 又踩一次）。
+        // "没有迁移外的游离表"，漏登记新表会让本测试假红（V2、V4、V6、V8 四次踩坑——
+                // 已上 pre-commit 机检 scripts/ci/check-migration-inventory.py，见 AGENTS §4）。
         assertThat(tables)
             .containsExactlyInAnyOrder(
                 "app_user", "user_profile", "user_session", "auth_token",

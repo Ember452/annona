@@ -124,7 +124,7 @@
 
 **结构与边界（改完必自查）**
 
-- **约定 → 机检的升级元规则**：任何一条本文件或代码注释里的硬约定，一旦被实际违反/踩坑一次，随修复**同一批次**给它配上机器门禁（pre-commit 检查 / ArchUnit 规则 / CI 断言）——只靠"下一个人读文档"传递的项目约定必然失守。已有先例：save/merge 语义（假绿复盘后进 §4）、迁移冻结（V1 被改两次后上 pre-commit）、pipefail（tee 吞退出码后进 validate-workflows）。新增约定时要么同时交出机检，要么写明触发升级的条件。
+- **约定 → 机检的升级元规则**：任何一条本文件或代码注释里的硬约定，一旦被实际违反/踩坑一次，随修复**同一批次**给它配上机器门禁（pre-commit 检查 / ArchUnit 规则 / CI 断言）——只靠"下一个人读文档"传递的项目约定必然失守。已有先例：save/merge 语义（假绿复盘后进 §4）、迁移冻结（V1 被改两次后上 pre-commit）、pipefail（tee 吞退出码后进 validate-workflows）、基线表清单登记（V2/V4/V6/V8 四次假红后上 pre-commit，P1b-01 批落地）。新增约定时要么同时交出机检，要么写明触发升级的条件。
 
 - 依赖方向只能是 `modules → spi → common`；`modules/*` 之间禁止 import，**两类例外**：① 只读消费其他模块的 `XxxQueryService` / `shared` 读模型——**不需要白名单**（先例：`qa → retrieval/knowledge`，qa-streaming-adr §决策 7，全仓首批跨模块只读）；② 白名单 `interview/orchestrator → planner/advisor`（非 QueryService 的调用才需要走白名单 + ADR）。写路径一律领域事件。
 - **端口放哪个模块：两条正交的判据，不要合成一条**。① **有没有外部实现方需求**（真的会有第三方写这个实现吗）：有 → 进 `annona-spi`（已确定的六个：`Retriever`、`ModelProvider`、`EmbeddingProvider`、`IdentityProvider`、`LearningSignalReader`、`DecisionRule`）；没有 → 只是内部解耦，端口进 `annona-common`（先例：`DocumentParser`、`ObjectStorage`、`TaskStreamPort`、`SessionStore`、`Tokenizer`）。**“能被替换”不是判据**——按那个标准几乎所有端口都是扩展点，spi 会长到十几个且每个都变成对外发布契约（改一次就是破坏性变更）。② **带不带第三方 SDK**：带就只能在 `annona-infrastructure`（common 只放端口与契约）；`annona-spi` 永远零 SDK，它是唯一发到 Central 的 artifact。
