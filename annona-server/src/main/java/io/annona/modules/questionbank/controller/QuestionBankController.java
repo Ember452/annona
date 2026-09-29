@@ -4,29 +4,38 @@ import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
 import io.annona.common.result.Result;
 import io.annona.common.session.CurrentPrincipal;
+import io.annona.modules.questionbank.dto.CapacityResponse;
 import io.annona.modules.questionbank.dto.GenerateQuestionsRequest;
 import io.annona.modules.questionbank.dto.QuestionGenStatusResponse;
+import io.annona.modules.questionbank.dto.QuestionResponse;
+import io.annona.modules.questionbank.dto.UpdateQuestionRequest;
+import io.annona.modules.questionbank.dto.UpdateQuestionStatusRequest;
 import io.annona.modules.questionbank.listener.QuestionGenStream;
 import io.annona.modules.questionbank.model.QuestionGenConfig;
+import io.annona.modules.questionbank.service.QuestionBankService;
 import io.annona.modules.questionbank.service.QuestionGenStateService;
 import io.annona.shared.direction.service.DirectionQueryService;
 import io.annona.shared.progress.ProgressEvent;
 import io.annona.shared.progress.SseProgressHub;
 import io.annona.spi.dto.Principal;
-import org.springframework.beans.factory.ObjectProvider;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * 知识库出题端点（P1b-02）：发起生成 / 轮询状态 / SSE 进度。
+ * 知识库出题与题库端点（P1b-02/03）：发起生成 / 轮询状态 / SSE 进度 / 题库维护 / 容量校验。
  * 鉴权由 SessionAuthFilter 对 /api/** 强制且白名单不含本路径——未登录即 1004。
  * 全部端点按 (userId, directionId) 作用域；内置方向共享可读，任务与题目按用户隔离。
  */
@@ -35,16 +44,19 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class QuestionBankController {
 
     private final QuestionGenStateService stateService;
+    private final QuestionBankService bankService;
     private final DirectionQueryService directionQuery;
     /** 门控 bean（generate.enabled）——常驻 bean 禁止硬注入，守卫 IT 的约定。 */
     private final ObjectProvider<QuestionGenStream> stream;
     private final SseProgressHub progressHub;
 
     public QuestionBankController(QuestionGenStateService stateService,
+                                  QuestionBankService bankService,
                                   DirectionQueryService directionQuery,
                                   ObjectProvider<QuestionGenStream> stream,
                                   SseProgressHub progressHub) {
         this.stateService = stateService;
+        this.bankService = bankService;
         this.directionQuery = directionQuery;
         this.stream = stream;
         this.progressHub = progressHub;
@@ -101,6 +113,81 @@ public class QuestionBankController {
                                @PathVariable String directionId) {
         requireVisible(principal, directionId);
         return progressHub.subscribe(UUID.fromString(directionId));
+    }
+
+    /**
+     * GET ""——题库列表（可空过滤：status/difficulty/keyword）。错误码：2100（方向不可见）。
+     */
+    @GetMapping
+    public Result<List<QuestionResponse>> list(@CurrentPrincipal Principal principal,
+                                               @PathVariable String directionId,
+                                               @RequestParam(required = false) String status,
+                                               @RequestParam(required = false) Short difficulty,
+                                               @RequestParam(required = false) String keyword) {
+        requireVisible(principal, directionId);
+        return Result.success(bankService.list(UUID.fromString(principal.id()),
+            UUID.fromString(directionId), status, difficulty, keyword));
+    }
+
+    /**
+     * GET /capacity——容量校验（追问数硬约束，0..5 逐档返回 available 与 selectable）。
+     * 错误码：2100（方向不可见）、1001（mainQuestionCount 越界）。
+     */
+    @GetMapping("/capacity")
+    public Result<CapacityResponse> capacity(@CurrentPrincipal Principal principal,
+                                             @PathVariable String directionId,
+                                             @RequestParam Short difficulty,
+                                             @RequestParam Integer mainQuestionCount) {
+        requireVisible(principal, directionId);
+        if (mainQuestionCount == null || mainQuestionCount < 1 || mainQuestionCount > 20) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "mainQuestionCount 需在 1–20 之间");
+        }
+        if (difficulty == null || difficulty < 1 || difficulty > 5) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "difficulty 需在 1–5 之间");
+        }
+        return Result.success(bankService.capacity(UUID.fromString(principal.id()),
+            UUID.fromString(directionId), difficulty, mainQuestionCount));
+    }
+
+    /**
+     * PUT /{questionId}——编辑题目（null 字段不更新）。错误码：2603（题目不存在/非本人）、
+     * 2100。
+     */
+    @PutMapping("/{questionId}")
+    public Result<QuestionResponse> update(@CurrentPrincipal Principal principal,
+                                           @PathVariable String directionId,
+                                           @PathVariable String questionId,
+                                           @RequestBody UpdateQuestionRequest request) {
+        requireVisible(principal, directionId);
+        return Result.success(bankService.update(UUID.fromString(principal.id()),
+            UUID.fromString(questionId), request));
+    }
+
+    /**
+     * PUT /{questionId}/status——状态变更（DRAFT ↔ ACTIVE、任意 → ARCHIVED，归档不复活）。
+     * 错误码：2603、1001（status 非法）、2100。
+     */
+    @PutMapping("/{questionId}/status")
+    public Result<QuestionResponse> changeStatus(@CurrentPrincipal Principal principal,
+                                                 @PathVariable String directionId,
+                                                 @PathVariable String questionId,
+                                                 @RequestBody UpdateQuestionStatusRequest request) {
+        requireVisible(principal, directionId);
+        return Result.success(bankService.changeStatus(UUID.fromString(principal.id()),
+            UUID.fromString(questionId), request.status()));
+    }
+
+    /**
+     * DELETE /{questionId}——物理删除（批 1 无作答记录；有作答史后走 ARCHIVED）。
+     * 错误码：2603、2100。
+     */
+    @DeleteMapping("/{questionId}")
+    public Result<Void> delete(@CurrentPrincipal Principal principal,
+                               @PathVariable String directionId,
+                               @PathVariable String questionId) {
+        requireVisible(principal, directionId);
+        bankService.delete(UUID.fromString(principal.id()), UUID.fromString(questionId));
+        return Result.success();
     }
 
     /** 出题后台机器被门控关闭时给出可理解错误，而不是 NoSuchBean 硬崩。 */
