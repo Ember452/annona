@@ -197,7 +197,11 @@ io.annona
 │   ├── interview/                     # 面试引擎（C 模块，文字）
 │   │   ├── controller/ service/ repository/ entity/ dto/
 │   │   ├── skill/                     #   ★ SKILL.md 加载、解析、注册表（内置 + 用户 + 知识库派生）
-│   │   ├── orchestrator/              #   组卷：方向配额 → 难度分布 → 阶段编排 → 主问题/追问
+│   │   ├── orchestrator/              #   组卷：方向配额 → 难度分布 → 阶段编排 → 主问题/追问。
+│   │   │                              #   P1b-04/05 已落：plan/（计划契约）pack/（去重双判+golden）
+│   │   │                              #   session/（实体/仓库/fencing 状态机/Facade）controller/
+│   │   │                              #   （/api/interview/sessions 六端点）；状态机与冷热快照在
+│   │   │                              #   orchestrator 内而非顶层 state/（interview-session-adr）
 │   │   ├── stage/                     #   阶段时长联动（自我介绍/考察/深挖/反问）
 │   │   ├── followup/                  #   追问生成与深度控制
 │   │   ├── state/                     #   状态机 + 中断续面（Redis 热 / DB 冷）
@@ -247,9 +251,20 @@ io.annona
 │   │
 │   ├── usage/                         # 用量与配额（J 模块，上线必需）
 │   │   ├── controller/ service/ entity/ repository/
+│   │   │                              #   P1b-10 已落：metering/（MeteredModelProvider 装饰器 @Primary，
+│   │   │                              #   前置熔断→调用→记账；qa 流式/embed 未计量见 metering-adr 决策 4）
+│   │   │                              #   config/（UsageProperties 单源 yaml）；配额端口在 common/quota，
+│   │   │                              #   Redisson 实现在 infra；上下文 common/usage/UsageContext
 │   │   ├── metering/                  #   ★ token 记账（场景/模型/成本），异步落库不进事务
 │   │   ├── quota/                     #   每日配额与超额熔断
-│   │   └── key/                       #   模型 Key 生命周期：加密、掩码、KEK 轮换（见 §12.1 产品设计）
+│   │   └── key/                       #   （消费拆分至 llmprovider 模块，见下）加密、掩码、KEK 轮换
+│   │
+│   ├── llmprovider/                   # 用户 BYOK 配置（P1b-10 落地）：CRUD + 连通性测试
+│   │   ├── controller/ service/ repository/ entity/ dto/
+│   │   │                              #   V10 三列密文（nonce/cipher/kek_version，KEK ADR 继承）；
+│   │   │                              #   六用途含 evaluator；加密实现在 infra/crypto，
+│   │   │                              #   探测端口 common/llm、实现在 infra/llm；
+│   │   │                              #   ⚠ 本批配置不路由业务调用（消费窄，metering-adr 决策 1）
 │   │
 │   ├── resume/                        # 简历分析（C 的前置）
 │   │   ├── controller/ service/ repository/ entity/ dto/
