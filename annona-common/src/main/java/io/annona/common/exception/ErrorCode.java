@@ -80,8 +80,11 @@ public enum ErrorCode {
     QB_QUESTION_NOT_FOUND(2603, "题目不存在"),
     QB_QUESTION_CAPACITY_INSUFFICIENT(2604, "题目容量不足，无法按当前条件开始面试"),
 
-    // ========== interview 2700–2799（P1b-01，技能注册表） ==========
-    SKILL_NOT_FOUND(2700, "技能不存在");
+    // ========== interview 2700–2799（P1b-01 技能注册表；会话段 P1b-04/05 续接） ==========
+    SKILL_NOT_FOUND(2700, "技能不存在"),
+    SESSION_NOT_FOUND(2701, "面试会话不存在或已过期"),
+    SESSION_ALREADY_COMPLETED(2702, "该面试已交卷，请从面试中心查看"),
+    SESSION_SLOT_MISMATCH(2703, "作答位置与会话进度不一致，请刷新后重试");
 
     private final int code;
     private final String message;
