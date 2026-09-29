@@ -8,6 +8,8 @@ import io.annona.spi.dto.ModelOptions;
 import io.annona.spi.model.ModelProvider;
 import java.util.ArrayList;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -27,6 +29,8 @@ import org.springframework.stereotype.Component;
 @Component
 @EnableConfigurationProperties(StructuredOutputProperties.class)
 public class StructuredOutputInvoker {
+
+    private static final Logger log = LoggerFactory.getLogger(StructuredOutputInvoker.class);
 
     private static final String RETRY_HINT = "\n\n上一次输出无法解析为约定 JSON，原因：";
     private static final String STRICT_REMINDER =
@@ -48,7 +52,12 @@ public class StructuredOutputInvoker {
      * 同步调用并把回复解析为 {@code type}。失败重试时在 user 消息后追加解析错误反馈
      * （上游口径：错误信息回填是结构化重试的关键，比单纯"再试一次"成功率高）。
      *
-     * @throws BusinessException 重试耗尽仍无法解析（AI_SERVICE_ERROR）；调用方翻译成自己的安全文案
+     * <p>对外只暴露安全文案：原始解析错误（Jackson 详情、模型返回正文）只进日志、
+     * 不进异常 message——本方法被 {@code QuestionGenerationService} 等消费方经
+     * {@code safeMessage} 原样写入 {@code task.error}，会透出到前端
+     * （skill-questionbank-adr §后果与约束"不透传模型原始报错"）。
+     *
+     * @throws BusinessException 重试耗尽仍无法解析（AI_SERVICE_ERROR，安全文案）；调用方可直接用文案或再翻译成更具体的业务描述
      */
     public <T> T invoke(String systemPrompt, String userPrompt, Class<T> type) {
         List<ModelChatMessage> messages = new ArrayList<>();
@@ -67,13 +76,15 @@ public class StructuredOutputInvoker {
                 return OBJECT_MAPPER.readValue(extractJson(content), type);
             } catch (Exception e) {
                 lastError = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                // 原始解析错误与模型正文只进日志（供诊断），不外泄；lastError 回填给模型重试是内部通路
+                log.warn("结构化输出第 {} 次解析失败：{}｜模型返回：{}", attempt, lastError, content);
                 messages = new ArrayList<>(messages);
                 messages.set(messages.size() - 1, new ModelChatMessage("user",
                     userPrompt + RETRY_HINT + lastError + STRICT_REMINDER));
             }
         }
         throw new BusinessException(ErrorCode.AI_SERVICE_ERROR,
-            "结构化输出解析失败（重试 " + properties.getMaxAttempts() + " 次）：" + lastError);
+            "结构化输出解析失败（重试 " + properties.getMaxAttempts() + " 次）");
     }
 
     /**
