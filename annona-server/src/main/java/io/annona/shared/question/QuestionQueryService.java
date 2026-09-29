@@ -1,5 +1,6 @@
 package io.annona.shared.question;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -12,4 +13,7 @@ public interface QuestionQueryService {
 
     /** 该用户该方向的全部 ACTIVE 题目（组卷池，题库侧时间倒序——同难度新题优先）。 */
     List<QuestionCandidate> activePool(UUID userId, UUID directionId);
+
+    /** 按 id 集合取题干+追问文本（会话视图装配）；不存在的 id 安静缺失，不抛异常。 */
+    List<QuestionStemDetail> stemsByIds(Collection<UUID> ids);
 }

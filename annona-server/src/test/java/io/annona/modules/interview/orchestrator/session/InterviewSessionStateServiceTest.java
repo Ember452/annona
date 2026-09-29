@@ -11,7 +11,6 @@ import static org.mockito.Mockito.when;
 
 import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
-import io.annona.modules.interview.orchestrator.plan.InterviewPlan;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -65,10 +64,10 @@ class InterviewSessionStateServiceTest {
         when(sessionRepository.abandonAllResumable(eq(USER), eq(DIRECTION), any())).thenReturn(1);
         when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(answerRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
-        var plan = new InterviewPlan(2, List.of(3, 4), 0);
         var questions = List.of(UUID.randomUUID(), UUID.randomUUID());
 
-        InterviewSessionEntity created = service.create(USER, DIRECTION, plan,
+        InterviewSessionEntity created = service.create(USER, DIRECTION,
+            "{\"totalCount\":2}", 2,
             List.of(new AnswerSlot(questions.get(0), 0), new AnswerSlot(questions.get(1), 0)));
 
         verify(sessionRepository).abandonAllResumable(eq(USER), eq(DIRECTION), any());
@@ -135,17 +134,28 @@ class InterviewSessionStateServiceTest {
     }
 
     @Test
-    @DisplayName("建会话：占位槽数与计划不符（客户端拼装越界）拒 1001，不落库")
+    @DisplayName("建会话：主问题槽数与 totalCount 不符（客户端拼装越界）拒 1001，不落库")
     void createRejectsSlotMismatch() {
         service = newService();
-        var plan = new InterviewPlan(2, List.of(3, 4), 0);   // 期望 2 个槽，给 3 个
 
-        assertThatThrownBy(() -> service.create(USER, DIRECTION, plan,
+        assertThatThrownBy(() -> service.create(USER, DIRECTION, "{}", 2,
             List.of(new AnswerSlot(UUID.randomUUID(), 0), new AnswerSlot(UUID.randomUUID(), 0),
-                new AnswerSlot(UUID.randomUUID(), 1))))
+                new AnswerSlot(UUID.randomUUID(), 0))))
             .isInstanceOfSatisfying(BusinessException.class,
                 e -> assertThat(e.getCode()).isEqualTo(ErrorCode.BAD_REQUEST.getCode()));
         verify(sessionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("追问索引空洞拒 1001（只占 1..k 连续层）")
+    void createRejectsIndexGap() {
+        service = newService();
+        var q = UUID.randomUUID();
+
+        assertThatThrownBy(() -> service.create(USER, DIRECTION, "{}", 1,
+            List.of(new AnswerSlot(q, 0), new AnswerSlot(q, 2))))
+            .isInstanceOfSatisfying(BusinessException.class,
+                e -> assertThat(e.getCode()).isEqualTo(ErrorCode.BAD_REQUEST.getCode()));
     }
 
     @Test
@@ -155,11 +165,10 @@ class InterviewSessionStateServiceTest {
         when(sessionRepository.abandonAllResumable(eq(USER), eq(DIRECTION), any())).thenReturn(0);
         when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(answerRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
-        var plan = new InterviewPlan(2, List.of(3, 4), 2);   // depth=2，但 q1 只有 1 层追问
         var q1 = UUID.randomUUID();
         var q2 = UUID.randomUUID();
 
-        var created = service.create(USER, DIRECTION, plan, List.of(
+        var created = service.create(USER, DIRECTION, "{\"followUpDepth\":2}", 2, List.of(
             new AnswerSlot(q1, 0), new AnswerSlot(q1, 1), new AnswerSlot(q2, 0)));
 
         assertThat(created.getStatus()).isEqualTo(InterviewSessionEntity.STATUS_RESUMABLE);

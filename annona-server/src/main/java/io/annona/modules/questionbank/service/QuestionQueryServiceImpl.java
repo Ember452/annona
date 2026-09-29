@@ -4,6 +4,8 @@ import io.annona.modules.questionbank.entity.QbQuestionEntity;
 import io.annona.modules.questionbank.repository.QbQuestionRepository;
 import io.annona.shared.question.QuestionCandidate;
 import io.annona.shared.question.QuestionQueryService;
+import io.annona.shared.question.QuestionStemDetail;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,16 @@ public class QuestionQueryServiceImpl implements QuestionQueryService {
             .stream()
             .map(q -> new QuestionCandidate(q.getId(), q.getQuestion(), q.getDifficulty(),
                 q.getFollowUps().size()))
+            .toList();
+    }
+
+    /** 手写映射只取题干与追问文本——referenceAnswer/keyPoints/rubric 不经本视图出去。 */
+    @Override
+    @Transactional(readOnly = true)
+    public List<QuestionStemDetail> stemsByIds(Collection<UUID> ids) {
+        return questionRepository.findAllById(ids).stream()
+            .map(q -> new QuestionStemDetail(q.getId(), q.getQuestion(),
+                q.getFollowUps().stream().map(f -> f.question()).toList()))
             .toList();
     }
 }

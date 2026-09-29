@@ -1,10 +1,7 @@
 package io.annona.modules.interview.orchestrator.session;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
-import io.annona.modules.interview.orchestrator.plan.InterviewPlan;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -37,20 +34,19 @@ public class InterviewSessionStateService {
 
     private final InterviewSessionRepository sessionRepository;
     private final InterviewAnswerRepository answerRepository;
-    private final ObjectMapper objectMapper;
 
     public InterviewSessionStateService(InterviewSessionRepository sessionRepository,
                                         InterviewAnswerRepository answerRepository) {
         this.sessionRepository = sessionRepository;
         this.answerRepository = answerRepository;
-        this.objectMapper = new ObjectMapper();
     }
 
     /**
      * 建会话：同方向旧 RESUMABLE 自动置 ABANDONED（ADR 决策 5/M6），落会话行与整排 PENDING
-     * 占位。槽位结构校验（T4 发现固定公式会误杀“题内追问少于 depth”的合法输入，改结构性）：
-     * 主问题槽（followUpIndex==0）数 == totalCount；每题追问索引连续且不超 depth；槽位不重复。
-     * 不符即 1001（防客户端拼装越界造会话）。
+     * 占位。{@code planJson} 是 Facade 序列化好的<b>组卷执行定稿快照</b>（plan + questionIds +
+     * skippedReasons——T5 发现只存期望 plan 无法恢复出题顺序，快照扩为执行结果，单列自含，
+     * 批 3 评估一次读全）；本方法不解析其内容，只守结构不变量：主问题槽数 == totalCount、
+     * 槽位不重复、追问索引连续且不超占位上限。不符即 1001（防客户端拼装越界造会话）。
      *
      * <p>返回实体的 {@code createdAt} 为 null：DB default 列未回读（save/merge 语义，
      * AGENTS §4）；批 2 消费方（视图/缓存）不需要它，历史面板要时在此接返回值 refresh。
@@ -58,9 +54,9 @@ public class InterviewSessionStateService {
      * @throws BusinessException 1001（槽位结构不符）
      */
     @Transactional
-    public InterviewSessionEntity create(UUID userId, UUID directionId, InterviewPlan plan,
-                                         List<AnswerSlot> slots) {
-        validateSlots(plan, slots);
+    public InterviewSessionEntity create(UUID userId, UUID directionId, String planJson,
+                                         int totalCount, List<AnswerSlot> slots) {
+        validateSlots(totalCount, slots);
         Instant now = Instant.now();
         sessionRepository.abandonAllResumable(userId, directionId, now);
 
@@ -69,9 +65,9 @@ public class InterviewSessionStateService {
         session.setUserId(userId);
         session.setDirectionId(directionId);
         session.setStatus(InterviewSessionEntity.STATUS_RESUMABLE);
-        session.setPlanJson(writePlan(plan));
+        session.setPlanJson(planJson);
         session.setCurrentIndex((short) 0);
-        session.setTotalCount((short) plan.totalCount());
+        session.setTotalCount((short) totalCount);
         session.setStartedAt(now);
         session.setUpdatedAt(now);
         sessionRepository.save(session);
@@ -130,16 +126,7 @@ public class InterviewSessionStateService {
         return sessionRepository.abandonIfResumable(sessionId, userId, Instant.now()) > 0;
     }
 
-    private String writePlan(InterviewPlan plan) {
-        try {
-            return objectMapper.writeValueAsString(plan);
-        } catch (JsonProcessingException e) {
-            // 计划由 record 定字段，序列化失败只可能是环境级 Jackson 故障，不静默降级
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "组卷计划快照失败", e);
-        }
-    }
-
-    private static void validateSlots(InterviewPlan plan, List<AnswerSlot> slots) {
+    private static void validateSlots(int totalCount, List<AnswerSlot> slots) {
         int mainCount = 0;
         Map<UUID, Integer> maxFollowLayer = new HashMap<>();
         Map<UUID, Integer> nonMainCount = new HashMap<>();
@@ -150,17 +137,14 @@ public class InterviewSessionStateService {
             }
             if (slot.followUpIndex() == 0) {
                 mainCount++;
-            } else if (slot.followUpIndex() > plan.followUpDepth()) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "追问层 " + slot.followUpIndex() + " 超过计划深度 " + plan.followUpDepth());
             } else {
                 maxFollowLayer.merge(slot.questionId(), (int) slot.followUpIndex(), Math::max);
                 nonMainCount.merge(slot.questionId(), 1, Integer::sum);
             }
         }
-        if (mainCount != plan.totalCount()) {
+        if (mainCount != totalCount) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
-                "主问题槽数 " + mainCount + " 与计划 " + plan.totalCount() + " 不符");
+                "主问题槽数 " + mainCount + " 与计划 " + totalCount + " 不符");
         }
         // 追问索引连续性：每题最大层号 == 该题非主槽数（1..k 无空洞；重复已在 distinct 拦下）
         maxFollowLayer.forEach((questionId, maxLayer) -> {

@@ -24,6 +24,10 @@ public interface InterviewSessionRepository
     List<InterviewSessionEntity> findByUserIdAndDirectionIdAndStatusOrderByCreatedAtDesc(
         UUID userId, UUID directionId, String status);
 
+    /** 面试中心首页：跨方向列全部在途会话。 */
+    List<InterviewSessionEntity> findByUserIdAndStatusOrderByCreatedAtDesc(
+        UUID userId, String status);
+
     /**
      * 交卷唯一守门（ADR 决策 6/M8）：RESUMABLE→COMPLETED 且写 evaluator_version + finished_at。
      * affected-rows 是幂等的全部依据——赢者才允许继续写作答终态，败者重读状态给 2702。
