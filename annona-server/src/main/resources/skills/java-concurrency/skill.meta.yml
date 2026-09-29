@@ -1,0 +1,10 @@
+displayName: Java 并发编程
+display:
+  icon: "🧵"
+  gradient: "from-amber-400 to-orange-600"
+categories:
+  - key: CONCURRENCY
+    label: 锁与内存模型
+    priority: CORE
+    ref: java.md
+    shared: true

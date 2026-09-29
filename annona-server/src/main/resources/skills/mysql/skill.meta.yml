@@ -1,0 +1,10 @@
+displayName: MySQL 与 SQL 优化
+display:
+  icon: "🐬"
+  gradient: "from-sky-500 to-blue-700"
+categories:
+  - key: INDEX
+    label: 索引与调优
+    priority: CORE
+    ref: mysql.md
+    shared: true

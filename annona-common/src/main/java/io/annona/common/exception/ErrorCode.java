@@ -71,7 +71,10 @@ public enum ErrorCode {
 
     // ========== qa 2500–2599（P1a-08，流式问答） ==========
     QA_SESSION_NOT_FOUND(2500, "问答会话不存在"),
-    QA_MODEL_NOT_CONFIGURED(2502, "问答模型未配置，请先在环境中配置 chat 模型");
+    QA_MODEL_NOT_CONFIGURED(2502, "问答模型未配置，请先在环境中配置 chat 模型"),
+
+    // ========== interview 2700–2799（P1b-01，技能注册表） ==========
+    SKILL_NOT_FOUND(2700, "技能不存在");
 
     private final int code;
     private final String message;

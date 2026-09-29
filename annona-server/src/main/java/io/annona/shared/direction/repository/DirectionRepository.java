@@ -31,6 +31,9 @@ public interface DirectionRepository extends JpaRepository<DirectionEntity, UUID
     /** owner 范围内取方向：查不到即 2100，不泄露内置/他人方向的存在性。 */
     Optional<DirectionEntity> findByIdAndUserId(UUID id, UUID userId);
 
+    /** 内置方向播种幂等检查（user_id IS NULL 命名空间；skill-questionbank-adr §决策 2）。 */
+    boolean existsByUserIdIsNullAndKey(String key);
+
     /**
      * 可见性校验（P1a-04 起 study 等业务模块经 DirectionQueryService 使用）：
      * ACTIVE 且（内置或本人）；本人半边命中 idx_direction_user partial index。

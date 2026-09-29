@@ -1,0 +1,10 @@
+displayName: Redis 与缓存
+display:
+  icon: "🧯"
+  gradient: "from-red-500 to-rose-700"
+categories:
+  - key: CACHE
+    label: 缓存模式
+    priority: ALWAYS_ONE
+    ref: redis.md
+    shared: true
