@@ -36,8 +36,8 @@ classpath 静态技能 + 题库全量替换的形态，与 annona 的多租户 d
    - `qb_generation_task`：`id UUID`（即 taskId fencing token）/ `user_id` / `direction_id` /
      `status CHECK QUEUED|PROCESSING|COMPLETED|FAILED` / `config JSONB`（请求参数快照）/
      `saved_count` / `skipped_count` / `message` / `error` / `updated_at`；
-     **partial unique index `(direction_id) WHERE status IN ('QUEUED','PROCESSING')`**——
-     一方向同时只允许一个在途任务。
+     **partial unique index `(user_id, direction_id) WHERE status IN ('QUEUED','PROCESSING')`**——
+     同一 (user, direction) 同时只允许一个在途任务（按用户隔离，两用户可并行给同一方向出题）。
 4. **difficulty 用 SMALLINT 1–5**（设计文档口径"难度升到 4"），否决上游 `junior|mid|senior`
    字符串——决策层（P1b-07 难度加权、P1c 难度映射）需要数值口径。
 5. **生成语义 = 按 (user, direction) 替换 DRAFT、保留 ACTIVE**：重新出题清掉旧草稿换新一批，
