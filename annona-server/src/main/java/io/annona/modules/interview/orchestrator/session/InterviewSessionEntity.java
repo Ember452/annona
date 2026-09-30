@@ -6,6 +6,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 面试会话（V9 interview_session）。DB 是冷真值，Redis 快照仅读加速（interview-session-adr
@@ -41,7 +43,13 @@ public class InterviewSessionEntity {
     @Column(name = "status", nullable = false)
     private String status;
 
-    @Column(name = "plan", nullable = false, columnDefinition = "jsonb")
+    /**
+     * 组卷执行定稿快照（raw JSON 字符串）。{@code @JdbcTypeCode(SqlTypes.JSON)} 必需：
+     * 仅 columnDefinition 不会改变 JDBC 绑定类型，String 会按 varchar 送进 jsonb 列
+     * （P1b 批 2 CI 实炸；QbGenerationTaskEntity.config 同款先例）。
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "plan", nullable = false)
     private String planJson;
 
     /** 续面恢复位：主问题序号 0..totalCount（== totalCount 表示全部答完待交卷）。 */
