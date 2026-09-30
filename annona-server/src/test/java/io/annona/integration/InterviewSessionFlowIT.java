@@ -16,7 +16,6 @@ import jakarta.persistence.PersistenceContext;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -162,12 +161,14 @@ class InterviewSessionFlowIT {
         facade.answer(userId, sessionId, UUID.fromString(view.slots().get(0).questionId()),
             0, "唯一作答");
 
+        // 不设发令 latch：invokeAll 在双线程池上即真并发（行锁提供 race 窗口）；
+        // 即便偶然串行，恰一成功断言也成立——上一版这里 await 一个永不 countDown 的
+        // latch，两个 worker 永久阻塞把 docker-it 挂到 2189s+（CI 实炸，教训入注释）
         ExecutorService pool = Executors.newFixedThreadPool(2);
-        var start = new CountDownLatch(1);
         try {
             List<Callable<Integer>> attempts = List.of(
-                () -> attemptFinalize(sessionId, start),
-                () -> attemptFinalize(sessionId, start));
+                () -> attemptFinalize(sessionId),
+                () -> attemptFinalize(sessionId));
             List<Future<Integer>> futures = pool.invokeAll(attempts);
             int successes = 0;
             for (var future : futures) {
@@ -198,8 +199,7 @@ class InterviewSessionFlowIT {
     }
 
     /** 0 = 交卷成功，1 = 拿到 2702（幂等败者）；其余异常直接失败。 */
-    private int attemptFinalize(UUID sessionId, CountDownLatch start) throws Exception {
-        start.await();
+    private int attemptFinalize(UUID sessionId) {
         try {
             facade.finalizeSession(userId, sessionId);
             return 0;
