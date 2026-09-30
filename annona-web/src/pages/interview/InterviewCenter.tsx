@@ -3,6 +3,7 @@ import { useCallback, useEffect, useReducer, useState } from 'react'
 import { ApiError } from '@/api/request'
 import { interviewApi } from '@/api/interview'
 import { questionbankApi } from '@/api/questionbank'
+import { EvaluationReportPanel } from '@/components/evaluation/EvaluationReportPanel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -24,7 +25,7 @@ const textareaClass =
  * 面试中心（P1b-04/05 前端）：开始面试 → 逐题作答（含追问槽）→ 交卷；
  * 断线重进自动恢复到当前题（服务端 currentIndex 为准）。状态迁移全部走
  * `lib/interviewFlow` 纯 reducer（vitest 覆盖），组件只做编排与 IO。
- * 评分报告属批 3——交卷后如实呈现落库事实，不做假评分。
+ * 交卷后轮询评估报告（批 3）：异步出分前显示“评估进行中”，DONE 后呈现分数/雷达/汇总。
  */
 export default function InterviewCenter({ directionId }: { directionId: string | null }) {
   const [flow, dispatch] = useReducer(flowReducer, initialFlow)
@@ -240,9 +241,7 @@ export default function InterviewCenter({ directionId }: { directionId: string |
             <p className="text-sm">
               已交卷：{flow.view.answeredCount} 个作答槽已落库（本场共 {flow.view.totalCount} 题）。
             </p>
-            <p className="text-sm text-muted-foreground">
-              评分与报告将在下一批开放（评估器版本 v1，交卷幂等已生效）。
-            </p>
+            <EvaluationReportPanel sessionId={flow.view.id} />
             <Button variant="outline" onClick={() => dispatch({ type: 'RESET' })}>返回面试中心</Button>
           </div>
         )}
