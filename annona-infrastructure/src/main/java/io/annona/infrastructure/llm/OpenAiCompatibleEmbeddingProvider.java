@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
+import io.annona.spi.dto.EmbeddingResult;
+import io.annona.spi.dto.UsageInfo;
 import io.annona.spi.model.EmbeddingProvider;
 import java.io.IOException;
 import java.net.URI;
@@ -52,21 +54,29 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
     }
 
     @Override
-    public List<float[]> embed(List<String> texts) {
+    public EmbeddingResult embed(List<String> texts) {
         ensureConfigured();
         if (texts.isEmpty()) {
-            return List.of();
+            return new EmbeddingResult(List.of(), new UsageInfo(0, 0));
         }
         List<float[]> out = new ArrayList<>(texts.size());
+        int promptTokens = 0;
         int batchSize = Math.max(1, properties.getBatchSize());
         for (int from = 0; from < texts.size(); from += batchSize) {
             List<String> batch = texts.subList(from, Math.min(from + batchSize, texts.size()));
-            out.addAll(embedBatch(batch));
+            BatchOutcome outcome = embedBatch(batch);
+            out.addAll(outcome.vectors());
+            // 跨批累加：供应商按批报账，一次 embed 调用的真账是各批之和
+            promptTokens += outcome.usage().promptTokens();
         }
-        return out;
+        return new EmbeddingResult(out, new UsageInfo(promptTokens, 0));
     }
 
-    private List<float[]> embedBatch(List<String> batch) {
+    /** 单批结果（向量 + 该批 usage）；内部结构，不出端口。 */
+    private record BatchOutcome(List<float[]> vectors, UsageInfo usage) {
+    }
+
+    private BatchOutcome embedBatch(List<String> batch) {
         HttpRequest request;
         try {
             Map<String, Object> body = new HashMap<>();
@@ -99,13 +109,15 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
     }
 
     /**
-     * 响应形状：{@code {"data":[{"index":0,"embedding":[…]}]}}。协议<b>不保证</b>按请求
+     * 响应形状：{@code {"data":[{"index":0,"embedding":[…]}],"usage":{…}}}。协议<b>不保证</b>按请求
      * 顺序返回——以 index 排序对齐并校验条数，供应商乱序/丢项时显式报错而不是让向量与
      * chunk 静默错位（那会无声劣化检索质量，P1a-09 评测最不该背的锅）。
+     * usage 缺失时填 0（宁缺毋假账，llmprovider-metering-adr 否决表）。
      */
-    private List<float[]> parseEmbeddings(String body, int expectedCount) {
+    private BatchOutcome parseEmbeddings(String body, int expectedCount) {
         try {
-            JsonNode data = mapper.readTree(body).path("data");
+            JsonNode root = mapper.readTree(body);
+            JsonNode data = root.path("data");
             if (!data.isArray() || data.size() != expectedCount) {
                 throw new BusinessException(ErrorCode.KB_EMBEDDING_FAILED,
                     "embedding 返回 " + data.size() + " 条，与请求的 " + expectedCount + " 条不一致");
@@ -127,7 +139,9 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
                 throw new BusinessException(ErrorCode.KB_EMBEDDING_FAILED,
                     "embedding 返回的 index 集合不是 0.." + (expectedCount - 1));
             }
-            return new ArrayList<>(byIndex.values());
+            JsonNode usage = root.path("usage");
+            UsageInfo usageInfo = new UsageInfo(usage.path("prompt_tokens").asInt(0), 0);
+            return new BatchOutcome(new ArrayList<>(byIndex.values()), usageInfo);
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.KB_EMBEDDING_FAILED, "embedding 响应解析失败");
         }

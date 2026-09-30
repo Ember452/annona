@@ -26,6 +26,7 @@ import io.annona.modules.qa.mapper.QaMapper;
 import io.annona.modules.qa.repository.QaMessageRepository;
 import io.annona.modules.qa.repository.QaSessionRepository;
 import io.annona.modules.retrieval.dto.RetrievalResponse;
+import io.annona.spi.dto.UsageInfo;
 import io.annona.modules.retrieval.service.RetrievalQueryService;
 import java.util.ArrayList;
 import java.util.List;
@@ -136,7 +137,7 @@ class QaServiceTest {
             if (fail) {
                 listener.onError(new BusinessException(ErrorCode.AI_STREAM_INTERRUPTED, "上游断了"));
             } else {
-                listener.onComplete(String.join("", deltas));
+                listener.onComplete(String.join("", deltas), new UsageInfo(3, 2));
             }
         }
     }

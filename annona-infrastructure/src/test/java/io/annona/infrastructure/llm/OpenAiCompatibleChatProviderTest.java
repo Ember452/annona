@@ -8,6 +8,7 @@ import io.annona.common.model.ChatMessage;
 import io.annona.common.model.ChatStreamListener;
 import io.annona.spi.dto.ModelChatMessage;
 import io.annona.spi.dto.ModelOptions;
+import io.annona.spi.dto.UsageInfo;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -30,6 +31,18 @@ class OpenAiCompatibleChatProviderTest {
     private static final String SSE_BODY = """
         data: {"choices":[{"delta":{"role":"assistant"}}]}
 
+        data: {"choices":[{"delta":{"content":"你"}}]}
+
+        data: {"choices":[{"delta":{"content":"好"}}]}
+
+        data: {"choices":[],"usage":{"prompt_tokens":7,"completion_tokens":2}}
+
+        data: [DONE]
+
+        """;
+
+    /** 同一正文但不回填 usage 帧（个别网关不支持 include_usage）：终态应携全 0。 */
+    private static final String SSE_BODY_NO_USAGE = """
         data: {"choices":[{"delta":{"content":"你"}}]}
 
         data: {"choices":[{"delta":{"content":"好"}}]}
@@ -94,7 +107,7 @@ class OpenAiCompatibleChatProviderTest {
     }
 
     @Test
-    @DisplayName("流式快乐路径：delta 按序回调，onComplete 收到全量拼接，终态后无回调")
+    @DisplayName("流式快乐路径：delta 按序回调，onComplete 收到全量拼接与 usage 终帧，终态后无回调")
     void streamHappyPath() {
         serve(SSE_BODY.getBytes(StandardCharsets.UTF_8), 200, false);
 
@@ -102,7 +115,22 @@ class OpenAiCompatibleChatProviderTest {
 
         assertThat(listener.deltas).containsExactly("你", "好");
         assertThat(listener.completed.get()).isEqualTo("你好");
+        assertThat(listener.usage.get()).isNotNull();
+        assertThat(listener.usage.get().promptTokens()).isEqualTo(7);
+        assertThat(listener.usage.get().completionTokens()).isEqualTo(2);
         assertThat(listener.error.get()).isNull();
+    }
+
+    @Test
+    @DisplayName("供应商未回填 usage：onComplete 携全 0（宁缺毋假账，不估算）")
+    void streamWithoutUsageFrameCarriesZeroUsage() {
+        serve(SSE_BODY_NO_USAGE.getBytes(StandardCharsets.UTF_8), 200, false);
+
+        RecordingListener listener = stream();
+
+        assertThat(listener.completed.get()).isEqualTo("你好");
+        assertThat(listener.usage.get()).isNotNull();
+        assertThat(listener.usage.get().totalTokens()).isZero();
     }
 
     @Test
@@ -170,6 +198,7 @@ class OpenAiCompatibleChatProviderTest {
 
         private final List<String> deltas = new ArrayList<>();
         private final AtomicReference<String> completed = new AtomicReference<>();
+        private final AtomicReference<UsageInfo> usage = new AtomicReference<>();
         private final AtomicReference<Throwable> error = new AtomicReference<>();
         private boolean terminal;
 
@@ -182,12 +211,13 @@ class OpenAiCompatibleChatProviderTest {
         }
 
         @Override
-        public void onComplete(String fullText) {
+        public void onComplete(String fullText, UsageInfo completionUsage) {
             if (terminal) {
                 throw new IllegalStateException("终态后出现 onComplete");
             }
             terminal = true;
             completed.set(fullText);
+            usage.set(completionUsage);
         }
 
         @Override

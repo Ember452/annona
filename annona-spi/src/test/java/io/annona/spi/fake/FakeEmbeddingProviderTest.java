@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -21,8 +22,8 @@ class FakeEmbeddingProviderTest {
     void deterministicForSameText() {
         FakeEmbeddingProvider provider = new FakeEmbeddingProvider(8);
 
-        float[] first = provider.embed(List.of("一段文本")).get(0);
-        float[] second = provider.embed(List.of("一段文本")).get(0);
+        float[] first = provider.embed(List.of("一段文本")).vectors().get(0);
+        float[] second = provider.embed(List.of("一段文本")).vectors().get(0);
 
         assertArrayEquals(first, second);
     }
@@ -32,8 +33,8 @@ class FakeEmbeddingProviderTest {
     void distinctTextsProduceDistinctUnitVectors() {
         FakeEmbeddingProvider provider = new FakeEmbeddingProvider(8);
 
-        float[] a = provider.embed(List.of("文本甲")).get(0);
-        float[] b = provider.embed(List.of("文本乙")).get(0);
+        float[] a = provider.embed(List.of("文本甲")).vectors().get(0);
+        float[] b = provider.embed(List.of("文本乙")).vectors().get(0);
 
         assertNotEquals(a, b);
         double normA = 0;
@@ -49,5 +50,20 @@ class FakeEmbeddingProviderTest {
         assertEquals(1024, new FakeEmbeddingProvider().dimensions());
         assertEquals(8, new FakeEmbeddingProvider(8).dimensions());
         assertThrows(IllegalArgumentException.class, () -> new FakeEmbeddingProvider(0));
+    }
+
+    @Test
+    @DisplayName("确定性假 usage：非零、只含输入侧、同输入同值（计量链可验非零的根基）")
+    void deterministicPromptUsage() {
+        var first = provider8().embed(List.of("一段文本")).usage();
+        var second = provider8().embed(List.of("一段文本")).usage();
+
+        assertTrue(first.promptTokens() > 0, "fake 按 chars/4 估输入 token，非零供计量链断言");
+        assertEquals(0, first.completionTokens(), "embedding 无输出口");
+        assertEquals(first.promptTokens(), second.promptTokens());
+    }
+
+    private static FakeEmbeddingProvider provider8() {
+        return new FakeEmbeddingProvider(8);
     }
 }

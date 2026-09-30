@@ -98,7 +98,9 @@ public class PgVectorRetriever implements Retriever {
         }
         float[] vector;
         try {
-            vector = embeddingProvider.get().embed(List.of(query.text())).get(0);
+            // 查询向量不记账：检索读路径无稳定会话宿主，用量归属不成立（如实声明，
+            // metering-adr 批 3 修订）；返回结果的 usage 在此刻意丢弃
+            vector = embeddingProvider.get().embed(List.of(query.text())).vectors().get(0);
         } catch (RuntimeException e) {
             throw new BusinessException(ErrorCode.RETRIEVAL_FAILED,
                 "查询向量化失败，无法执行语义检索：" + e.getMessage());

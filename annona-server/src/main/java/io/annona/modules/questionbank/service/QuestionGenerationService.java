@@ -287,7 +287,7 @@ public class QuestionGenerationService implements TaskStreamPort.TaskMessageHand
             aiIoExecutor.execute(() -> {
                 try {
                     List<float[]> vectors = provider.embed(
-                        targets.stream().map(QbQuestionEntity::getQuestion).toList());
+                        targets.stream().map(QbQuestionEntity::getQuestion).toList()).vectors();
                     // embed 在事务外、回填在短事务内（@Modifying 需活动事务；纪律与类注释一致）
                     txTemplate.executeWithoutResult(status -> {
                         for (int i = 0; i < targets.size() && i < vectors.size(); i++) {

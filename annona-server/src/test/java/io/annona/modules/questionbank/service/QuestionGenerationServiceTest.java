@@ -23,7 +23,9 @@ import io.annona.shared.ai.StructuredOutputInvoker;
 import io.annona.shared.direction.dto.DirectionResponse;
 import io.annona.shared.direction.service.DirectionQueryService;
 import io.annona.shared.progress.SseProgressHub;
+import io.annona.spi.dto.EmbeddingResult;
 import io.annona.spi.dto.RetrievalHit;
+import io.annona.spi.dto.UsageInfo;
 import io.annona.spi.retrieval.Retriever;
 import java.util.List;
 import java.util.Optional;
@@ -223,7 +225,8 @@ class QuestionGenerationServiceTest {
     void embedsAfterPersist() {
         io.annona.spi.model.EmbeddingProvider provider = mock(io.annona.spi.model.EmbeddingProvider.class);
         when(embeddingProvider.getIfAvailable()).thenReturn(provider);
-        when(provider.embed(any())).thenReturn(List.of(new float[]{0.1f, -0.2f}, new float[]{0.3f, 0.4f}));
+        when(provider.embed(any())).thenReturn(new EmbeddingResult(
+            List.of(new float[]{0.1f, -0.2f}, new float[]{0.3f, 0.4f}), new UsageInfo(2, 0)));
         when(invoker.invoke(anyString(), anyString(), any())).thenReturn(
             payload(List.of(question("Q1 向量题", 0), question("Q2 向量题", 0))));
 
@@ -253,7 +256,8 @@ class QuestionGenerationServiceTest {
     void embedPoolRejectionSkipsQuietly() {
         io.annona.spi.model.EmbeddingProvider provider = mock(io.annona.spi.model.EmbeddingProvider.class);
         when(embeddingProvider.getIfAvailable()).thenReturn(provider);
-        when(provider.embed(any())).thenReturn(List.of(new float[]{0.1f}));
+        when(provider.embed(any())).thenReturn(new EmbeddingResult(
+            List.of(new float[]{0.1f}), new UsageInfo(1, 0)));
         when(invoker.invoke(anyString(), anyString(), any())).thenReturn(
             payload(List.of(question("Q1 池满题", 0))));
         // 池饱和形态的执行器：execute() 直接拒绝（AbortPolicy）

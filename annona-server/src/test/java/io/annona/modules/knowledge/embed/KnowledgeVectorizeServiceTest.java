@@ -21,6 +21,8 @@ import io.annona.modules.knowledge.entity.KbDocEntity;
 import io.annona.shared.progress.SseProgressHub;
 import io.annona.modules.knowledge.repository.KbDocChunkRepository;
 import io.annona.modules.knowledge.repository.KbDocRepository;
+import io.annona.spi.dto.EmbeddingResult;
+import io.annona.spi.dto.UsageInfo;
 import io.annona.spi.model.EmbeddingProvider;
 import java.util.List;
 import java.util.Map;
@@ -128,7 +130,8 @@ class KnowledgeVectorizeServiceTest {
         lenient().when(objectStorage.get(anyString())).thenReturn("你好世界".getBytes());
         lenient().when(documentParser.parse(any(), anyString()))
             .thenReturn(List.of(new DocumentBlock(BlockType.PARAGRAPH, null, "你好世界", 0, 4)));
-        lenient().when(embeddingProvider.embed(any())).thenReturn(List.of(new float[] {0.1f, 0.2f}));
+        lenient().when(embeddingProvider.embed(any())).thenReturn(
+            new EmbeddingResult(List.of(new float[] {0.1f, 0.2f}), new UsageInfo(1, 0)));
         lenient().when(embeddingProvider.name()).thenReturn("text-embedding-fake");
         KbDocChunkEntity row = new KbDocChunkEntity();
         row.setId(UUID.randomUUID());

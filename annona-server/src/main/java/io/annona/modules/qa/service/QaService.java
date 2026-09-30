@@ -21,6 +21,7 @@ import io.annona.modules.retrieval.dto.RetrievalMissReason;
 import io.annona.modules.retrieval.dto.RetrievalRequest;
 import io.annona.modules.retrieval.service.RetrievalQueryService;
 import io.annona.modules.retrieval.dto.RetrievalResponse;
+import io.annona.spi.dto.UsageInfo;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -254,7 +255,8 @@ public class QaService {
                     }
 
                     @Override
-                    public void onComplete(String fullText) {
+                    public void onComplete(String fullText, UsageInfo usage) {
+                        // usage 暂只接收不记账（记账在下一 commit 随挂点接入，metering-adr 决策 4）
                         backfill(assistantId, fullText, citations, !state.clientGone, missReason);
                         send(emitter, "done", Map.of("messageId", assistantId.toString()));
                         emitter.complete();

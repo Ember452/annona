@@ -1,5 +1,7 @@
 package io.annona.spi.fake;
 
+import io.annona.spi.dto.EmbeddingResult;
+import io.annona.spi.dto.UsageInfo;
 import io.annona.spi.model.EmbeddingProvider;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,12 +45,17 @@ public final class FakeEmbeddingProvider implements EmbeddingProvider {
     }
 
     @Override
-    public List<float[]> embed(List<String> texts) {
+    public EmbeddingResult embed(List<String> texts) {
         List<float[]> out = new ArrayList<>(texts.size());
+        int chars = 0;
         for (String text : texts) {
-            out.add(vectorFor(text == null ? "" : text, dimensions));
+            String safe = text == null ? "" : text;
+            out.add(vectorFor(safe, dimensions));
+            chars += safe.length();
         }
-        return out;
+        // 确定性假 usage（与 FakeModelProvider 同口径 chars/4）：让计量链在测试里能验
+        // "非零"而非全零；fake 的数字不可读作成本事实（与向量同理）
+        return new EmbeddingResult(out, new UsageInfo(chars / 4, 0));
     }
 
     /** 以文本哈希为种子的 LCG，输出归一化到单位长度（点积即余弦相似度，检索语义成立）。 */

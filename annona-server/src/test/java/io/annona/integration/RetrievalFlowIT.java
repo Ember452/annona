@@ -195,7 +195,7 @@ class RetrievalFlowIT {
         if (withEmbedding) {
             columns += ", embedding";
             placeholders += ", ?::vector";
-            args.add(VectorLiterals.of(embeddingProvider.embed(List.of(content)).get(0)));
+            args.add(VectorLiterals.of(embeddingProvider.embed(List.of(content)).vectors().get(0)));
         }
         jdbc.update("INSERT INTO kb_doc_chunk (" + columns + ") VALUES (" + placeholders + ")",
             args.toArray());

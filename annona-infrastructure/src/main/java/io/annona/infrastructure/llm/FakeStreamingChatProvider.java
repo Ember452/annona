@@ -3,6 +3,7 @@ package io.annona.infrastructure.llm;
 import io.annona.common.model.ChatMessage;
 import io.annona.common.model.ChatStreamListener;
 import io.annona.common.model.StreamingChatProvider;
+import io.annona.spi.dto.UsageInfo;
 import java.util.List;
 
 /**
@@ -30,6 +31,9 @@ public class FakeStreamingChatProvider implements StreamingChatProvider {
         for (String delta : DELTAS) {
             listener.onDelta(delta);
         }
-        listener.onComplete(RESPONSE);
+        // 确定性假 usage（与 FakeModelProvider 同口径 chars/4）：让 qa 计量链在 slice/CI
+        // 能验"非零"；数字不可读作成本事实（fake 无真上游）
+        int promptChars = messages.stream().mapToInt(m -> m.content() == null ? 0 : m.content().length()).sum();
+        listener.onComplete(RESPONSE, new UsageInfo(promptChars / 4, RESPONSE.length() / 4));
     }
 }

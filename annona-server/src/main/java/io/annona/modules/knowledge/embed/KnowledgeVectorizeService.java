@@ -179,22 +179,29 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
             beat(docId, attemptId, lastHeartbeat);
             List<KnowledgeChunk> batch = chunks.subList(from,
                 Math.min(from + PROGRESS_BATCH_SIZE, chunks.size()));
-            List<float[]> vectors = provider.embed(batch.stream().map(KnowledgeChunk::text).toList());
+            List<float[]> vectors = provider.embed(batch.stream().map(KnowledgeChunk::text).toList()).vectors();
+            // 整批的向量写 + 进度写合进一个短事务（TD-02：旧写法逐 chunk 一事务，大文档
+            // = 数千小事务）；行在事务外算齐、事务内只写已知 id，embed 仍在事务外（铁律）；
+            // chunkIdByIndex 来自 persistChunks 后回读，重跑时同 id 重写（幂等）
+            List<UUID> batchChunkIds = new ArrayList<>(batch.size());
+            List<String> batchVectors = new ArrayList<>(batch.size());
             for (int i = 0; i < batch.size(); i++) {
                 UUID chunkId = chunkIdByIndex.get(batch.get(i).index());
                 if (chunkId == null) {
                     throw new BusinessException(ErrorCode.INTERNAL_ERROR,
                         "分块行缺失 docId=" + docId + " index=" + batch.get(i).index());
                 }
-                final UUID chunkIdFinal = chunkId;
-                final float[] vector = vectors.get(i);
-                tx.executeWithoutResult(s ->
-                    chunkRepository.updateEmbedding(chunkIdFinal, VectorLiterals.of(vector)));
+                batchChunkIds.add(chunkId);
+                batchVectors.add(VectorLiterals.of(vectors.get(i)));
             }
             processed += batch.size();
             int processedNow = processed;
-            tx.executeWithoutResult(s ->
-                docRepository.markProgress(docId, attemptId, processedNow, Instant.now()));
+            tx.executeWithoutResult(s -> {
+                for (int i = 0; i < batchChunkIds.size(); i++) {
+                    chunkRepository.updateEmbedding(batchChunkIds.get(i), batchVectors.get(i));
+                }
+                docRepository.markProgress(docId, attemptId, processedNow, Instant.now());
+            });
             progressHub.publish(docId, new ProgressEvent(KbDocEntity.STATUS_EMBEDDING, "向量化中",
                 processed, chunks.size(), ""));
         }

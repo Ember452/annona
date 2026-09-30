@@ -2,10 +2,11 @@
  * annona 扩展点契约层（SPI）。
  *
  * <p>本包只放<b>接口 + 跨模块契约 DTO</b>，是唯一允许被外部仓库依赖并实现的技术契约。
- * 五个扩展点：
+ * 六个扩展点（与 AGENTS.md §4 端口判据同源）：
  * <ul>
  *   <li>{@link io.annona.spi.identity.IdentityProvider}——身份源（local / platform / none）</li>
- *   <li>{@link io.annona.spi.model.ModelProvider}——模型网关（LLM / Embedding / Rerank 的供应商抽象）</li>
+ *   <li>{@link io.annona.spi.model.ModelProvider}——同步模型网关（chat）</li>
+ *   <li>{@link io.annona.spi.model.EmbeddingProvider}——向量化网关（含 usage 透传，批 3 契约变更）</li>
  *   <li>{@link io.annona.spi.retrieval.Retriever}——检索后端（默认 PgVector，可插 ES/Milvus）</li>
  *   <li>{@link io.annona.spi.signal.LearningSignalReader}——学习信号读取（planner 的输入侧）</li>
  *   <li>{@link io.annona.spi.planner.DecisionRule}——训练决策规则（可解释面板的理由生成器）</li>

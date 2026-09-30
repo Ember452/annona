@@ -1,5 +1,6 @@
 package io.annona.spi.model;
 
+import io.annona.spi.dto.EmbeddingResult;
 import java.util.List;
 
 /**
@@ -34,9 +35,10 @@ public interface EmbeddingProvider {
     int dimensions();
 
     /**
-     * 批量嵌入一段文本。实现方可内部分批（按供应商单批上限），调用方只管给全量。
+     * 批量嵌入一段文本。实现方可内部分批（按供应商单批上限），调用方只管给全量；
+     * 内部分批时 {@link EmbeddingResult#usage()} 为各批累加值。
      *
      * @param texts 非空文本列表；空白文本由调用方保证不存在（分块器已过滤）
      */
-    List<float[]> embed(List<String> texts);
+    EmbeddingResult embed(List<String> texts);
 }

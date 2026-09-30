@@ -14,12 +14,20 @@
     <description>通用能力层：统一响应、异常体系、错误码、常量、切面基类；不含业务概念</description>
 
     <dependencies>
-        <!-- 零框架依赖：本模块只放 Result / ErrorCode / BusinessException 与常量基类。
+        <!-- 零框架依赖：本模块只放 Result / ErrorCode / BusinessException 与端口契约。
              需要 Spring 的全局异常出口已移到 annona-server 的 config/web（原因见该类注释）。
-             这条约束让 annona-spi 将来可以安全地复用 common 而不被拉进框架。 -->
+             对 spi 的依赖不破坏这条约束（spi 自身零框架，批 3 usage 契约变更使然：
+             ChatStreamListener 终态回调携带 UsageInfo，理由与重评条件见
+             docs/specs/2026-09-29-llmprovider-metering-adr.md 批 3 修订）。 -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.annona</groupId>
+            <artifactId>annona-spi</artifactId>
+            <version>${project.version}</version>
         </dependency>
 
         <dependency>

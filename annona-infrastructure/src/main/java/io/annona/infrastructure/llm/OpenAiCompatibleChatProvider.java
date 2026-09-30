@@ -24,8 +24,11 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * OpenAI 兼容 {@code POST /chat/completions} 实现，一个类同时落同步（spi 的
@@ -40,6 +43,8 @@ import java.util.stream.Stream;
  * 是已知残留（P1a 单用户接受；出现挂死实例再上读空闲超时）。
  */
 public class OpenAiCompatibleChatProvider implements ModelProvider, StreamingChatProvider {
+
+    private static final Logger log = LoggerFactory.getLogger(OpenAiCompatibleChatProvider.class);
 
     private final ChatProperties properties;
     private final HttpClient httpClient;
@@ -133,18 +138,20 @@ public class OpenAiCompatibleChatProvider implements ModelProvider, StreamingCha
         }
 
         StringBuilder full = new StringBuilder();
+        // include_usage 后的 usage 终帧携带量；供应商不回填时保持 null → 回调携全 0
+        AtomicReference<UsageInfo> streamUsage = new AtomicReference<>();
         OpenAiSseDecoder decoder = new OpenAiSseDecoder();
         try (Stream<String> lines = response.body()) {
             Iterator<String> iterator = lines.iterator();
             while (iterator.hasNext()) {
                 for (String payload : decoder.feed(iterator.next())) {
-                    if (handlePayload(payload, full, listener)) {
+                    if (handlePayload(payload, full, streamUsage, listener)) {
                         return;
                     }
                 }
             }
             String tail = decoder.flush();
-            if (tail != null && handlePayload(tail, full, listener)) {
+            if (tail != null && handlePayload(tail, full, streamUsage, listener)) {
                 return;
             }
         } catch (UncheckedIOException e) {
@@ -156,17 +163,50 @@ public class OpenAiCompatibleChatProvider implements ModelProvider, StreamingCha
     }
 
     /** @return true = 已到终态（[DONE]，正常完成）。 */
-    private boolean handlePayload(String payload, StringBuilder full, ChatStreamListener listener) {
+    private boolean handlePayload(String payload, StringBuilder full,
+                                  AtomicReference<UsageInfo> streamUsage, ChatStreamListener listener) {
         if ("[DONE]".equals(payload)) {
-            listener.onComplete(full.toString());
+            UsageInfo usage = streamUsage.get();
+            if (usage == null) {
+                log.debug("流式终帧未携带 usage（供应商未回填 include_usage），记 0 不估算");
+                usage = new UsageInfo(0, 0);
+            }
+            // full 是内部拼接缓冲的视图（契约允许）；长命消费者自行拷贝
+            listener.onComplete(full.toString(), usage);
             return true;
         }
+        streamFrameUsage(payload, streamUsage);
         String delta = parseDelta(payload);
         if (delta != null && !delta.isEmpty()) {
             full.append(delta);
             listener.onDelta(delta);
         }
         return false;
+    }
+
+    /**
+     * 累计 usage 帧（include_usage 下为 [DONE] 前的独立帧，choices 为空；个别供应商
+     * 在终帧内联，同一解析都覆盖）；多帧出现时逐字段累加，非法帧静默跳过不伤正文链。
+     */
+    private void streamFrameUsage(String payload, AtomicReference<UsageInfo> streamUsage) {
+        try {
+            JsonNode usage = mapper.readTree(payload).path("usage");
+            if (!usage.isObject()) {
+                return;
+            }
+            streamUsage.updateAndGet(prev -> {
+                int prompt = usage.path("prompt_tokens").asInt(0);
+                int completion = usage.path("completion_tokens").asInt(0);
+                if (prev == null) {
+                    return new UsageInfo(prompt, completion);
+                }
+                return new UsageInfo(prev.promptTokens() + prompt, prev.completionTokens() + completion);
+            });
+        } catch (IOException e) {
+            // usage 帧解析失败不影响正文流：宁缺账不断流（与 parseDelta 的协议错误口径不同，
+            // 那里坏的是正文本身）
+            log.debug("流式 usage 帧解析跳过", e);
+        }
     }
 
     /** @return 增量正文；role 帧 / usage 帧 / 空 choices 返回 {@code null}（跳过）。 */
@@ -210,6 +250,11 @@ public class OpenAiCompatibleChatProvider implements ModelProvider, StreamingCha
                 .map(m -> Map.of("role", m[0], "content", m[1]))
                 .toList());
             body.put("stream", stream);
+            if (stream) {
+                // 终帧要 usage（计量补票，metering-adr 决策 4）；不支持该字段的网关会忽略或
+                // 拒 400——拒则回落 1104 可诊断，比静默缺账好（ADR 批 3 修订说明了探测口径）
+                body.put("stream_options", Map.of("include_usage", true));
+            }
             if (options != null) {
                 if (options.temperature() != null) {
                     body.put("temperature", options.temperature());
