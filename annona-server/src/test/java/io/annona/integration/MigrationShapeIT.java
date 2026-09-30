@@ -62,7 +62,7 @@ class MigrationShapeIT {
             "select pg_get_constraintdef(oid) from pg_constraint where conname = 'chk_usage_scene'",
             String.class);
         assertThat(sceneDef).contains("'INTERVIEW'", "'QUESTION_GEN'", "'QA'",
-            "'EVALUATION'", "'KB_INGEST'");
+            "'EVALUATION'", "'KB_INGEST'", "'RESUME'");
     }
 
     @Test
@@ -80,5 +80,18 @@ class MigrationShapeIT {
             "select pg_get_constraintdef(oid) from pg_constraint where conname = 'chk_report_status'",
             String.class);
         assertThat(statusDef).contains("'PENDING'", "'RUNNING'", "'DONE'", "'FAILED'");
+    }
+
+    @Test
+    @DisplayName("V14 简历幂等键与状态 CHECK 就位（同用户重复上传不双行）")
+    void resumeConstraintsExist() {
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        assertThat(jdbc.queryForObject(
+            "select count(*) from pg_constraint where conname = 'uq_resume_user_hash'",
+            Integer.class)).as("(user_id,file_hash) 幂等键").isEqualTo(1);
+        String statusDef = jdbc.queryForObject(
+            "select pg_get_constraintdef(oid) from pg_constraint where conname = 'chk_resume_status'",
+            String.class);
+        assertThat(statusDef).contains("'PENDING'", "'PROCESSING'", "'DONE'", "'FAILED'");
     }
 }

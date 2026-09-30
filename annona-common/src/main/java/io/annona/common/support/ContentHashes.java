@@ -1,4 +1,4 @@
-package io.annona.modules.knowledge.ingest;
+package io.annona.common.support;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -6,8 +6,9 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
 /**
- * 内容 hash 工具（SHA-256 十六进制，借 🅖 FileHashService 的算法与输出口径）：
- * 文档级做 (user_id, file_hash) 幂等键，分块级做 content_hash 差分记录。
+ * 内容 hash 工具（SHA-256 十六进制）：文档/简历级做 (user_id, file_hash) 幂等键，
+ * 分块级做 content_hash 差分。原在 knowledge 模块，因简历链（P1b-08）也需同一口径
+ * 且不得跨模块 import，按 AGENTS §4"基础设施能力放 common"下沉至此（纯 JDK，无框架）。
  */
 public final class ContentHashes {
 

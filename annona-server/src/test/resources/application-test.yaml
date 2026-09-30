@@ -49,3 +49,8 @@ annona:
     enabled: false
     recovery:
       enabled: false
+  # 简历分析链同构（ResumeStream/ResumeRecoveryScheduler 强制实例化），无 DB/Redis 冒烟上下文一并关
+  resume:
+    enabled: false
+    recovery:
+      enabled: false

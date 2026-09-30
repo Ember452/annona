@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.annona.common.storage.ObjectStorage;
 import io.annona.modules.evaluation.listener.EvaluationRecoveryScheduler;
 import io.annona.modules.evaluation.listener.EvaluationStream;
+import io.annona.modules.resume.listener.ResumeRecoveryScheduler;
+import io.annona.modules.resume.listener.ResumeStream;
 import io.annona.modules.knowledge.controller.KnowledgeDocController;
 import io.annona.modules.knowledge.ingest.KnowledgeUploadService;
 import io.annona.modules.knowledge.listener.KnowledgeRecoveryScheduler;
@@ -37,6 +39,8 @@ import org.springframework.test.context.ActiveProfiles;
     "annona.questionbank.recovery.enabled=false",
     "annona.evaluation.enabled=false",
     "annona.evaluation.recovery.enabled=false",
+    "annona.resume.enabled=false",
+    "annona.resume.recovery.enabled=false",
     "annona.model.embedding.provider=none",
 })
 @ActiveProfiles("docker")
@@ -57,6 +61,10 @@ class AllGatesOffContextIT {
     @Autowired
     private ObjectProvider<EvaluationRecoveryScheduler> evaluationRecoveryProvider;
     @Autowired
+    private ObjectProvider<ResumeStream> resumeStreamProvider;
+    @Autowired
+    private ObjectProvider<ResumeRecoveryScheduler> resumeRecoveryProvider;
+    @Autowired
     private KnowledgeDocController knowledgeDocController;
     @Autowired
     private KnowledgeUploadService uploadService;
@@ -73,6 +81,9 @@ class AllGatesOffContextIT {
         // 评估链门控 bean 全关时（交卷事件无人监听也无妨，EvaluationService 常驻但不起流）
         assertThat(evaluationStreamProvider.getIfAvailable()).isNull();
         assertThat(evaluationRecoveryProvider.getIfAvailable()).isNull();
+        // 简历分析链门控 bean 全关时同样缺席
+        assertThat(resumeStreamProvider.getIfAvailable()).isNull();
+        assertThat(resumeRecoveryProvider.getIfAvailable()).isNull();
 
         // 常驻链存在性即装配证明：它们构造成功 = 每个门控依赖都走的是 Optional
         assertThat(knowledgeDocController).isNotNull();

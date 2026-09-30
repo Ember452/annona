@@ -4,6 +4,7 @@ import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
 import io.annona.common.storage.ObjectStorage;
 import io.annona.common.stream.TaskStreamPort;
+import io.annona.common.support.ContentHashes;
 import io.annona.modules.knowledge.chunk.Chunker;
 import io.annona.modules.knowledge.dto.UploadResponse;
 import io.annona.modules.knowledge.entity.KbDocEntity;

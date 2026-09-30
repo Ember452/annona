@@ -96,7 +96,14 @@ public enum ErrorCode {
     PROVIDER_KEY_DECRYPT_FAILED(2903, "密钥解密失败，联系管理员检查 KEK 轮换状态"),
 
     // ========== evaluation 3000–3099（P1b-06/07，面试评估链） ==========
-    EVALUATION_NOT_FOUND(3000, "该面试尚无评估报告（未交卷或评估未开始）");
+    EVALUATION_NOT_FOUND(3000, "该面试尚无评估报告（未交卷或评估未开始）"),
+
+    // ========== resume 3100–3199（P1b-08，简历上传与异步分析） ==========
+    RESUME_NOT_FOUND(3100, "简历不存在"),
+    RESUME_TOO_LARGE(3101, "简历文件过大"),
+    RESUME_TYPE_NOT_SUPPORTED(3102, "简历文件格式不支持（仅 pdf/docx/txt/md）"),
+    RESUME_STORAGE_NOT_CONFIGURED(3103, "对象存储未配置，无法上传简历"),
+    RESUME_ENQUEUE_FAILED(3104, "分析任务投递失败，请稍后重试");
 
     private final int code;
     private final String message;
