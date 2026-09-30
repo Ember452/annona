@@ -62,7 +62,9 @@ jobs:
   docker-it:
     name: Integration tests on real PG + Redis (services:)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # 25 -> 40：批 2 真库 IT 增补后套件实测 25.3min 撞上限（GitHub 标 cancelled 而非
+    # failure，与真失败难分辨）；上限给余量，真实时长由 job 用时观察再收敛
+    timeout-minutes: 40
     # job 级 env：下面三步（mvn / 断言 / 汇报）都能着到底
     env:
       SPRING_PROFILES_ACTIVE: docker
