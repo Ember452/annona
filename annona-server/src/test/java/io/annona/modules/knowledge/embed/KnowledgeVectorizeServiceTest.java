@@ -100,6 +100,8 @@ class KnowledgeVectorizeServiceTest {
     private EmbeddingProvider embeddingProvider;
     @Mock
     private SseProgressHub progressHub;
+    @Mock
+    private io.annona.common.usage.UsageLedger usageLedger;
 
     private KnowledgeVectorizeService service;
 
@@ -110,7 +112,7 @@ class KnowledgeVectorizeServiceTest {
     void setUp() {
         service = new KnowledgeVectorizeService(docRepository, chunkRepository, 
             Optional.of(objectStorage), documentParser, new StubTokenizer(), Optional.of(embeddingProvider), progressHub,
-            TX_MGR);
+            usageLedger, TX_MGR);
         doc = new KbDocEntity();
         doc.setId(docId);
         doc.setStatus(KbDocEntity.STATUS_PENDING);

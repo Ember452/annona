@@ -7,6 +7,7 @@ import io.annona.common.model.ChatMessage;
 import io.annona.common.model.ChatStreamListener;
 import io.annona.common.model.StreamingChatProvider;
 import io.annona.common.usage.UsageContext;
+import io.annona.common.usage.UsageLedger;
 import io.annona.modules.knowledge.dto.KbChunkReference;
 import io.annona.modules.knowledge.ops.KnowledgeDocQueryService;
 import io.annona.modules.qa.dto.QaAskRequest;
@@ -22,7 +23,6 @@ import io.annona.modules.retrieval.dto.RetrievalMissReason;
 import io.annona.modules.retrieval.dto.RetrievalRequest;
 import io.annona.modules.retrieval.service.RetrievalQueryService;
 import io.annona.modules.retrieval.dto.RetrievalResponse;
-import io.annona.modules.usage.service.UsageRecorder;
 import io.annona.spi.dto.UsageInfo;
 import java.io.IOException;
 import java.io.InputStream;
@@ -80,7 +80,7 @@ public class QaService {
     private final Executor aiIoExecutor;
     private final TransactionTemplate tx;
     private final QaMapper mapper;
-    private final UsageRecorder usageRecorder;
+    private final UsageLedger usageLedger;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final String systemPrompt;
     private final String userPromptTemplate;
@@ -90,7 +90,7 @@ public class QaService {
         Optional<StreamingChatProvider> chatProvider,
         @Qualifier("aiIoExecutor") Executor aiIoExecutor,
         PlatformTransactionManager transactionManager, QaMapper mapper,
-        UsageRecorder usageRecorder) {
+        UsageLedger usageLedger) {
         this.sessionRepository = sessionRepository;
         this.messageRepository = messageRepository;
         this.retrievalQueryService = retrievalQueryService;
@@ -99,7 +99,7 @@ public class QaService {
         this.aiIoExecutor = aiIoExecutor;
         this.tx = new TransactionTemplate(transactionManager);
         this.mapper = mapper;
-        this.usageRecorder = usageRecorder;
+        this.usageLedger = usageLedger;
         this.systemPrompt = readPrompt("prompts/qa-system.st");
         this.userPromptTemplate = readPrompt("prompts/qa-user.st");
     }
@@ -276,7 +276,7 @@ public class QaService {
                     public void onComplete(String fullText, UsageInfo usage) {
                         if (usage != null && usage.totalTokens() > 0) {
                             StreamingChatProvider provider = chatProvider.orElseThrow();
-                            usageRecorder.record(new UsageRecorder.UsageEntry(UUID.fromString(userId),
+                            usageLedger.record(new UsageLedger.UsageEntry(UUID.fromString(userId),
                                 "QA", sessionId, provider.channel(), provider.name(), "chat",
                                 usage.promptTokens(), usage.completionTokens(), null, null));
                         }

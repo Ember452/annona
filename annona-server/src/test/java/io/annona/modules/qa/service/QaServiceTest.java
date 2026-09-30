@@ -16,6 +16,7 @@ import io.annona.common.exception.ErrorCode;
 import io.annona.common.model.ChatMessage;
 import io.annona.common.model.ChatStreamListener;
 import io.annona.common.model.StreamingChatProvider;
+import io.annona.common.usage.UsageLedger;
 import io.annona.modules.knowledge.dto.KbChunkReference;
 import io.annona.modules.knowledge.ops.KnowledgeDocQueryService;
 import io.annona.modules.qa.dto.QaAskRequest;
@@ -26,7 +27,6 @@ import io.annona.modules.qa.mapper.QaMapper;
 import io.annona.modules.qa.repository.QaMessageRepository;
 import io.annona.modules.qa.repository.QaSessionRepository;
 import io.annona.modules.retrieval.dto.RetrievalResponse;
-import io.annona.modules.usage.service.UsageRecorder;
 import io.annona.spi.dto.UsageInfo;
 import io.annona.modules.retrieval.service.RetrievalQueryService;
 import java.util.ArrayList;
@@ -83,7 +83,7 @@ class QaServiceTest {
     private QaMapper mapper;
 
     @Mock
-    private UsageRecorder usageRecorder;
+    private UsageLedger usageLedger;
 
     private final List<QaMessageEntity> saved = new ArrayList<>();
 
@@ -115,7 +115,7 @@ class QaServiceTest {
     private QaService service(StreamingChatProvider provider, Executor executor) {
         return new QaService(sessionRepository, messageRepository, retrievalQueryService,
             docQueryService, Optional.ofNullable(provider), executor, transactionManager, mapper,
-            usageRecorder);
+            usageLedger);
     }
 
     /** 确定性 provider：按给定脚本回调。占位态的观察走 states 快照，无需在流开始时再取。 */
@@ -379,9 +379,9 @@ class QaServiceTest {
 
             service(new StubProvider(List.of("答"), false)).ask(USER, new QaAskRequest(null, "问题"));
 
-            ArgumentCaptor<UsageRecorder.UsageEntry> entry =
-                ArgumentCaptor.forClass(UsageRecorder.UsageEntry.class);
-            verify(usageRecorder).record(entry.capture());
+            ArgumentCaptor<UsageLedger.UsageEntry> entry =
+                ArgumentCaptor.forClass(UsageLedger.UsageEntry.class);
+            verify(usageLedger).record(entry.capture());
             assertThat(entry.getValue().scene()).isEqualTo("QA");
             assertThat(entry.getValue().provider()).isEqualTo("stub-channel");
             assertThat(entry.getValue().model()).isEqualTo("stub-model");
@@ -399,7 +399,7 @@ class QaServiceTest {
             service(new StubProvider(List.of("答"), false, new UsageInfo(0, 0)))
                 .ask(USER, new QaAskRequest(null, "问题"));
 
-            verify(usageRecorder, never()).record(any());
+            verify(usageLedger, never()).record(any());
         }
 
         @Test
@@ -409,7 +409,7 @@ class QaServiceTest {
 
             service(new StubProvider(List.of("部分"), true)).ask(USER, new QaAskRequest(null, "问题"));
 
-            verify(usageRecorder, never()).record(any());
+            verify(usageLedger, never()).record(any());
         }
     }
 }

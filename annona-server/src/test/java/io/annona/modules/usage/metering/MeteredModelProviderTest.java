@@ -16,6 +16,7 @@ import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
 import io.annona.common.quota.DailyQuotaCounter;
 import io.annona.common.usage.UsageContext;
+import io.annona.common.usage.UsageLedger;
 import io.annona.modules.usage.config.UsageProperties;
 import io.annona.modules.usage.service.UsageRecorder;
 import io.annona.spi.dto.ModelChatMessage;
@@ -81,7 +82,7 @@ class MeteredModelProviderTest {
             ModelResponse response = provider.chat(messages(), ModelOptions.defaults());
             assertThat(response.content()).isEqualTo("ok");
         }
-        var captor = ArgumentCaptor.forClass(UsageRecorder.UsageEntry.class);
+        var captor = ArgumentCaptor.forClass(UsageLedger.UsageEntry.class);
         verify(recorder).record(captor.capture());
         var entry = captor.getValue();
         assertThat(entry.scene()).isEqualTo("QUESTION_GEN");
@@ -114,7 +115,7 @@ class MeteredModelProviderTest {
         try (UsageContext.Scope scope = UsageContext.bind(USER_ID, "QUESTION_GEN", null, null)) {
             provider.chat(messages(), ModelOptions.defaults());
         }
-        var captor = ArgumentCaptor.forClass(UsageRecorder.UsageEntry.class);
+        var captor = ArgumentCaptor.forClass(UsageLedger.UsageEntry.class);
         verify(recorder).record(captor.capture());
         assertThat(captor.getValue().promptTokens()).isZero();
         verify(quota, never()).tryConsume(anyString(), anyLong(), anyLong(), any());

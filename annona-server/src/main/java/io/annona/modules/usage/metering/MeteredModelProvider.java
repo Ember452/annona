@@ -4,6 +4,7 @@ import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
 import io.annona.common.quota.DailyQuotaCounter;
 import io.annona.common.usage.UsageContext;
+import io.annona.common.usage.UsageLedger;
 import io.annona.modules.usage.config.UsageProperties;
 import io.annona.modules.usage.service.UsageRecorder;
 import io.annona.spi.dto.ModelChatMessage;
@@ -89,7 +90,7 @@ public class MeteredModelProvider implements ModelProvider {
                 Duration.between(LocalDateTime.now(),
                     LocalDate.now().plusDays(1).atStartOfDay()));
         }
-        recorder.record(new UsageRecorder.UsageEntry(
+        recorder.record(new UsageLedger.UsageEntry(
             UUID.fromString(userId), attribution.scene(), attribution.sessionId(),
             // provider = 供应通道（channel），model = 响应模型 id：两列语义独立（TD-03，
             // 旧写法两处同值让通道归因失真）；响应不报 model 时退 name()，再退 unknown

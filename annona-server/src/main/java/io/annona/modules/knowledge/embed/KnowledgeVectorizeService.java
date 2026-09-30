@@ -8,6 +8,7 @@ import io.annona.common.search.Tokenizer;
 import io.annona.common.search.VectorLiterals;
 import io.annona.common.storage.ObjectStorage;
 import io.annona.common.stream.TaskStreamPort;
+import io.annona.common.usage.UsageLedger;
 import io.annona.modules.knowledge.chunk.ChunkOptions;
 import io.annona.modules.knowledge.chunk.Chunker;
 import io.annona.modules.knowledge.chunk.KnowledgeChunk;
@@ -18,6 +19,7 @@ import io.annona.modules.knowledge.ingest.ContentHashes;
 import io.annona.shared.progress.SseProgressHub;
 import io.annona.modules.knowledge.repository.KbDocChunkRepository;
 import io.annona.modules.knowledge.repository.KbDocRepository;
+import io.annona.spi.dto.EmbeddingResult;
 import io.annona.spi.model.EmbeddingProvider;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -73,6 +75,11 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
     private final Optional<EmbeddingProvider> embeddingProvider;
     private final SseProgressHub progressHub;
     /**
+     * 向量化用量记账（metering-adr 批 3 修订，决策 4 的 embed 债）：经 common 端口注入，
+     * 不直依赖 modules/usage（跨模块写）。
+     */
+    private final UsageLedger usageLedger;
+    /**
      * 条件 UPDATE 的事务来源：每个状态迁移经 {@link TransactionTemplate} 自成一个短事务
      * （LoginAttemptStore 先例）。@Modifying 查询没有调用方事务时 Hibernate 会抛
      * TransactionRequiredException，而后台消费线程没有任何现成事务上下文——切片测试
@@ -87,6 +94,7 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
         Tokenizer tokenizer,
         Optional<EmbeddingProvider> embeddingProvider,
         SseProgressHub progressHub,
+        UsageLedger usageLedger,
         PlatformTransactionManager transactionManager) {
         this.docRepository = docRepository;
         this.chunkRepository = chunkRepository;
@@ -95,6 +103,7 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
         this.tokenizer = tokenizer;
         this.embeddingProvider = embeddingProvider;
         this.progressHub = progressHub;
+        this.usageLedger = usageLedger;
         this.tx = new TransactionTemplate(transactionManager);
     }
 
@@ -174,12 +183,15 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
             0, chunks.size(), ""));
 
         int processed = 0;
+        int embedPrompt = 0; // 跨批累加的输入 token（一次向量化只记一行账，不逐批刷）
         // 进度推进粒度（每批发一条 SSE + 一次 DB 进度写），与 provider 内部的分批上限无关
         for (int from = 0; from < chunks.size(); from += PROGRESS_BATCH_SIZE) {
             beat(docId, attemptId, lastHeartbeat);
             List<KnowledgeChunk> batch = chunks.subList(from,
                 Math.min(from + PROGRESS_BATCH_SIZE, chunks.size()));
-            List<float[]> vectors = provider.embed(batch.stream().map(KnowledgeChunk::text).toList()).vectors();
+            EmbeddingResult result = provider.embed(batch.stream().map(KnowledgeChunk::text).toList());
+            List<float[]> vectors = result.vectors();
+            embedPrompt += result.usage().promptTokens();
             // 整批的向量写 + 进度写合进一个短事务（TD-02：旧写法逐 chunk 一事务，大文档
             // = 数千小事务）；行在事务外算齐、事务内只写已知 id，embed 仍在事务外（铁律）；
             // chunkIdByIndex 来自 persistChunks 后回读，重跑时同 id 重写（幂等）
@@ -209,6 +221,12 @@ public class KnowledgeVectorizeService implements TaskStreamPort.TaskMessageHand
         if (tx.execute(s -> docRepository.markReady(docId, attemptId, chunks.size(),
             provider.name(), Instant.now())) == 0) {
             throw new AttemptLostException();
+        }
+        // 向量化用量补票（scene KB_INGEST，V12 扩 CHECK）：整个文档 embed 累计账一行；
+        // provider = 通道、model = 向量身份（两列语义独立，TD-03）；total=0（fake/不回填）不记。
+        if (embedPrompt > 0) {
+            usageLedger.record(new UsageLedger.UsageEntry(doc.getUserId(), "KB_INGEST", docId,
+                provider.channel(), provider.name(), "embedding", embedPrompt, 0, null, null));
         }
         progressHub.publish(docId, new ProgressEvent(KbDocEntity.STATUS_READY, "就绪",
             chunks.size(), chunks.size(), ""));

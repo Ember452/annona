@@ -85,12 +85,16 @@
    ——**不估算**（否决表原样有效）。common 新增对 spi 的依赖（usage record 复用）：spi 自身
    零框架，common 的"零框架依赖"不变量不破；重新评估条件 = spi 将来引入任何依赖时重议。
 2. **挂点例外（对决策 3 的偏离）**：装饰器只认同步 `ModelProvider`；qa 流式在 **AI-IO 执行线程
-   的终态回调**里 bind `UsageContext` + 调 `UsageRecorder` 显式记账（异步线程拿不到请求线程
-   ThreadLocal，bind 必须在执行线程）。否决"把装饰器扩到两个新端口"：UsageRecorder 在
-   modules/usage，infra 实现接不到它（依赖方向），接法只会把挂点拆散。
+   的终态回调**里 bind `UsageContext` + 调 `UsageLedger`（common 端口，实现在 usage 模块）显式记账
+   （异步线程拿不到请求 ThreadLocal，bind 必须在执行线程）。否决"把装饰器扩到两个新端口"：
+   业务模块不应 import `modules/usage` 的写服务（跨模块写，违反依赖方向），也不该把
+   记账实现搬进 infra（infra 够不到 token_usage 表）；折中 = 记账能力以 `common.usage.UsageLedger`
+   端口暴露（同 DailyQuotaCounter/TaskStreamPort 先例），各模块经端口注入。
    挂点单点原则维持：**此后每新增一类模型出口，必须回本 ADR 登记挂点**，不许就地写例外。
-3. **embed 计量范围**：入库向量化与题库回填记账（scene 分别 `KB_INGEST`/`QUESTION_GEN`，
-   V12 扩 CHECK）；**检索查询向量不记账**——无稳定会话宿主，归属不成立，如实声明而非遗漏。
+3. **embed 计量范围**：入库向量化（`KnowledgeVectorizeService`，整档累计一行）与题库
+   回填（`QuestionGenerationService.embedBestEffort`）经 `UsageLedger` 端口记账（scene 分别
+   `KB_INGEST`/`QUESTION_GEN`，V12 扩 CHECK）；**检索查询向量不记账**——无稳定会话宿主，
+   归属不成立，如实声明而非遗漏。
 4. **provider 列语义修正（TD-03）**：`token_usage.provider` = 供应通道（配置枚举值，端口
    `channel()`），`model` = 响应模型 id；旧装饰器两处同值使通道归因失真。两列自此语义独立。
 5. **SSE 超时同源（TD-04）**：`QaService` 的 emitter 超时 = `2 × streamTimeoutMillis()`（端口

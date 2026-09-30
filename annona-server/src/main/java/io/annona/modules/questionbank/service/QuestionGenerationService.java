@@ -5,6 +5,7 @@ import io.annona.common.exception.ErrorCode;
 import io.annona.common.search.VectorLiterals;
 import io.annona.common.stream.TaskStreamPort;
 import io.annona.common.usage.UsageContext;
+import io.annona.common.usage.UsageLedger;
 import io.annona.modules.interview.skill.model.SkillDefinition;
 import io.annona.modules.interview.skill.service.SkillQueryService;
 import io.annona.modules.knowledge.ops.KnowledgeDocQueryService;
@@ -20,6 +21,7 @@ import io.annona.shared.direction.dto.DirectionResponse;
 import io.annona.shared.direction.service.DirectionQueryService;
 import io.annona.shared.progress.ProgressEvent;
 import io.annona.shared.progress.SseProgressHub;
+import io.annona.spi.dto.EmbeddingResult;
 import io.annona.spi.dto.RetrievalHit;
 import io.annona.spi.dto.RetrievalQuery;
 import io.annona.spi.model.EmbeddingProvider;
@@ -78,6 +80,7 @@ public class QuestionGenerationService implements TaskStreamPort.TaskMessageHand
     private final ObjectProvider<EmbeddingProvider> embeddingProvider;
     private final Executor aiIoExecutor;
     private final SseProgressHub progressHub;
+    private final UsageLedger usageLedger;
     private final TransactionTemplate txTemplate;
     private final String systemPrompt;
     private final String userPromptTemplate;
@@ -93,6 +96,7 @@ public class QuestionGenerationService implements TaskStreamPort.TaskMessageHand
                                      ObjectProvider<EmbeddingProvider> embeddingProvider,
                                      @Qualifier("aiIoExecutor") Executor aiIoExecutor,
                                      SseProgressHub progressHub,
+                                     UsageLedger usageLedger,
                                      PlatformTransactionManager transactionManager) {
         this.taskRepository = taskRepository;
         this.questionRepository = questionRepository;
@@ -105,6 +109,7 @@ public class QuestionGenerationService implements TaskStreamPort.TaskMessageHand
         this.embeddingProvider = embeddingProvider;
         this.aiIoExecutor = aiIoExecutor;
         this.progressHub = progressHub;
+        this.usageLedger = usageLedger;
         this.txTemplate = new TransactionTemplate(transactionManager);
         this.systemPrompt = readPrompt("prompts/question-generation-system.st");
         this.userPromptTemplate = readPrompt("prompts/question-generation-user.st");
@@ -264,7 +269,7 @@ public class QuestionGenerationService implements TaskStreamPort.TaskMessageHand
             questionRepository.deleteDrafts(task.getUserId(), task.getDirectionId());
             questionRepository.saveAll(drafts);
         });
-        embedBestEffort(drafts);
+        embedBestEffort(task.getUserId(), task.getId(), drafts);
         return drafts.size();
     }
 
@@ -277,7 +282,7 @@ public class QuestionGenerationService implements TaskStreamPort.TaskMessageHand
      * 嵌在草稿期而非启用（ACTIVE）期：启用是轻开关动作，不该挂外部 HTTP；草稿多嵌的代价
      * 只是批量一次调用（N≤20），可接受。
      */
-    private void embedBestEffort(List<QbQuestionEntity> drafts) {
+    private void embedBestEffort(UUID userId, UUID taskId, List<QbQuestionEntity> drafts) {
         EmbeddingProvider provider = embeddingProvider.getIfAvailable();
         if (provider == null || drafts.isEmpty()) {
             return;
@@ -286,8 +291,9 @@ public class QuestionGenerationService implements TaskStreamPort.TaskMessageHand
         try {
             aiIoExecutor.execute(() -> {
                 try {
-                    List<float[]> vectors = provider.embed(
-                        targets.stream().map(QbQuestionEntity::getQuestion).toList()).vectors();
+                    EmbeddingResult result = provider.embed(
+                        targets.stream().map(QbQuestionEntity::getQuestion).toList());
+                    List<float[]> vectors = result.vectors();
                     // embed 在事务外、回填在短事务内（@Modifying 需活动事务；纪律与类注释一致）
                     txTemplate.executeWithoutResult(status -> {
                         for (int i = 0; i < targets.size() && i < vectors.size(); i++) {
@@ -295,6 +301,13 @@ public class QuestionGenerationService implements TaskStreamPort.TaskMessageHand
                                 VectorLiterals.of(vectors.get(i)));
                         }
                     });
+                    // 题干嵌入用量补票（scene QUESTION_GEN，与同任务的 chat 账同宿主）：
+                    // 异步线程拿不到 run() 的 UsageContext，此处显式带 userId/taskId 记账。
+                    if (result.usage().totalTokens() > 0) {
+                        usageLedger.record(new UsageLedger.UsageEntry(userId, "QUESTION_GEN", taskId,
+                            provider.channel(), provider.name(), "embedding",
+                            result.usage().promptTokens(), 0, null, null));
+                    }
                 } catch (RuntimeException e) {
                     log.warn("题干嵌入失败，组卷将降级关键词判：{}", e.getMessage(), e);
                 }

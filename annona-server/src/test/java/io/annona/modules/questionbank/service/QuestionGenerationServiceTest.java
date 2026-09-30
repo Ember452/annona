@@ -75,6 +75,8 @@ class QuestionGenerationServiceTest {
     @Mock
     private SseProgressHub progressHub;
     @Mock
+    private io.annona.common.usage.UsageLedger usageLedger;
+    @Mock
     private PlatformTransactionManager transactionManager;
 
     @org.mockito.Captor
@@ -122,7 +124,7 @@ class QuestionGenerationServiceTest {
             .thenReturn(Optional.of(task));
         service = new QuestionGenerationService(taskRepository, questionRepository, stateService,
             directionQuery, skillQuery, knowledgeDocQuery, retriever, invokerProvider,
-            embeddingProvider, Runnable::run, progressHub, transactionManager);
+            embeddingProvider, Runnable::run, progressHub, usageLedger, transactionManager);
     }
 
     private QuestionGenerationService.QuestionListPayload payload(
@@ -265,7 +267,7 @@ class QuestionGenerationServiceTest {
             questionRepository, stateService, directionQuery, skillQuery, knowledgeDocQuery,
             retriever, invokerProvider, embeddingProvider,
             command -> { throw new java.util.concurrent.RejectedExecutionException("pool full"); },
-            progressHub, transactionManager);
+            progressHub, usageLedger, transactionManager);
 
         saturated.run(UUID.fromString(TASK_ID));
 
