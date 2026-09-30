@@ -248,6 +248,28 @@ class QuestionGenerationServiceTest {
         verify(questionRepository, never()).updateEmbedding(any(), anyString());
     }
 
+    @Test
+    @DisplayName("AI-IO 池拒绝提交：嵌入静默跳过，任务不被错标 RETRY")
+    void embedPoolRejectionSkipsQuietly() {
+        io.annona.spi.model.EmbeddingProvider provider = mock(io.annona.spi.model.EmbeddingProvider.class);
+        when(embeddingProvider.getIfAvailable()).thenReturn(provider);
+        when(provider.embed(any())).thenReturn(List.of(new float[]{0.1f}));
+        when(invoker.invoke(anyString(), anyString(), any())).thenReturn(
+            payload(List.of(question("Q1 池满题", 0))));
+        // 池饱和形态的执行器：execute() 直接拒绝（AbortPolicy）
+        QuestionGenerationService saturated = new QuestionGenerationService(taskRepository,
+            questionRepository, stateService, directionQuery, skillQuery, knowledgeDocQuery,
+            retriever, invokerProvider, embeddingProvider,
+            command -> { throw new java.util.concurrent.RejectedExecutionException("pool full"); },
+            progressHub, transactionManager);
+
+        saturated.run(UUID.fromString(TASK_ID));
+
+        verify(stateService).markCompleted(UUID.fromString(TASK_ID), 1, 0, "已生成 1 题");
+        verify(stateService, never()).resetForRetry(any());
+        verify(questionRepository, never()).updateEmbedding(any(), anyString());
+    }
+
     private static void assertThatException(Runnable runnable, io.annona.common.exception.ErrorCode code) {
         try {
             runnable.run();

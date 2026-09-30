@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -270,6 +271,9 @@ public class QuestionGenerationService implements TaskStreamPort.TaskMessageHand
     /**
      * 题干向量 best-effort 回填（V9 M3/interview-session-adr §决策 3）：事务外异步，
      * 失败只记日志——embedding 为 NULL 的行在组卷侧自动降级关键词判，不阻塞出题主流程。
+     * 池饱和（AbortPolicy 拒绝提交）同口径跳过：草稿已落库、任务已成功，REE 若冒出去
+     * 会被 {@code handle()} 的兜底 catch 错标 RETRY 重跑整场出题（QaService.ask 对同一
+     * 执行器转 1100，那是流尚未开始的用户入口，此处是事后补偿路径，语义不同）。
      * 嵌在草稿期而非启用（ACTIVE）期：启用是轻开关动作，不该挂外部 HTTP；草稿多嵌的代价
      * 只是批量一次调用（N≤20），可接受。
      */
@@ -279,21 +283,25 @@ public class QuestionGenerationService implements TaskStreamPort.TaskMessageHand
             return;
         }
         List<QbQuestionEntity> targets = List.copyOf(drafts);
-        aiIoExecutor.execute(() -> {
-            try {
-                List<float[]> vectors = provider.embed(
-                    targets.stream().map(QbQuestionEntity::getQuestion).toList());
-                // embed 在事务外、回填在短事务内（@Modifying 需活动事务；纪律与类注释一致）
-                txTemplate.executeWithoutResult(status -> {
-                    for (int i = 0; i < targets.size() && i < vectors.size(); i++) {
-                        questionRepository.updateEmbedding(targets.get(i).getId(),
-                            VectorLiterals.of(vectors.get(i)));
-                    }
-                });
-            } catch (RuntimeException e) {
-                log.warn("题干嵌入失败，组卷将降级关键词判：{}", e.getMessage(), e);
-            }
-        });
+        try {
+            aiIoExecutor.execute(() -> {
+                try {
+                    List<float[]> vectors = provider.embed(
+                        targets.stream().map(QbQuestionEntity::getQuestion).toList());
+                    // embed 在事务外、回填在短事务内（@Modifying 需活动事务；纪律与类注释一致）
+                    txTemplate.executeWithoutResult(status -> {
+                        for (int i = 0; i < targets.size() && i < vectors.size(); i++) {
+                            questionRepository.updateEmbedding(targets.get(i).getId(),
+                                VectorLiterals.of(vectors.get(i)));
+                        }
+                    });
+                } catch (RuntimeException e) {
+                    log.warn("题干嵌入失败，组卷将降级关键词判：{}", e.getMessage(), e);
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            log.warn("AI-IO 池饱和，题干嵌入跳过，组卷将降级关键词判：{}", e.getMessage());
+        }
     }
 
     /** 追问裁剪：空题干剔除 + 截断到目标数（模型多给不要、少给如实呈现——上游口径）。 */
