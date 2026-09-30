@@ -2,6 +2,7 @@ package io.annona.modules.interview.orchestrator.session;
 
 import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
+import io.annona.shared.domain.InterviewFinalizedEvent;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -9,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,11 +36,14 @@ public class InterviewSessionStateService {
 
     private final InterviewSessionRepository sessionRepository;
     private final InterviewAnswerRepository answerRepository;
+    private final ApplicationEventPublisher events;
 
     public InterviewSessionStateService(InterviewSessionRepository sessionRepository,
-                                        InterviewAnswerRepository answerRepository) {
+                                        InterviewAnswerRepository answerRepository,
+                                        ApplicationEventPublisher events) {
         this.sessionRepository = sessionRepository;
         this.answerRepository = answerRepository;
+        this.events = events;
     }
 
     /**
@@ -116,6 +121,10 @@ public class InterviewSessionStateService {
                     ? "该面试已被放弃" : "该面试已交卷，请勿重复提交");
         }
         int submitted = answerRepository.markAllSubmitted(sessionId, now);
+        // 交卷赢者才发领域事件（事务内发布，@TransactionalEventListener AFTER_COMMIT 消费）：
+        // evaluation 监听后建报告 + 投递评估任务，interview 不直接依赖 evaluation（§4 写走事件）。
+        events.publishEvent(new InterviewFinalizedEvent(sessionId, userId, session.getDirectionId(),
+            InterviewSessionEntity.EVALUATOR_VERSION_V1));
         return new FinalizeResult(sessionId, submitted,
             InterviewSessionEntity.EVALUATOR_VERSION_V1);
     }

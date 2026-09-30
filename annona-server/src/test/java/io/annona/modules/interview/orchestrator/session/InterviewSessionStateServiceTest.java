@@ -37,13 +37,16 @@ class InterviewSessionStateServiceTest {
     @Mock
     private InterviewAnswerRepository answerRepository;
 
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher events;
+
     private InterviewSessionStateService service;
 
     private static final UUID USER = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID DIRECTION = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
     private InterviewSessionStateService newService() {
-        return new InterviewSessionStateService(sessionRepository, answerRepository);
+        return new InterviewSessionStateService(sessionRepository, answerRepository, events);
     }
 
     private static InterviewSessionEntity session(String status) {

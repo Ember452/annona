@@ -60,11 +60,21 @@ public class StructuredOutputInvoker {
      * @throws BusinessException 重试耗尽仍无法解析（AI_SERVICE_ERROR，安全文案）；调用方可直接用文案或再翻译成更具体的业务描述
      */
     public <T> T invoke(String systemPrompt, String userPrompt, Class<T> type) {
+        return invokeWithRaw(systemPrompt, userPrompt, type).parsed();
+    }
+
+    /**
+     * 同 {@link #invoke} 的重试语义，但额外返回<b>最后一次模型的原始正文</b>——解析成功时为
+     * 该次返回体，重试耗尽时为最后一次尝试的正文。评估链靠它在降级时保留逐题原文
+     * （出口③，evaluation-pipeline-adr），避免在业务代码里复制一套重试。
+     */
+    public <T> StructuredResult<T> invokeWithRaw(String systemPrompt, String userPrompt, Class<T> type) {
         List<ModelChatMessage> messages = new ArrayList<>();
         messages.add(new ModelChatMessage("system", systemPrompt));
         messages.add(new ModelChatMessage("user", userPrompt));
 
         String lastError = "";
+        String lastRaw = "";
         ModelProvider chat = provider.getIfAvailable();
         if (chat == null) {
             throw new BusinessException(ErrorCode.AI_SERVICE_UNAVAILABLE,
@@ -72,8 +82,9 @@ public class StructuredOutputInvoker {
         }
         for (int attempt = 1; attempt <= properties.getMaxAttempts(); attempt++) {
             String content = chat.chat(messages, ModelOptions.defaults()).content();
+            lastRaw = content;
             try {
-                return OBJECT_MAPPER.readValue(extractJson(content), type);
+                return new StructuredResult<>(OBJECT_MAPPER.readValue(extractJson(content), type), content);
             } catch (Exception e) {
                 lastError = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
                 // 原始解析错误与模型正文只进日志（供诊断），不外泄；lastError 回填给模型重试是内部通路
@@ -83,8 +94,30 @@ public class StructuredOutputInvoker {
                     userPrompt + RETRY_HINT + lastError + STRICT_REMINDER));
             }
         }
-        throw new BusinessException(ErrorCode.AI_SERVICE_ERROR,
-            "结构化输出解析失败（重试 " + properties.getMaxAttempts() + " 次）");
+        // 耗尽：仍把最后一次的原始正文交给调用方（评估链据此落 raw_response，出口③）
+        throw new StructuredOutputUnparsedException(
+            "结构化输出解析失败（重试 " + properties.getMaxAttempts() + " 次）", lastRaw);
+    }
+
+    /** 解析成功结果 + 模型原始正文。 */
+    public record StructuredResult<T>(T parsed, String raw) {
+    }
+
+    /**
+     * 重试耗尽仍无法解析——携带最后一次模型原文（{@code lastRaw}），供评估链保留逐题原文。
+     * message 仍是安全文案（不透传 Jackson 详情/模型正文），正文经 {@code lastRaw} 单独取。
+     */
+    public static final class StructuredOutputUnparsedException extends BusinessException {
+        private final String lastRaw;
+
+        public StructuredOutputUnparsedException(String safeMessage, String lastRaw) {
+            super(ErrorCode.AI_SERVICE_ERROR, safeMessage);
+            this.lastRaw = lastRaw;
+        }
+
+        public String lastRaw() {
+            return lastRaw;
+        }
     }
 
     /**

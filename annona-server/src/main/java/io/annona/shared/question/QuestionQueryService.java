@@ -16,4 +16,11 @@ public interface QuestionQueryService {
 
     /** 按 id 集合取题干+追问文本（会话视图装配）；不存在的 id 安静缺失，不抛异常。 */
     List<QuestionStemDetail> stemsByIds(Collection<UUID> ids);
+
+    /**
+     * 按 id 集合取<b>评分口径</b>（参考答案/关键点/rubric/难度）——仅评估链（evaluation）消费。
+     * 与 {@link #stemsByIds} 是两个视图：组卷/展示拿不到评分内容，评分内容只经本方法出去。
+     * 不存在的 id 安静缺失。
+     */
+    List<QuestionGrading> gradingByIds(Collection<UUID> ids);
 }

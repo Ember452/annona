@@ -3,6 +3,7 @@ package io.annona.modules.questionbank.service;
 import io.annona.modules.questionbank.entity.QbQuestionEntity;
 import io.annona.modules.questionbank.repository.QbQuestionRepository;
 import io.annona.shared.question.QuestionCandidate;
+import io.annona.shared.question.QuestionGrading;
 import io.annona.shared.question.QuestionQueryService;
 import io.annona.shared.question.QuestionStemDetail;
 import java.util.Collection;
@@ -43,6 +44,20 @@ public class QuestionQueryServiceImpl implements QuestionQueryService {
         return questionRepository.findAllById(ids).stream()
             .map(q -> new QuestionStemDetail(q.getId(), q.getQuestion(),
                 q.getFollowUps().stream().map(f -> f.question()).toList()))
+            .toList();
+    }
+
+    /** 评估链专用：携带评分口径（参考答案/关键点/rubric/难度）。仅 evaluation 消费（shared 端口约束）。 */
+    @Override
+    @Transactional(readOnly = true)
+    public List<QuestionGrading> gradingByIds(Collection<UUID> ids) {
+        return questionRepository.findAllById(ids).stream()
+            .map(q -> new QuestionGrading(q.getId(), q.getQuestion(), q.getReferenceAnswer(),
+                q.getKeyPoints(), q.getScoringRubric(), q.getDifficulty(),
+                q.getFollowUps().stream()
+                    .map(f -> new QuestionGrading.FollowUpGrading(f.question(), f.referenceAnswer(),
+                        f.keyPoints(), f.scoringRubric()))
+                    .toList()))
             .toList();
     }
 }
