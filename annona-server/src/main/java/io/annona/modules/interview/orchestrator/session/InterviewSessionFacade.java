@@ -28,6 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 面试会话编排（P1b-04/05 端点侧）：校验 → 组卷 → 落会话 → 视图装配 → 快照维护。
@@ -155,7 +156,12 @@ public class InterviewSessionFacade {
     /**
      * 单题作答：终态 2702 先行（预读给可读文案），提交失败 2703；主题答完推进恢复位，
      * DB 成功后 evict 快照（尽力）。
+     *
+     * <p>事务必须盖住两段写：{@code advanceIndexIfResumable} 是 @Modifying，
+     * 无活动事务时 Hibernate 拒接（TransactionRequiredException，批 2 CI 实炸）；
+     * 内部 StateService.submitAnswer 的 REQUIRED 加入本事务，不会各自提交。
      */
+    @Transactional
     public boolean answer(UUID userId, UUID sessionId, UUID questionId, int followUpIndex,
                           String text) {
         InterviewSessionEntity session = ownedSession(userId, sessionId);
