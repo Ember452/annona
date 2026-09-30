@@ -321,9 +321,9 @@ P0-15（仓库设置）不计批次，需你在 GitHub 网页操作。
 | ID | 项 | 位置 | 严重度 | 触发时机 |
 |---|---|---|---|---|
 | TD-01 | 5 处列表无分页（qa 会话 / 单会话消息 / 题库 search / kb 文档列表 / 文档明细全量返回 chunk） | `QaSessionRepository` `QaMessageRepository` `QbQuestionRepository.search` `KbDocRepository` `KnowledgeDocQueryService.detail` | 中 | 公测前必清；随批 3 动 QA/题库时顺手 |
-| TD-02 | 嵌入回填逐 chunk 独立事务（大文档 = 数千小事务），至少并进 PROGRESS_BATCH_SIZE 批次事务 | `KnowledgeVectorizeService` 嵌入循环 | 中 | 随批 3（动计量 / 留痕时） |
-| TD-03 | `token_usage.provider` 列恒等于 model 列，provider 维度成本归因失真 | `MeteredModelProvider` 记账行 | 低 | 批 3 计量集成时定口径 |
-| TD-04 | SSE 超时硬编码 120s，与注释承诺的"2×chat 超时"脱钩 | `QaService.EMITTER_TIMEOUT_MS` | 低 | 随批 3 动 qa 时改为派生 |
+| TD-02 | 嵌入回填逐 chunk 独立事务（大文档 = 数千小事务），至少并进 PROGRESS_BATCH_SIZE 批次事务 | `KnowledgeVectorizeService` 嵌入循环 | 中 | **已折入批 3 T0**（动 embed 调用点时顺手） |
+| TD-03 | `token_usage.provider` 列恒等于 model 列，provider 维度成本归因失真 | `MeteredModelProvider` 记账行 | 低 | **已折入批 3 T0** |
+| TD-04 | SSE 超时硬编码 120s，与注释承诺的"2×chat 超时"脱钩 | `QaService.EMITTER_TIMEOUT_MS` | 低 | **已折入批 3 T0**（改为派生） |
 | TD-05 | encrypt 失败复用解密错误码 `PROVIDER_KEY_DECRYPT_FAILED`，排障方向误导 | `AesGcmApiKeyCipher` | 低 | 随批 3 动 llmprovider 时加 24xx 段码 |
 | TD-06 | 8 处 `Optional<T>` 字段存可选 bean → `ObjectProvider`（批 2 新代码已用后者，存量统一） | KnowledgeVectorize / KnowledgeUpload / KnowledgeDocLifecycle / QaService / PgVectorRetriever / RetrievalQueryService | 低 | 下次动对应模块时顺手 |
 | TD-07 | 前端 Vite 5.4（维护线已止，无安全修复）→ 升 8.x，连带 Vitest 5 / TS 新线 | `annona-web/package.json` | 中 | 独立小任务，批 3 CI 空档做 |
@@ -331,7 +331,7 @@ P0-15（仓库设置）不计批次，需你在 GitHub 网页操作。
 | TD-09 | spi 决策 API 7 个文件（DecisionRule 等）main 零消费方 | `annona-spi` 的 planner / dto / fake | 低 | P1c-03 接线即消费；届时仍无消费方则删除 |
 | TD-10 | 重复代码五组：readPrompt×2、OpenAI provider 胶水（stripTrailingSlash / HttpClient 构建 / 错误映射）、rootMessage×2、optionalUuid×2、Cookie 遍历×2 | qa / questionbank / infrastructure / identity | 低 | 随批 3 动对应模块时顺手收口 |
 | TD-11 | 审计字段抽 `@MappedSuperclass`：14 实体手写 created_at、8 手写 updated_at、CheckinEntity 的 @UpdateTimestamp 孤例 | 全部 entity | 低 | P1 收尾批（跨 14 实体的重构，避免与进行中分支冲突） |
-| TD-12 | 配置口径分裂：MAX_RETRY 硬编码×2 vs KnowledgeRecoveryProperties 可配；QuestionGenRecoveryScheduler 阈值全硬编码；require-kek 默认值 4 处 | questionbank / knowledge / bootstrap | 低 | 批 3 收口时单源化 |
+| TD-12 | 配置口径分裂：MAX_RETRY 硬编码×2 vs KnowledgeRecoveryProperties 可配；QuestionGenRecoveryScheduler 阈值全硬编码；require-kek 默认值 4 处 | questionbank / knowledge / bootstrap | 低 | **已折入批 3 T7**（收口时单源化） |
 | TD-13 | QuestionBankController.generate() 内嵌"落库 → 投递 → 失败补偿"编排 + 未使用 import | `QuestionBankController` | 低 | 随批 3 动题库时下沉 Service |
 
 ## 计划维护规则
