@@ -1,0 +1,10 @@
+{
+  "answers": [
+    { "score": 100, "difficulty": 5, "gradable": true },
+    { "score": 0, "difficulty": 1, "gradable": true },
+    { "score": 80, "difficulty": 3, "gradable": true },
+    { "score": 60, "difficulty": 4, "gradable": true },
+    { "score": 0, "difficulty": 2, "gradable": false }
+  ],
+  "expected": 65
+}

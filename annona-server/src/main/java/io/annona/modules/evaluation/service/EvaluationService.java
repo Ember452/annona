@@ -217,28 +217,20 @@ public class EvaluationService implements TaskStreamPort.TaskMessageHandler {
         }
     }
 
-    /** 难度加权总分（P1b-07 完整实现由 ComparabilityRules 承接；此处内联：按难度加权、跳过降级题）。 */
+    /** 难度加权总分：委托 {@link ComparabilityRules}（降级/无分题不计入）；追问沿用主题难度。 */
     private short compositeScore(List<InterviewEvaluationEntity> gradeRows,
                                  Map<UUID, QuestionGrading> gradingById) {
-        Map<UUID, Integer> difficultyById = new LinkedHashMap<>();
-        gradingById.forEach((id, g) -> difficultyById.put(id, g.difficulty()));
-        double weighted = 0;
-        double weightSum = 0;
+        List<ComparabilityRules.ScoredAnswer> items = new java.util.ArrayList<>();
         for (var grade : gradeRows) {
+            int difficulty = gradingById.containsKey(grade.getQuestionId())
+                ? gradingById.get(grade.getQuestionId()).difficulty() : 3;
             if (grade.isFallbackUsed() || grade.getScore() == null) {
-                continue; // 降级/无分题不进总分（宁缺勿假）
+                items.add(ComparabilityRules.ScoredAnswer.notGradable(difficulty));
+            } else {
+                items.add(new ComparabilityRules.ScoredAnswer(grade.getScore(), difficulty, true));
             }
-            int difficulty = difficultyById.getOrDefault(grade.getQuestionId(), 3);
-            double weight = difficultyWeight(difficulty);
-            weighted += grade.getScore() * weight;
-            weightSum += weight;
         }
-        return weightSum == 0 ? 0 : (short) Math.round(weighted / weightSum);
-    }
-
-    /** 难度权重（1..5 → 1.0..1.5，线性）；C7 ComparabilityRules 落地后由常量类接管。 */
-    private static double difficultyWeight(int difficulty) {
-        return 1.0 + 0.125 * (Math.max(1, Math.min(5, difficulty)) - 1);
+        return (short) ComparabilityRules.weightedTotal(items);
     }
 
     private boolean resetToPending(UUID sessionId) {
