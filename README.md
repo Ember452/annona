@@ -20,12 +20,12 @@
 | AI 协作规范 | ✅ [`AGENTS.md`](./AGENTS.md) |
 | 仓库入口文件 | ✅ `README` / `LICENSE`(AGPL-3.0 全文) / `SECURITY` / `CONTRIBUTING` / `CODE_OF_CONDUCT` / `.editorconfig` / `.env.example` |
 | **Maven 结构** | ✅ 已拆为 4 个 Java 模块（`annona-common` / `annona-spi` / `annona-infrastructure` / `annona-server`）+ 聚合根 pom；`annona-web` 为 Vite 子项目 |
-| **业务代码** | 🔶 P1a 逐模块填充中：`identity`（P1a-01/02）、`study`（P1a-04）、`shared/direction`（P1a-03）、`knowledge`（P1a-05/06，入库管线 + 分块器）已有实现；前端有设计基座、登录/注册页与守卫、方向选择器、自习室页与知识库页；其余 12 个业务模块仍只有 `package-info.java` |
-| 已落地的技术基座 | ✅ `Result`/异常体系、`traceId` 过滤器、四类线程池 + Micrometer、启动 fail-fast（缺 KEK / 缺 pgvector 拒起）、Flyway V1（身份 7 表 + `direction` 主数据）→ V2（study 采集 3 表）→ V3（checkin_id 定位索引）→ V4（kb_doc + kb_doc_chunk），已应用迁移由 pre-commit 冻结机检保护、覆盖由 JaCoCo 60% 底线机检保护（chunk 包 85% 专项）、前端由 ESLint/vitest 机检保护、ArchUnit 七条、`.githooks/`、5+1 job 的 `ci.yml`（action 全部 SHA pin）、compose 三阶段 Dockerfile、`Makefile`、CI 密钥扫描 |
-| **施工阶段** | 🔶 **P1a 进行中**（数据与知识底座）：批 1（P1a-06 + P1a-05）已实现并入 main，CI 实证中；任务清单与状态以 [docs/annona-开发计划.md](./docs/annona-开发计划.md) 为唯一真相源 |
+| **业务代码** | ✅ P1a + P1b 已落地：`identity` `study` `shared/direction` `knowledge`（入库+分块+向量化）`retrieval`（双通道 RRF）`qa`（SSE 流式问答）`questionbank`（SKILL 驱动异步出题+容量校验）`interview`（组卷去重+fencing 状态机+续面+交卷幂等）`evaluation`（异步评估+难度加权+可比性+PDF 导出）`resume`（上传解析+AI 分析）`llmprovider`/`usage`（BYOK 六用途加密+token 计量+日配额）；前端有登录/自习室/知识库/问答/面试中心/报告等页面；语音/计划日程/agent 等模块仍只有 `package-info.java` |
+| 已落地的技术基座 | ✅ `Result`/异常体系、`traceId` 过滤器、四类线程池 + Micrometer、启动 fail-fast（缺 KEK / 缺 pgvector 拒起）、Flyway V1–V14（身份/方向 → 学习采集 → 知识库+pgvector → 问答 → 面试会话 → 计量 → 题库 → 评估 → 简历），已应用迁移由 pre-commit 冻结+登记双机检、`@Modifying` 事务覆盖机检、JaCoCo 60% 底线（关键包 85% 专项）、前端 ESLint/vitest 机检、ArchUnit 七条、`.githooks/`、六 job 的 `ci.yml`（含 docker-it 真库集测，action 全 SHA pin）、compose 三阶段 Dockerfile、`Makefile`、CI 密钥扫描 |
+| **施工阶段** | ✅ **P1b 已关账（2026-09-30，用户裁决：出口① 真模型人工取证接受为遗留，见阶段总结）**；下一阶段 P1c 训练决策层；任务清单与状态以 [docs/annona-开发计划.md](./docs/annona-开发计划.md) 为唯一真相源 |
 | Docker 相关 | 📄 文件已交，**本机不跑**（无 Docker），验证全部在 CI（见下） |
 
-> **一句话定位现状**：地基与门禁就位；身份 / 方向字典 / 学习采集 / 知识库入库管线已落地（含前端六个入口），检索与流式问答在批 2/3。P1a 出口 = 真实资料可流式问答。
+> **一句话定位现状**：地基与门禁就位；真实资料可流式问答（P1a 出口），两个方向可完成一场带评分标准与可解释报告的 AI 面试（P1b 出口：内置方向 + 知识库派生方向，取证口径以 CI/单测为准，真模型人工走查为登记在案的遗留）。P1c 出口 = 面试决策可解释。
 > 目标结构与当前代码的差异，以 [docs/annona-项目结构.md](./docs/annona-项目结构.md) §12 的状态列与 [开发计划](./docs/annona-开发计划.md) 「当前进度」表为准。
 
 ---

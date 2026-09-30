@@ -40,6 +40,13 @@
 6. **可比性四留痕放会话级 report**：`chat_model / evaluator_model / prompt_hash / evaluator_version`
    是一次评估运行的属性（不是每题各异），故落 `interview_report`；趋势断开的纯函数比较连续报告
    的四留痕（P1b-07）。逐题行只带 `evaluator_version`（幂等键成分）。
+   6a. **prompt_hash 口径（收口批修订，2026-09-30 外审发现）**：= 四段评估 prompt（评分
+   system/user 模板 + 汇总 system/user 模板）按固定顺序拼接的 SHA-256，只折静态模板文本、
+   不折渲染后动态内容。初版只折评分 system 段——改汇总模板或 user 段评分指令不会断开趋势，
+   与本决策意图（“评分提示模板变化”全覆盖）有缝。v2 尚无生产报告，修订无历史断链；
+   后果：**prompt 变更后即使 `evaluator_version` 不升，哈希变化也会使趋势断开**——升版本
+   不再是断开的唯一路径，这是特性不是事故。另：难度读不回时的缺省档固化为
+   `ComparabilityRules.DEFAULT_DIFFICULTY = 3`（域中值，不往任一侧偏）。
 7. **异步链路**：交卷赢者分支 `afterCommit` 投 `interview_report` PENDING + Redis Stream 消息
    （复用 `TaskStreamPort` + `QuestionGenStream` 形态，非 interview-guide 的 `AbstractStreamProducer`），
    消费在 `modules/evaluation`。评估经 `StructuredOutputInvoker`（重试预算由 T-demo 实测服从率定）。

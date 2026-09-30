@@ -1,8 +1,8 @@
 # P1b 面试与评估 阶段总结
 
-- 日期：2026-09-30 起草（阶段窗口 2026-09-29 ~ 2026-09-30）
+- 日期：2026-09-30 定稿（阶段窗口 2026-09-29 ~ 2026-09-30）
 - 对应里程碑：设计文档 §14 P1b（面试与评估）
-- 状态：**待用户定稿**。出口① 的"真模型两方向各一场 + 导出"人工取证按用户决定（T-demo 不做）如实记为遗留，不粉饰。
+- 状态：**已定稿（2026-09-30 用户裁决）**。出口① 的“真模型两方向各一场 + 导出”人工取证按用户决定接受为遗留，**P1b 正式关账**；不粉饰：出口①只有 CI 自动化证据，无真模型人证。
 
 ## 1. 目标 vs 实际
 三条设计主张的对齐：入口平级、可解释优先、内容不自产——本阶段交付"能面试、能评估、能解释每一分怎么来"。
@@ -32,6 +32,8 @@
 CI（docker-it 真 PG+Redis，origin/main `e9771ca`）六 job 全绿：unit+ArchUnit / **docker-it（`InterviewSessionFlowIT`、`EvaluationFlowIT` 真库幂等+状态机、`QaFlowIT` 流式计量、`MigrationShapeIT` V12/V13/V14 形状、`AllGatesOffContextIT` 含评估+简历门控）** / compose-smoke / frontend / gitleaks / gate。
 ADR：evaluation-pipeline-adr、pdf-export-itext-adr、metering-adr 批3修订。批收口：P1b-批2、P1b-批3 小结。
 
+**收口修复批（2026-09-30，二次全量校验后）**：① `prompt_hash` 从只折评分 system 段扩为四段 prompt 全集（v2 无生产报告，无历史断链；口径钉进 evaluation-pipeline-adr 决策 6a）；② 难度缺省值提为 `ComparabilityRules.DEFAULT_DIFFICULTY`（域中值依据写进注释）；③ 评估置 DONE 影响 0 行补 warn（不抛，取舍写进注释）；④ 配额 check/consume 非原子的近似性补登 metering-adr 决策 5a（代码注释同步）；⑤ TD-02 标✅、新登 TD-14（批内逐行 UPDATE 尾巴）。新增两条行为测试（hash 形状、难度缺省加权），本机 `mvnw -B verify` **341 tests EXIT=0**。本批为本人自查（CodeReview 子代理鉴权不可用，已如实标注）。
+
 ## 4. 与原设计的偏离（均已回写 ADR/计划）
 - 评估表迁移编号 V12→V13（V12 被 scene CHECK 扩展占用）；evaluator Key 走 env 通道（非 BYOK 消费，`llm_provider_config` 无运行期消费路径）。
 - qa/embed 计量挂点 = 执行线程 bind + `common.UsageLedger` 端口显式记账（装饰器只认同步 chat）；PDF 走按需同步 + 内置字体（非计划原案的异步+ObjectStorage+外部署名），偏离理由与重评触发写入各自 ADR。
@@ -41,21 +43,21 @@ ADR：evaluation-pipeline-adr、pdf-export-itext-adr、metering-adr 批3修订�
 ## 5. 已知缺陷与技术债
 | 项 | 影响 | 何时处理 |
 |---|---|---|
-| **出口① 真模型端到端取证未做**（两方向各一场 + 导出，人工） | 出口①只有 CI 自动化证据 + 本机单测，缺真模型人证 | 用户执行 T-demo（本批经用户决定跳过 → 记为遗留，非缺陷）|
+| **出口① 真模型端到端取证未做**（两方向各一场 + 导出，人工） | 出口①只有 CI 自动化证据 + 本机单测，缺真模型人证 | **用户裁决（09-30）：接受为遗留，P1c 开工前不补**；回填触发 = P1c-08 `demo seed`/A/B 真模型跑通时顺路补走一场并截图入 #17 |
 | 评估 retry 预算占位（`StructuredOutputProperties.maxAttempts`） | 未按实测 JSON 服从率调 | T-demo 出服从率后一键替换 |
 | TD-12 配置单源化（MAX_RETRY×4、调度器阈值、require-kek 默认） | 无功能影响，一致性债 | 独立低危批（非 P1b 出口，见 §6）|
 | 检索查询向量不记账 | 如实声明（无会话宿主） | 托管成本对账议题 |
 | 简历"→面试上下文"接线未做 | 分析已入库可查，但未自动喂给出题 | P1c/P2 需要时接 |
 
 ## 6. 遗留进入下一阶段（P1c）
-- T-demo 真模型取证：**必须在 P1c 开工前补吗？建议是**——它是出口①的人证，也是 retry 预算与 rubric 成段率的首次真模型数据（P1a 已因"天花板饱和"吃过评测集教训，评估链 prompt 质量同样需实测背书）。
+- T-demo 真模型取证：**用户裁决（09-30）：不挡 P1c 开工**，接受出口①为遗留关账；但它仍是欠账——retry 预算与 rubric 成段率缺实测背书（P1a 吃过天花板饱和的亏），随 P1c-08 真模型跑通时顺路补。
 - TD-12：否（不挡 P1c）。
 
 ## 7. P1c 入口条件（可验证门槛）
-1. 批 3/批 4 已并入 main 且 CI 保持绿（✅ 已满足，origin/main e9771ca 六 job 绿）。
-2. T-demo 真模型走过一遍，评估 prompt 的 JSON 服从率有实测数（→ 回填 retry 预算与 ADR）。
+1. 批 3/批 4 已并入 main 且 CI 保持绿（✅ 已满足，origin/main e9771ca 六 job 绿；收口修复批待推后以新 HEAD 复验）。
+2. ~~T-demo 真模型走过一遍~~ → 用户裁决降档：`StructuredOutputProperties.maxAttempts` 先用借鉴值 3，P1c-08 真模型跑通时回填实测服从率。
 3. shared.signal（学习信号）能按方向聚合读到面试评估分（planner 的输入侧，依赖本阶段 `interview_report`）。
-4. 出口① 的"两方向各一场 + 导出"人工取证入 #17。
+4. 出口① 的“两方向各一场 + 导出”人工取证：转入 P1c-08 顺路项，届时补入 #17。
 
 ## 8. 借鉴使用记录
 上游 🅖 interview-guide（出题/会话/评估/简历/PdfExport）与 🅜 MockPilot（finalize 幂等/状态机）为现成行为规格；🅢 summer-checkin（token 用量表）。均本人自有项目，搬运免许可声明、按 annona 改造（详见各 feat commit body 四行借鉴说明与借鉴地图）。本阶段新增的 annona-only 硬需求：evaluator_version/prompt_hash 四留痕 + 难度加权 + 降级保留原文 + 可比性断开（上游无，可解释主张要求）。
