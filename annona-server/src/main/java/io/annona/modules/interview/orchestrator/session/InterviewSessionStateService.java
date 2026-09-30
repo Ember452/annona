@@ -121,6 +121,16 @@ public class InterviewSessionStateService {
     }
 
     /** 手动放弃（M6 入口二）：仅 RESUMABLE 可弃。返回 false = 不存在或已终态。 */
+    /**
+     * 主问题作答后推进恢复位（条件 UPDATE：RESUMABLE 且只前进不回退）。
+     * 放本服务而非 facade：@Modifying 必须在事务内执行（docker-it 实测 facade 直调
+     * 抛 No active transaction），状态转移一律收口在 StateService。
+     */
+    @Transactional
+    public boolean advanceIndex(UUID sessionId, short target) {
+        return sessionRepository.advanceIndexIfResumable(sessionId, target, Instant.now()) > 0;
+    }
+
     @Transactional
     public boolean abandon(UUID sessionId, UUID userId) {
         return sessionRepository.abandonIfResumable(sessionId, userId, Instant.now()) > 0;
