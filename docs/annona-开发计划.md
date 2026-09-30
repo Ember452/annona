@@ -326,7 +326,7 @@ P0-15（仓库设置）不计批次，需你在 GitHub 网页操作。
 | TD-04 | SSE 超时硬编码 120s，与注释承诺的"2×chat 超时"脱钩 | `QaService.EMITTER_TIMEOUT_MS` | 低 | **已折入批 3 T0**（改为派生） |
 | TD-05 | encrypt 失败复用解密错误码 `PROVIDER_KEY_DECRYPT_FAILED`，排障方向误导 | `AesGcmApiKeyCipher` | 低 | 随批 3 动 llmprovider 时加 24xx 段码 |
 | TD-06 | 8 处 `Optional<T>` 字段存可选 bean → `ObjectProvider`（批 2 新代码已用后者，存量统一） | KnowledgeVectorize / KnowledgeUpload / KnowledgeDocLifecycle / QaService / PgVectorRetriever / RetrievalQueryService | 低 | 下次动对应模块时顺手 |
-| TD-07 | 前端 Vite 5.4（维护线已止，无安全修复）→ 升 8.x，连带 Vitest 5 / TS 新线 | `annona-web/package.json` | 中 | 独立小任务，批 3 CI 空档做 |
+| TD-07 | 前端 Vite 5.4（维护线已止，无安全修复）→ 升 8.x，连带 Vitest 5 / TS 新线 | `annona-web/package.json` | 中 | **✅ Vite 8.3 / Vitest 5.0 / plugin-react 6.1 已升（批 3 C1，四门绿）；TS 停 5.9——typescript-eslint 不支持 TS 7.0（实测报错），TS 7 单开条目等生态** |
 | TD-08 | Redisson 3.34 → 3.50+、ArchUnit 1.3 → 1.5+ | 根 pom.xml | 低 | 批 3 依赖批一起升 |
 | TD-09 | spi 决策 API 7 个文件（DecisionRule 等）main 零消费方 | `annona-spi` 的 planner / dto / fake | 低 | P1c-03 接线即消费；届时仍无消费方则删除 |
 | TD-10 | 重复代码五组：readPrompt×2、OpenAI provider 胶水（stripTrailingSlash / HttpClient 构建 / 错误映射）、rootMessage×2、optionalUuid×2、Cookie 遍历×2 | qa / questionbank / infrastructure / identity | 低 | 随批 3 动对应模块时顺手收口 |
