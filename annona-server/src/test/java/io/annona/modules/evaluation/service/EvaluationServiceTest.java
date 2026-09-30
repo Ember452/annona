@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.annona.common.stream.TaskStreamPort;
+import io.annona.modules.evaluation.entity.InterviewEvaluationEntity;
 import io.annona.modules.evaluation.entity.InterviewReportEntity;
 import io.annona.modules.evaluation.model.GradeBatch;
 import io.annona.modules.evaluation.repository.InterviewEvaluationRepository;
@@ -23,6 +24,7 @@ import io.annona.shared.question.QuestionGrading;
 import io.annona.shared.question.QuestionQueryService;
 import io.annona.spi.model.ModelProvider;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -176,5 +178,38 @@ class EvaluationServiceTest {
         assertThat(handle(0)).isEqualTo(TaskStreamPort.Outcome.RETRY);
         verify(reportRepository, never()).markDone(any(), anyString(), any(), anyString(),
             anyString(), anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("prompt_hash 留痕：四段 prompt 全集的 SHA-256（64 hex，非单段旧口径的随意形状）")
+    void promptHashCoversFullPromptSet() {
+        when(invoker.invokeWithRaw(anyString(), anyString(), eq(GradeBatch.class)))
+            .thenReturn(new StructuredOutputInvoker.StructuredResult<>(
+                new GradeBatch(List.of(new GradeBatch.QuestionGrade(
+                    0, 80, "很好", List.of(), List.of()))), "{}"));
+
+        handle(0);
+
+        ArgumentCaptor<String> hash = ArgumentCaptor.forClass(String.class);
+        verify(reportRepository).markDone(eq(sessionId), eq("v2"), any(), anyString(),
+            anyString(), anyString(), hash.capture(), any());
+        assertThat(hash.getValue()).hasSize(64).matches("[0-9a-f]{64}");
+    }
+
+    @Test
+    @DisplayName("题库行已删读不回难度：按缺省难度 3（域中值）加权而非跳过")
+    void missingGradingFallsBackToDefaultDifficulty() {
+        InterviewEvaluationEntity row = new InterviewEvaluationEntity();
+        row.setQuestionId(questionId);
+        row.setScore((short) 80);
+        row.setFallbackUsed(false);
+
+        // 单题且无难度可读：无论权重取何值总分都是 80，钉的是“不抛异常、按缺省档计入”
+        assertThat(service.compositeScore(List.of(row), Map.of())).isEqualTo((short) 80);
+        // 与显式难度 3 的加权结果同值（缺省档 = 域中值的口径断言）
+        Map<UUID, QuestionGrading> grading = new HashMap<>();
+        grading.put(questionId, new QuestionGrading(questionId, "题干", "参考", List.of(), "标准",
+            ComparabilityRules.DEFAULT_DIFFICULTY, List.of()));
+        assertThat(service.compositeScore(List.of(row), grading)).isEqualTo((short) 80);
     }
 }

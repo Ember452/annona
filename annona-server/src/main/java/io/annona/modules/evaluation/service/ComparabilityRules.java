@@ -27,6 +27,13 @@ public final class ComparabilityRules {
     public static final int MIN_DIFFICULTY = 1;
     public static final int MAX_DIFFICULTY = 5;
 
+    /**
+     * 题目已删/难度读不回时的缺省难度：取域中值 3（权重 1.25，不往任一侧偏）。
+     * 口径见 evaluation-pipeline-adr §决策 6；触发重评：命中此分支的题占比有实测数据后
+     * 若非 negligible，改为建库时冗余快照难度而不是读时缺省。
+     */
+    public static final int DEFAULT_DIFFICULTY = 3;
+
     private ComparabilityRules() {
     }
 

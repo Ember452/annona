@@ -93,7 +93,20 @@ public class EvaluationService implements TaskStreamPort.TaskMessageHandler {
         this.gradeUserTemplate = readPrompt("prompts/evaluation-grade-user.st");
         this.summarySystemPrompt = readPrompt("prompts/evaluation-summary-system.st");
         this.summaryUserTemplate = readPrompt("prompts/evaluation-summary-user.st");
-        this.promptHash = sha256(gradeSystemPrompt);
+        this.promptHash = computePromptHash();
+    }
+
+    /**
+     * 评分器身份摘要 = 四段 prompt（评分 system/user 模板、汇总 system/user 模板）按固定顺序
+     * 拼接的 SHA-256。取舍：只折静态模板文本，不折渲染后的动态内容（题干/作答逐次不同，
+     * 摘要要钉的是“口径”不是“这次评了什么”）。旧写法只折评分 system 段——改汇总模板或
+     * user 段的评分指令不会触发趋势断开，与 evaluation-pipeline-adr §决策 6 的意图有缝。
+     * 本定义随批 3 收口修复固化（v2 尚未产生任何生产报告，无历史断链；此后改 prompt 不升
+     * {@code EVALUATOR_VERSION} 也会被哈希抓到，见 ADR 修订注）。
+     */
+    private String computePromptHash() {
+        return sha256(String.join("\n---\n",
+            gradeSystemPrompt, gradeUserTemplate, summarySystemPrompt, summaryUserTemplate));
     }
 
     @Override
@@ -155,8 +168,14 @@ public class EvaluationService implements TaskStreamPort.TaskMessageHandler {
             EvaluationSummary summary = summarize(gradeRows);
             short composite = compositeScore(gradeRows, gradingById);
             String model = modelProvider.getIfAvailable() != null ? modelProvider.getObject().name() : null;
-            tx.executeWithoutResult(s -> reportRepository.markDone(sessionId, EVALUATOR_VERSION,
+            Integer rows = tx.execute(s -> reportRepository.markDone(sessionId, EVALUATOR_VERSION,
                 composite, toJson(summary), model, model, promptHash, Instant.now()));
+            if (rows == null || rows == 0) {
+                // 报告已非 RUNNING（恢复调度回收/他人接手）：分数已算但写不进终态。
+                // 不抛——重跑整场评估要再烧一次 LLM，交给恢复调度重新投递更便宜；
+                // 告警是此分支唯一的可见性来源，不得静默
+                log.warn("报告 {} 置 DONE 影响 0 行（执行权已失效），本轮评分丢弃等重投", sessionId);
+            }
         }
     }
 
@@ -218,12 +237,13 @@ public class EvaluationService implements TaskStreamPort.TaskMessageHandler {
     }
 
     /** 难度加权总分：委托 {@link ComparabilityRules}（降级/无分题不计入）；追问沿用主题难度。 */
-    private short compositeScore(List<InterviewEvaluationEntity> gradeRows,
-                                 Map<UUID, QuestionGrading> gradingById) {
+    short compositeScore(List<InterviewEvaluationEntity> gradeRows,
+                         Map<UUID, QuestionGrading> gradingById) {
         List<ComparabilityRules.ScoredAnswer> items = new java.util.ArrayList<>();
         for (var grade : gradeRows) {
             int difficulty = gradingById.containsKey(grade.getQuestionId())
-                ? gradingById.get(grade.getQuestionId()).difficulty() : 3;
+                ? gradingById.get(grade.getQuestionId()).difficulty()
+                : ComparabilityRules.DEFAULT_DIFFICULTY;
             if (grade.isFallbackUsed() || grade.getScore() == null) {
                 items.add(ComparabilityRules.ScoredAnswer.notGradable(difficulty));
             } else {
