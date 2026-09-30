@@ -6,8 +6,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 /**
  * 面试会话（V9 interview_session）。DB 是冷真值，Redis 快照仅读加速（interview-session-adr
@@ -43,9 +41,6 @@ public class InterviewSessionEntity {
     @Column(name = "status", nullable = false)
     private String status;
 
-    /** String + JSON jdbc 类型（QbGenerationTaskEntity.config 先例）：String 会被
-     * Hibernate 按 jsonb 原样透传；漏注解会按 varchar 发送、真库拒绝（docker-it 实测）。 */
-    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "plan", nullable = false, columnDefinition = "jsonb")
     private String planJson;
 

@@ -211,7 +211,8 @@ public class InterviewSessionFacade {
         }
         int position = snapshot.questionIds().indexOf(questionId);
         if (position >= 0) {
-            stateService.advanceIndex(session.getId(), (short) (position + 1));
+            sessionRepository.advanceIndexIfResumable(session.getId(),
+                (short) (position + 1), Instant.now());
         }
     }
 

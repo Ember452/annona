@@ -177,8 +177,8 @@ class InterviewSessionFacadeTest {
 
         assertThat(facade.answer(USER, session.getId(), q1.id(), 0, "答")).isTrue();
 
-        // 推进收口在 StateService（@Modifying 必须在事务内，docker-it 实测 facade 直调无事务）
-        verify(stateService).advanceIndex(session.getId(), (short) 1);
+        verify(sessionRepository).advanceIndexIfResumable(eq(session.getId()), eq((short) 1),
+            any());
         verify(snapshot).evict(session.getId().toString());
     }
 
