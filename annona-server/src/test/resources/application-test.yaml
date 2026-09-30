@@ -42,3 +42,10 @@ annona:
       enabled: false
     recovery:
       enabled: false
+  # 评估链同构：EvaluationStream（SmartLifecycle）/EvaluationRecoveryScheduler（@Scheduled）/
+  # EvaluationTrigger（@TransactionalEventListener）都会被强制提前实例化，无 DB/Redis 冒烟上下文必须关掉；
+  # EvaluationService 等普通 @Service 走懒加载不受影响
+  evaluation:
+    enabled: false
+    recovery:
+      enabled: false

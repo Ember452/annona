@@ -93,7 +93,10 @@ public enum ErrorCode {
     PROVIDER_NOT_FOUND(2900, "Provider 配置不存在"),
     PROVIDER_KEY_DUPLICATE(2901, "该 Provider 的此用途已配置，请直接编辑现有条目"),
     PROVIDER_TEST_FAILED(2902, "连通性测试失败，请检查 Base URL 与 Key"),
-    PROVIDER_KEY_DECRYPT_FAILED(2903, "密钥解密失败，联系管理员检查 KEK 轮换状态");
+    PROVIDER_KEY_DECRYPT_FAILED(2903, "密钥解密失败，联系管理员检查 KEK 轮换状态"),
+
+    // ========== evaluation 3000–3099（P1b-06/07，面试评估链） ==========
+    EVALUATION_NOT_FOUND(3000, "该面试尚无评估报告（未交卷或评估未开始）");
 
     private final int code;
     private final String message;
