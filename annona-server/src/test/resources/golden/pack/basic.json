@@ -1,0 +1,19 @@
+{
+  "name": "basic",
+  "plan": { "totalCount": 3, "difficulties": [2, 3, 5], "followUpDepth": 1 },
+  "pool": [
+    { "seq": 1, "difficulty": 2, "question": "Redis 持久化机制" },
+    { "seq": 2, "difficulty": 2, "question": "Redis RDB 与 AOF 的差异" },
+    { "seq": 3, "difficulty": 3, "question": "Kafka 分区再平衡流程" }
+  ],
+  "dedupHits": [ { "seq": 2, "cosine": 0.93, "keywordHit": false } ],
+  "expected": {
+    "questionIds": [
+      "ff33f1b1-2213-3021-82c4-a888141953ba",
+      "69855eda-6d72-32de-b12f-ee7eb5235ab1"
+    ],
+    "skippedReasons": [
+      "难度5 无可用题目（含相邻回填），跳过 1 个槽位"
+    ]
+  }
+}

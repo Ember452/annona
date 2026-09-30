@@ -2,7 +2,9 @@ package io.annona.modules.questionbank.service;
 
 import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
+import io.annona.common.search.VectorLiterals;
 import io.annona.common.stream.TaskStreamPort;
+import io.annona.common.usage.UsageContext;
 import io.annona.modules.interview.skill.model.SkillDefinition;
 import io.annona.modules.interview.skill.service.SkillQueryService;
 import io.annona.modules.knowledge.ops.KnowledgeDocQueryService;
@@ -20,6 +22,7 @@ import io.annona.shared.progress.ProgressEvent;
 import io.annona.shared.progress.SseProgressHub;
 import io.annona.spi.dto.RetrievalHit;
 import io.annona.spi.dto.RetrievalQuery;
+import io.annona.spi.model.EmbeddingProvider;
 import io.annona.spi.retrieval.Retriever;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -28,9 +31,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Executor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -69,6 +74,8 @@ public class QuestionGenerationService implements TaskStreamPort.TaskMessageHand
     private final KnowledgeDocQueryService knowledgeDocQuery;
     private final Retriever retriever;
     private final ObjectProvider<StructuredOutputInvoker> invoker;
+    private final ObjectProvider<EmbeddingProvider> embeddingProvider;
+    private final Executor aiIoExecutor;
     private final SseProgressHub progressHub;
     private final TransactionTemplate txTemplate;
     private final String systemPrompt;
@@ -82,6 +89,8 @@ public class QuestionGenerationService implements TaskStreamPort.TaskMessageHand
                                      KnowledgeDocQueryService knowledgeDocQuery,
                                      Retriever retriever,
                                      ObjectProvider<StructuredOutputInvoker> invoker,
+                                     ObjectProvider<EmbeddingProvider> embeddingProvider,
+                                     @Qualifier("aiIoExecutor") Executor aiIoExecutor,
                                      SseProgressHub progressHub,
                                      PlatformTransactionManager transactionManager) {
         this.taskRepository = taskRepository;
@@ -92,6 +101,8 @@ public class QuestionGenerationService implements TaskStreamPort.TaskMessageHand
         this.knowledgeDocQuery = knowledgeDocQuery;
         this.retriever = retriever;
         this.invoker = invoker;
+        this.embeddingProvider = embeddingProvider;
+        this.aiIoExecutor = aiIoExecutor;
         this.progressHub = progressHub;
         this.txTemplate = new TransactionTemplate(transactionManager);
         this.systemPrompt = readPrompt("prompts/question-generation-system.st");
@@ -119,13 +130,23 @@ public class QuestionGenerationService implements TaskStreamPort.TaskMessageHand
         }
     }
 
-    /** 领取后的完整执行：取任务 → 校验方向与文档 → 组上下文 → LLM → 落库 → 完成落账。 */
+    /** 领取后的完整执行：取任务 → 校验方向与文档 → 组上下文 → LLM → 落库 → 完成落账。
+     * 线程内 bind 用量归属（MeteredModelProvider 在 chat 出口读）：消费线程复用，
+     * try-with-resources 保证不串场景。 */
     void run(UUID taskId) {
         QbGenerationTaskEntity task = taskRepository.findById(taskId).orElse(null);
         if (task == null) {
             log.warn("出题任务 {} 不存在（可能已被清理），跳过", taskId);
             return;
         }
+        try (UsageContext.Scope ignored = UsageContext.bind(
+            task.getUserId().toString(), "QUESTION_GEN", null, null)) {
+            runInternal(task);
+        }
+    }
+
+    private void runInternal(QbGenerationTaskEntity task) {
+        UUID taskId = task.getId();
         QuestionGenConfig config = task.getConfig();
         publish(task.getDirectionId(), "PROCESSING", "正在出题", 0, config.questionCount(), "");
 
@@ -242,7 +263,37 @@ public class QuestionGenerationService implements TaskStreamPort.TaskMessageHand
             questionRepository.deleteDrafts(task.getUserId(), task.getDirectionId());
             questionRepository.saveAll(drafts);
         });
+        embedBestEffort(drafts);
         return drafts.size();
+    }
+
+    /**
+     * 题干向量 best-effort 回填（V9 M3/interview-session-adr §决策 3）：事务外异步，
+     * 失败只记日志——embedding 为 NULL 的行在组卷侧自动降级关键词判，不阻塞出题主流程。
+     * 嵌在草稿期而非启用（ACTIVE）期：启用是轻开关动作，不该挂外部 HTTP；草稿多嵌的代价
+     * 只是批量一次调用（N≤20），可接受。
+     */
+    private void embedBestEffort(List<QbQuestionEntity> drafts) {
+        EmbeddingProvider provider = embeddingProvider.getIfAvailable();
+        if (provider == null || drafts.isEmpty()) {
+            return;
+        }
+        List<QbQuestionEntity> targets = List.copyOf(drafts);
+        aiIoExecutor.execute(() -> {
+            try {
+                List<float[]> vectors = provider.embed(
+                    targets.stream().map(QbQuestionEntity::getQuestion).toList());
+                // embed 在事务外、回填在短事务内（@Modifying 需活动事务；纪律与类注释一致）
+                txTemplate.executeWithoutResult(status -> {
+                    for (int i = 0; i < targets.size() && i < vectors.size(); i++) {
+                        questionRepository.updateEmbedding(targets.get(i).getId(),
+                            VectorLiterals.of(vectors.get(i)));
+                    }
+                });
+            } catch (RuntimeException e) {
+                log.warn("题干嵌入失败，组卷将降级关键词判：{}", e.getMessage(), e);
+            }
+        });
     }
 
     /** 追问裁剪：空题干剔除 + 截断到目标数（模型多给不要、少给如实呈现——上游口径）。 */

@@ -22,7 +22,8 @@ import org.springframework.test.context.ActiveProfiles;
  * <p>断言四件事：
  * <ol>
  *   <li>{@code flyway_schema_history} 有 V1 成功记录；</li>
- *   <li>public schema 下 16 张表齐全（V1 基线八张 + V2 采集三张 + V4 知识库两张 + V5 评测一张 + V6 问答两张）；</li>
+ *   <li>public schema 下 20 张表齐全（V1 基线八张 + V2 采集三张 + V4 知识库两张 + V5 评测一张
+ *       + V6 问答两张 + V8 出题两张 + V9 面试会话两张 + V10 配置一张 + V11 用量一张）；</li>
  *   <li>{@code pg_extension} 含 vector、citext 与 pg_trgm；</li>
  *   <li>二次启动 skip 迁移（V1 记录数仍为 1）。</li>
  * </ol>
@@ -51,7 +52,7 @@ class FlywayBaselineIT {
     }
 
     @Test
-    @DisplayName("public schema 下 16 张业务表齐全（V1 基线八张 + V2 采集三张 + V4 知识库两张 + V5 评测一张 + V6 问答两张）")
+    @DisplayName("public schema 下 20 张业务表齐全（V1–V11 各迁移登记表）")
     void allBaselineTablesExist() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         List<String> tables = jdbc.queryForList(
@@ -59,7 +60,8 @@ class FlywayBaselineIT {
                 + "WHERE table_schema = 'public' AND table_name <> 'flyway_schema_history'",
             String.class);
         // 期望清单必须随每个新迁移同步扩充：containsExactlyInAnyOrder 兼职守卫
-        // "没有迁移外的游离表"，漏登记新表会让本测试假红（V2、V4 两次踩过，V6 又踩一次）。
+        // "没有迁移外的游离表"，漏登记新表会让本测试假红（V2、V4、V6、V8 四次踩坑——
+                // 已上 pre-commit 机检 scripts/ci/check-migration-inventory.py，见 AGENTS §4）。
         assertThat(tables)
             .containsExactlyInAnyOrder(
                 "app_user", "user_profile", "user_session", "auth_token",
@@ -68,7 +70,11 @@ class FlywayBaselineIT {
                 "kb_doc", "kb_doc_chunk", "retrieval_eval_run",
                 "qa_session", "qa_message",
                 // V8（P1b-02 出题链）：后续迁移新增表在此追加，保持全库清单断言成立
-                "qb_question", "qb_generation_task");
+                "qb_question", "qb_generation_task",
+                // V9（P1b-04/05 面试会话）：T0 门禁（scripts/ci/check-migration-inventory.py）会守这一行
+                "interview_session", "interview_answer",
+                // V10/V11（P1b-10 provider 配置与用量账）
+                "llm_provider_config", "token_usage");
     }
 
     @Test

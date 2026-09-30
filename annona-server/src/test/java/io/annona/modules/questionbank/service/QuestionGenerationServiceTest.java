@@ -69,6 +69,8 @@ class QuestionGenerationServiceTest {
     @Mock
     private ObjectProvider<StructuredOutputInvoker> invokerProvider;
     @Mock
+    private ObjectProvider<io.annona.spi.model.EmbeddingProvider> embeddingProvider;
+    @Mock
     private SseProgressHub progressHub;
     @Mock
     private PlatformTransactionManager transactionManager;
@@ -90,6 +92,7 @@ class QuestionGenerationServiceTest {
     void setUp() {
         invoker = mock(StructuredOutputInvoker.class);
         lenient().when(invokerProvider.getObject()).thenReturn(invoker);
+        lenient().when(embeddingProvider.getIfAvailable()).thenReturn(null);
         lenient().when(stateService.tryMarkProcessing(UUID.fromString(TASK_ID))).thenReturn(true);
         lenient().when(directionQuery.findVisible(USER.toString(), DIRECTION.toString()))
             .thenReturn(Optional.of(new DirectionResponse(DIRECTION.toString(), "java-backend",
@@ -116,8 +119,8 @@ class QuestionGenerationServiceTest {
         lenient().when(taskRepository.findById(UUID.fromString(TASK_ID)))
             .thenReturn(Optional.of(task));
         service = new QuestionGenerationService(taskRepository, questionRepository, stateService,
-            directionQuery, skillQuery, knowledgeDocQuery, retriever, invokerProvider, progressHub,
-            transactionManager);
+            directionQuery, skillQuery, knowledgeDocQuery, retriever, invokerProvider,
+            embeddingProvider, Runnable::run, progressHub, transactionManager);
     }
 
     private QuestionGenerationService.QuestionListPayload payload(
@@ -213,6 +216,36 @@ class QuestionGenerationServiceTest {
         TaskStreamPort.Outcome outcome = service.handle("msg", java.util.Map.of("taskId", TASK_ID), 0);
         assertThat(outcome).isEqualTo(TaskStreamPort.Outcome.ACK);
         verify(invokerProvider, never()).getObject();
+    }
+
+    @Test
+    @DisplayName("embedding 可用：落库后 best-effort 回填向量字面量")
+    void embedsAfterPersist() {
+        io.annona.spi.model.EmbeddingProvider provider = mock(io.annona.spi.model.EmbeddingProvider.class);
+        when(embeddingProvider.getIfAvailable()).thenReturn(provider);
+        when(provider.embed(any())).thenReturn(List.of(new float[]{0.1f, -0.2f}, new float[]{0.3f, 0.4f}));
+        when(invoker.invoke(anyString(), anyString(), any())).thenReturn(
+            payload(List.of(question("Q1 向量题", 0), question("Q2 向量题", 0))));
+
+        service.run(UUID.fromString(TASK_ID));
+
+        verify(questionRepository).updateEmbedding(any(), org.mockito.ArgumentMatchers.eq("[0.1,-0.2]"));
+        verify(questionRepository).updateEmbedding(any(), org.mockito.ArgumentMatchers.eq("[0.3,0.4]"));
+    }
+
+    @Test
+    @DisplayName("embed 抛异常不传染出题主流程：任务照常 COMPLETED")
+    void embedFailureDoesNotBreakGeneration() {
+        io.annona.spi.model.EmbeddingProvider provider = mock(io.annona.spi.model.EmbeddingProvider.class);
+        when(embeddingProvider.getIfAvailable()).thenReturn(provider);
+        when(provider.embed(any())).thenThrow(new RuntimeException("embedding 服务不可用"));
+        when(invoker.invoke(anyString(), anyString(), any())).thenReturn(
+            payload(List.of(question("Q1 正常题", 1))));
+
+        service.run(UUID.fromString(TASK_ID));
+
+        verify(stateService).markCompleted(UUID.fromString(TASK_ID), 1, 0, "已生成 1 题");
+        verify(questionRepository, never()).updateEmbedding(any(), anyString());
     }
 
     private static void assertThatException(Runnable runnable, io.annona.common.exception.ErrorCode code) {
