@@ -70,6 +70,22 @@
             <artifactId>jieba-analysis</artifactId>
         </dependency>
 
+        <!-- P1b-09：PDF 导出（端口在 common/export，本模块是 iText 实现方；SDK 只允许在
+             infrastructure——见 AGENTS §4 端口判据与 pdf-export-itext-adr）。font-asian 提供内置
+             CJK 字体，无需外部字体二进制。 -->
+        <dependency>
+            <groupId>com.itextpdf</groupId>
+            <artifactId>kernel</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.itextpdf</groupId>
+            <artifactId>layout</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.itextpdf</groupId>
+            <artifactId>font-asian</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

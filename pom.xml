@@ -73,6 +73,10 @@
              上收到收敛版本，否则 enforcer 的 requireUpperBoundDeps 会在 validate 直接响。 -->
         <jieba.version>1.0.2</jieba.version>
         <aws-sdk.version>2.30.31</aws-sdk.version>
+        <!-- P1b-09：PDF 导出用 iText 8（AGPL，与本项 AGPL-3.0 兼容）。只用 kernel+layout
+             +font-asian（内置 Adobe CJK 字体 STSong-Light，不需往仓里塞字体二进制，
+             绕开未核查的第三方字体许可），版本上收到根统一管理。见 pdf-export-itext-adr。 -->
+        <itext.version>8.0.5</itext.version>
 
         <!-- Mockito 在 JDK 21 上动态 attach 会告警，显式放行（surefire 与 CI 同一口径） -->
         <annona.test.jvmArgs>--enable-native-access=ALL-UNNAMED</annona.test.jvmArgs>
@@ -225,6 +229,23 @@
                 <groupId>org.apache.logging.log4j</groupId>
                 <artifactId>log4j-api</artifactId>
                 <version>2.26.0</version>
+            </dependency>
+            <!-- iText 8 模块（PDF 导出）：kernel=底层文档模型，layout=版面/段落，
+                 font-asian=内置 CJK 字体与 CMap（中文不乱码且不引外部字体）。 -->
+            <dependency>
+                <groupId>com.itextpdf</groupId>
+                <artifactId>kernel</artifactId>
+                <version>${itext.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.itextpdf</groupId>
+                <artifactId>layout</artifactId>
+                <version>${itext.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.itextpdf</groupId>
+                <artifactId>font-asian</artifactId>
+                <version>${itext.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
