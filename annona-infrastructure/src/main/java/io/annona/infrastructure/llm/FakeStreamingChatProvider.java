@@ -27,6 +27,17 @@ public class FakeStreamingChatProvider implements StreamingChatProvider {
     }
 
     @Override
+    public String channel() {
+        return "fake";
+    }
+
+    @Override
+    public long streamTimeoutMillis() {
+        // 与 application.yaml 的 chat timeout-seconds 默认值同量级（fake 无真上游，只供派生链有值）
+        return 60_000L;
+    }
+
+    @Override
     public void streamChat(List<ChatMessage> messages, ChatStreamListener listener) {
         for (String delta : DELTAS) {
             listener.onDelta(delta);

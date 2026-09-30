@@ -17,8 +17,10 @@ import io.annona.modules.qa.entity.QaSessionEntity;
 import io.annona.modules.qa.repository.QaMessageRepository;
 import io.annona.modules.qa.repository.QaSessionRepository;
 import io.annona.modules.qa.service.QaService;
+import io.annona.modules.usage.repository.TokenUsageRepository;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -26,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
@@ -48,6 +51,10 @@ class QaFlowIT {
     private QaSessionRepository sessionRepository;
     @Autowired
     private QaMessageRepository messageRepository;
+    @Autowired
+    private TokenUsageRepository tokenUsageRepository;
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private static String uniqueEmail() {
         return "p1a08-" + UUID.randomUUID() + "@example.test";
@@ -167,5 +174,39 @@ class QaFlowIT {
         assertThat(messageRepository.findBySessionIdOrderByMessageOrderAsc(sessionId)).isNotEmpty();
         sessionRepository.deleteById(sessionId);
         assertThat(messageRepository.findBySessionIdOrderByMessageOrderAsc(sessionId)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("流式计量补票（metering-adr 决策 4 债清偿）：一次真问答流后会话钻取非零，provider ≠ model")
+    void streamingUsageIsMetered() throws InterruptedException {
+        AuthUserResponse user = registrar.register(uniqueEmail(), "GoodPass123");
+        UUID userId = UUID.fromString(user.id());
+
+        qaService.ask(user.id(), new QaAskRequest(null, "计个账"));
+
+        String sessionId = qaService.sessions(user.id()).get(0).id().toString();
+        // 记账在终态回调后异步落库（UsageRecorder 投 ai-io），轮询到行可见
+        Instant deadline = Instant.now().plusSeconds(10);
+        List<Map<String, Object>> rows = List.of();
+        while (rows.isEmpty() && Instant.now().isBefore(deadline)) {
+            Thread.sleep(50);
+            rows = jdbc.queryForList(
+                "select scene, provider, model, prompt_tokens, completion_tokens from token_usage"
+                    + " where session_id = ?",
+                UUID.fromString(sessionId));
+        }
+
+        assertThat(rows).as("qa 流式链已接入计量（fake 产确定性非零账）").isNotEmpty();
+        Map<String, Object> row = rows.get(0);
+        assertThat(row.get("scene")).isEqualTo("QA");
+        // 两列语义独立（TD-03）：通道 fake ≠ 模型 id fake-chat；聚合读命中本会话即可证
+        // idx_usage_session 路径，不另补 provider 列断言到聚合视图（视图无该列，口径属面板）
+        assertThat(row.get("provider")).isEqualTo("fake");
+        assertThat(row.get("model")).isEqualTo("fake-chat");
+        assertThat(((Number) row.get("prompt_tokens")).intValue()).isPositive();
+        assertThat(((Number) row.get("completion_tokens")).intValue()).isPositive();
+        // 归属钉：会话钻取（owner 谓词在聚合条件里）能聚合到本会话的账
+        assertThat(tokenUsageRepository.aggregateBySession(UUID.fromString(sessionId), userId))
+            .isNotEmpty();
     }
 }

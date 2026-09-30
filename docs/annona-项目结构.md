@@ -252,7 +252,8 @@ io.annona
 │   ├── usage/                         # 用量与配额（J 模块，上线必需）
 │   │   ├── controller/ service/ entity/ repository/
 │   │   │                              #   P1b-10 已落：metering/（MeteredModelProvider 装饰器 @Primary，
-│   │   │                              #   前置熔断→调用→记账；qa 流式/embed 未计量见 metering-adr 决策 4）
+│   │   │                              #   前置熔断→调用→记账；qa 流式/embed 计量批 3 接通，
+│   │   │                              #   挂点例外见 metering-adr 批 3 修订）
 │   │   │                              #   config/（UsageProperties 单源 yaml）；配额端口在 common/quota，
 │   │   │                              #   Redisson 实现在 infra；上下文 common/usage/UsageContext
 │   │   ├── metering/                  #   ★ token 记账（场景/模型/成本），异步落库不进事务

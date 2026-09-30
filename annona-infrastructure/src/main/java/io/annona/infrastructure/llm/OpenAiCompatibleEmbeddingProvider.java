@@ -49,6 +49,12 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
     }
 
     @Override
+    public String channel() {
+        // 通道归因与向量身份分列（TD-03）：取配置的 provider 枚举值
+        return properties.getProvider();
+    }
+
+    @Override
     public int dimensions() {
         return properties.getDimensions();
     }

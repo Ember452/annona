@@ -31,6 +31,13 @@ public interface EmbeddingProvider {
      */
     String name();
 
+    /**
+     * 供应通道标识（如 {@code openai-compatible} / {@code fake}）；与 {@link #name()}（向量
+     * 身份 = 模型 id）分维度，供 {@code token_usage.provider} 按通道归因
+     * （llmprovider-metering-adr 批 3 修订；同 ModelProvider.channel，直接断不提供 default）。
+     */
+    String channel();
+
     /** 本 provider 产出向量的固定维度。 */
     int dimensions();
 

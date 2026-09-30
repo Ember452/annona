@@ -62,6 +62,11 @@ public class MeteredModelProvider implements ModelProvider {
     }
 
     @Override
+    public String channel() {
+        return delegate().channel();
+    }
+
+    @Override
     public ModelResponse chat(List<ModelChatMessage> messages, ModelOptions options) {
         UsageContext.Attribution attribution = UsageContext.current().orElse(null);
         if (attribution == null) {
@@ -86,8 +91,10 @@ public class MeteredModelProvider implements ModelProvider {
         }
         recorder.record(new UsageRecorder.UsageEntry(
             UUID.fromString(userId), attribution.scene(), attribution.sessionId(),
+            // provider = 供应通道（channel），model = 响应模型 id：两列语义独立（TD-03，
+            // 旧写法两处同值让通道归因失真）；响应不报 model 时退 name()，再退 unknown
+            delegate().channel(),
             response.model() == null ? name() : response.model(),
-            response.model() == null ? "unknown" : response.model(),
             "chat", prompt, completion, hashOf(messages), attribution.evaluatorVersion()));
         return response;
     }

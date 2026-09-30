@@ -38,6 +38,11 @@ public final class FakeModelProvider implements ModelProvider {
     }
 
     @Override
+    public String channel() {
+        return NAME;
+    }
+
+    @Override
     public ModelResponse chat(List<ModelChatMessage> messages, ModelOptions options) {
         int promptTokens = estimateTokens(messages);
         int completionTokens = reply.length() / 4;

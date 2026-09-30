@@ -56,5 +56,12 @@ class MigrationShapeIT {
         assertThat(purposeCheck).as("evaluator 用途随 V10 落定，不留给 V12（KEK ADR 否决表）")
             .isEqualTo(1);
         assertThat(sceneCheck).isEqualTo(1);
+        // V12 把 scene CHECK 扩到五值（+KB_INGEST）：约束定义直接断字面量集，
+        // 有人重建旧版四值 CHECK 会让本断言红（计量写入撞约束只在真 PG 暴露）
+        String sceneDef = jdbc.queryForObject(
+            "select pg_get_constraintdef(oid) from pg_constraint where conname = 'chk_usage_scene'",
+            String.class);
+        assertThat(sceneDef).contains("'INTERVIEW'", "'QUESTION_GEN'", "'QA'",
+            "'EVALUATION'", "'KB_INGEST'");
     }
 }

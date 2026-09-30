@@ -63,6 +63,8 @@ class MeteredModelProviderTest {
     void setUp() {
         properties.setDailyTokenLimit(1000);
         lenient().when(candidates.stream()).thenAnswer(inv -> Stream.of(provider, delegate));
+        lenient().when(delegate.name()).thenReturn("glm-4.7");
+        lenient().when(delegate.channel()).thenReturn("openai-compatible");
         lenient().when(delegate.chat(any(), any()))
             .thenReturn(new ModelResponse("ok", new UsageInfo(120, 30), "glm-4.7"));
         provider = new MeteredModelProvider(candidates, recorder, quota, properties);
@@ -83,6 +85,9 @@ class MeteredModelProviderTest {
         verify(recorder).record(captor.capture());
         var entry = captor.getValue();
         assertThat(entry.scene()).isEqualTo("QUESTION_GEN");
+        // provider = 通道、model = 响应模型 id：两列语义独立（TD-03 的回归钉）
+        assertThat(entry.provider()).isEqualTo("openai-compatible");
+        assertThat(entry.model()).isEqualTo("glm-4.7");
         assertThat(entry.promptTokens()).isEqualTo(120);
         assertThat(entry.completionTokens()).isEqualTo(30);
         assertThat(entry.promptHash()).hasSize(64);

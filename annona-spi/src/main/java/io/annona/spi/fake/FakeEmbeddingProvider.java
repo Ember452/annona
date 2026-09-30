@@ -40,6 +40,11 @@ public final class FakeEmbeddingProvider implements EmbeddingProvider {
     }
 
     @Override
+    public String channel() {
+        return NAME;
+    }
+
+    @Override
     public int dimensions() {
         return dimensions;
     }

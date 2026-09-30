@@ -6,6 +6,7 @@ import io.annona.common.exception.ErrorCode;
 import io.annona.common.model.ChatMessage;
 import io.annona.common.model.ChatStreamListener;
 import io.annona.common.model.StreamingChatProvider;
+import io.annona.common.usage.UsageContext;
 import io.annona.modules.knowledge.dto.KbChunkReference;
 import io.annona.modules.knowledge.ops.KnowledgeDocQueryService;
 import io.annona.modules.qa.dto.QaAskRequest;
@@ -21,6 +22,7 @@ import io.annona.modules.retrieval.dto.RetrievalMissReason;
 import io.annona.modules.retrieval.dto.RetrievalRequest;
 import io.annona.modules.retrieval.service.RetrievalQueryService;
 import io.annona.modules.retrieval.dto.RetrievalResponse;
+import io.annona.modules.usage.service.UsageRecorder;
 import io.annona.spi.dto.UsageInfo;
 import java.io.IOException;
 import java.io.InputStream;
@@ -65,10 +67,10 @@ public class QaService {
     /** 引用 snippet 截断长度；完整正文回查 kb_doc_chunk，300 字符够面板展示与留痕（V6 列注释）。 */
     private static final int SNIPPET_LENGTH = 300;
 
-    /** SSE 服务端超时（毫秒）：上游挂死时断开连接的兜底——流式无逐 token 超时（provider
-     * 注释的残留）。取值 = 2 × chat 请求超时（{@code annona.model.chat.timeout-seconds}
-     * 默认 60）：覆盖"建连 + 首 token"的最坏静默，超过即视作上游挂死而非慢。 */
-    private static final long EMITTER_TIMEOUT_MS = 120_000L;
+    /** SSE 服务端超时回退值（毫秒）：provider 不报超时时用。常态下按
+     * {@code 2 × streamTimeoutMillis()} 派生（TD-04，旧版把 120s 写死——与注释承诺的
+     * "2×chat 超时"脱钩）：覆盖"建连 + 首 token"的最坏静默，超过即视作上游挂死而非慢。 */
+    private static final long EMITTER_TIMEOUT_FALLBACK_MS = 120_000L;
 
     private final QaSessionRepository sessionRepository;
     private final QaMessageRepository messageRepository;
@@ -78,6 +80,7 @@ public class QaService {
     private final Executor aiIoExecutor;
     private final TransactionTemplate tx;
     private final QaMapper mapper;
+    private final UsageRecorder usageRecorder;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final String systemPrompt;
     private final String userPromptTemplate;
@@ -86,7 +89,8 @@ public class QaService {
         RetrievalQueryService retrievalQueryService, KnowledgeDocQueryService docQueryService,
         Optional<StreamingChatProvider> chatProvider,
         @Qualifier("aiIoExecutor") Executor aiIoExecutor,
-        PlatformTransactionManager transactionManager, QaMapper mapper) {
+        PlatformTransactionManager transactionManager, QaMapper mapper,
+        UsageRecorder usageRecorder) {
         this.sessionRepository = sessionRepository;
         this.messageRepository = messageRepository;
         this.retrievalQueryService = retrievalQueryService;
@@ -95,6 +99,7 @@ public class QaService {
         this.aiIoExecutor = aiIoExecutor;
         this.tx = new TransactionTemplate(transactionManager);
         this.mapper = mapper;
+        this.usageRecorder = usageRecorder;
         this.systemPrompt = readPrompt("prompts/qa-system.st");
         this.userPromptTemplate = readPrompt("prompts/qa-user.st");
     }
@@ -123,7 +128,9 @@ public class QaService {
         UUID assistantId = placeholder.getId();
         UUID sessionId = placeholder.getSessionId();
 
-        SseEmitter emitter = new SseEmitter(EMITTER_TIMEOUT_MS);
+        SseEmitter emitter = new SseEmitter(
+            2 * chatProvider.map(StreamingChatProvider::streamTimeoutMillis)
+                .filter(ms -> ms > 0).orElse(EMITTER_TIMEOUT_FALLBACK_MS / 2));
         try {
             aiIoExecutor.execute(() -> streamAnswer(userId, sessionId, assistantId, question, emitter));
         } catch (RejectedExecutionException e) {
@@ -203,6 +210,17 @@ public class QaService {
 
     private void streamAnswer(String userId, UUID sessionId, UUID assistantId,
         String question, SseEmitter emitter) {
+        // 计量挂点（metering-adr 批 3 修订，决策 4 的 qa 流式债）：流式链不经 MeteredModelProvider
+        // 装饰器，在本执行线程 bind 归属并在终态回调显式记账——异步线程拿不到请求线程的
+        // ThreadLocal，绑定必须在这里而不是 ask()。检索段的查询 embed 不记会话账（宿主语义弱，
+        // 如实声明不硬凑）。
+        try (UsageContext.Scope ignored = UsageContext.bind(userId, "QA", sessionId, null)) {
+            doStreamAnswer(userId, sessionId, assistantId, question, emitter);
+        }
+    }
+
+    private void doStreamAnswer(String userId, UUID sessionId, UUID assistantId,
+        String question, SseEmitter emitter) {
         RetrievalResponse retrieval;
         try {
             retrieval = retrievalQueryService.search(userId, new RetrievalRequest(question, null, "BOTH"));
@@ -256,7 +274,12 @@ public class QaService {
 
                     @Override
                     public void onComplete(String fullText, UsageInfo usage) {
-                        // usage 暂只接收不记账（记账在下一 commit 随挂点接入，metering-adr 决策 4）
+                        if (usage != null && usage.totalTokens() > 0) {
+                            StreamingChatProvider provider = chatProvider.orElseThrow();
+                            usageRecorder.record(new UsageRecorder.UsageEntry(UUID.fromString(userId),
+                                "QA", sessionId, provider.channel(), provider.name(), "chat",
+                                usage.promptTokens(), usage.completionTokens(), null, null));
+                        }
                         backfill(assistantId, fullText, citations, !state.clientGone, missReason);
                         send(emitter, "done", Map.of("messageId", assistantId.toString()));
                         emitter.complete();

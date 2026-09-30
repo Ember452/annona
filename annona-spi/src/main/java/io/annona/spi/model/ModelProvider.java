@@ -17,8 +17,16 @@ import java.util.List;
  */
 public interface ModelProvider {
 
-    /** Provider 唯一名，用于配置路由（{@code annona.model.default}）与用量归属。 */
+    /** Provider 唯一名（模型 id），用于配置路由（{@code annona.model.default}）与用量归属。 */
     String name();
+
+    /**
+     * 供应通道标识（如 {@code openai-compatible} / {@code fake}，即配置的 provider 枚举值）。
+     * 与 {@link #name()}（模型 id）是两个维度：同一通道可换模型，成本归因要按通道聚合
+     * （{@code token_usage.provider} 列，llmprovider-metering-adr 批 3 修订）。实现方全在
+     * 仓内，随批 3 usage 契约变更直接断加入，不提供 default。
+     */
+    String channel();
 
     /**
      * 同步调用一次 chat。网络与限流异常必须包装成业务异常（实现方用

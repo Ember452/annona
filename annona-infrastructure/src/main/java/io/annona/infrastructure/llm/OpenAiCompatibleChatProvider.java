@@ -62,6 +62,18 @@ public class OpenAiCompatibleChatProvider implements ModelProvider, StreamingCha
         return properties.getModel().isBlank() ? "openai-compatible" : properties.getModel();
     }
 
+    @Override
+    public String channel() {
+        // 通道归因与模型身份分列（TD-03）：取配置的 provider 枚举值
+        return properties.getProvider();
+    }
+
+    @Override
+    public long streamTimeoutMillis() {
+        // 同步调用超时同源（TD-04）：消费方（SSE 兜底）按它派生，不再各自硬编码
+        return properties.getTimeoutSeconds() * 1000L;
+    }
+
     // ========== 同步（spi 契约：失败一律包装 BusinessException，禁止裸抛） ==========
 
     @Override

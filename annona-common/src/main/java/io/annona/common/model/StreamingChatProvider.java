@@ -12,8 +12,18 @@ import java.util.List;
  */
 public interface StreamingChatProvider {
 
-    /** Provider 唯一名，与同步实现同口径返回模型 id，供用量归属。 */
+    /** Provider 唯一名（模型 id），与同步实现同口径，供用量归属的 model 列。 */
     String name();
+
+    /** 供应通道标识（配置的 provider 枚举值），供用量归属的 provider 列（TD-03，
+     * 与 {@code ModelProvider.channel} 同口径；同一实现类双端口时两处返回同一配置值）。 */
+    String channel();
+
+    /**
+     * 单次流式调用的服务端超时建议值（毫秒）：消费方（SSE 兜底）按它派生而非另定
+     * 魔数（TD-04）。实现方无此概念时返 0，调用方自取回退默认。
+     */
+    long streamTimeoutMillis();
 
     /**
      * 发起一次流式 chat 并<b>阻塞</b>到流终态（onComplete/onError）。选阻塞式而非返回

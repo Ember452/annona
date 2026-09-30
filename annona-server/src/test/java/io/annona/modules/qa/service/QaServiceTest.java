@@ -26,6 +26,7 @@ import io.annona.modules.qa.mapper.QaMapper;
 import io.annona.modules.qa.repository.QaMessageRepository;
 import io.annona.modules.qa.repository.QaSessionRepository;
 import io.annona.modules.retrieval.dto.RetrievalResponse;
+import io.annona.modules.usage.service.UsageRecorder;
 import io.annona.spi.dto.UsageInfo;
 import io.annona.modules.retrieval.service.RetrievalQueryService;
 import java.util.ArrayList;
@@ -81,6 +82,9 @@ class QaServiceTest {
     @Mock
     private QaMapper mapper;
 
+    @Mock
+    private UsageRecorder usageRecorder;
+
     private final List<QaMessageEntity> saved = new ArrayList<>();
 
     /** 每次 save 时的行状态快照（type/content/completed）：占位态只能从追加式快照观察。 */
@@ -110,7 +114,8 @@ class QaServiceTest {
 
     private QaService service(StreamingChatProvider provider, Executor executor) {
         return new QaService(sessionRepository, messageRepository, retrievalQueryService,
-            docQueryService, Optional.ofNullable(provider), executor, transactionManager, mapper);
+            docQueryService, Optional.ofNullable(provider), executor, transactionManager, mapper,
+            usageRecorder);
     }
 
     /** 确定性 provider：按给定脚本回调。占位态的观察走 states 快照，无需在流开始时再取。 */
@@ -118,16 +123,32 @@ class QaServiceTest {
 
         private final List<String> deltas;
         private final boolean fail;
+        private final UsageInfo usage;
         private List<ChatMessage> seenMessages;
 
         private StubProvider(List<String> deltas, boolean fail) {
+            this(deltas, fail, new UsageInfo(3, 2));
+        }
+
+        private StubProvider(List<String> deltas, boolean fail, UsageInfo usage) {
             this.deltas = deltas;
             this.fail = fail;
+            this.usage = usage;
         }
 
         @Override
         public String name() {
-            return "stub";
+            return "stub-model";
+        }
+
+        @Override
+        public String channel() {
+            return "stub-channel";
+        }
+
+        @Override
+        public long streamTimeoutMillis() {
+            return 45_000L;
         }
 
         @Override
@@ -137,7 +158,7 @@ class QaServiceTest {
             if (fail) {
                 listener.onError(new BusinessException(ErrorCode.AI_STREAM_INTERRUPTED, "上游断了"));
             } else {
-                listener.onComplete(String.join("", deltas), new UsageInfo(3, 2));
+                listener.onComplete(String.join("", deltas), usage);
             }
         }
     }
@@ -344,6 +365,51 @@ class QaServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getCode())
                 .isEqualTo(ErrorCode.QA_SESSION_NOT_FOUND.getCode());
+        }
+    }
+
+    @Nested
+    @DisplayName("qa 流式计量挂点（metering-adr 批 3 修订：决策 4 的债清偿）")
+    class Metering {
+
+        @Test
+        @DisplayName("终态带 usage：显式记一行 QA 账，provider=通道、model=模型 id 两列独立（TD-03）")
+        void completionRecordsUsageWithDistinctProviderAndModel() {
+            stubRetrieval(CHUNK_ID, false);
+
+            service(new StubProvider(List.of("答"), false)).ask(USER, new QaAskRequest(null, "问题"));
+
+            ArgumentCaptor<UsageRecorder.UsageEntry> entry =
+                ArgumentCaptor.forClass(UsageRecorder.UsageEntry.class);
+            verify(usageRecorder).record(entry.capture());
+            assertThat(entry.getValue().scene()).isEqualTo("QA");
+            assertThat(entry.getValue().provider()).isEqualTo("stub-channel");
+            assertThat(entry.getValue().model()).isEqualTo("stub-model");
+            assertThat(entry.getValue().promptTokens()).isEqualTo(3);
+            assertThat(entry.getValue().completionTokens()).isEqualTo(2);
+            assertThat(entry.getValue().sessionId()).isEqualTo(saved.get(1).getSessionId());
+            assertThat(entry.getValue().userId()).isEqualTo(UUID.fromString(USER));
+        }
+
+        @Test
+        @DisplayName("供应商未回填 usage（全 0）：宁缺毋假账，不记行")
+        void zeroUsageIsNotRecorded() {
+            stubRetrieval(CHUNK_ID, false);
+
+            service(new StubProvider(List.of("答"), false, new UsageInfo(0, 0)))
+                .ask(USER, new QaAskRequest(null, "问题"));
+
+            verify(usageRecorder, never()).record(any());
+        }
+
+        @Test
+        @DisplayName("流中断：已收增量不记账（用量以供应商终帧为准）")
+        void interruptedStreamIsNotRecorded() {
+            stubRetrieval(CHUNK_ID, false);
+
+            service(new StubProvider(List.of("部分"), true)).ask(USER, new QaAskRequest(null, "问题"));
+
+            verify(usageRecorder, never()).record(any());
         }
     }
 }

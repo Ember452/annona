@@ -18,7 +18,7 @@ public final class UsageContext {
      * 当前归属。
      *
      * @param userId           计费主体
-     * @param scene            INTERVIEW / QUESTION_GEN / QA / EVALUATION
+     * @param scene            INTERVIEW / QUESTION_GEN / QA / EVALUATION / KB_INGEST
      * @param sessionId        场景宿主（可空）
      * @param evaluatorVersion 评估器版本（非评估调用为空）
      */
