@@ -37,6 +37,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /** 会话编排：开始/作答/交卷/放弃/恢复读路径与快照维护（SQL 真行为归 docker IT）。 */
 @Tag("slice")
@@ -180,6 +182,32 @@ class InterviewSessionFacadeTest {
         verify(sessionRepository).advanceIndexIfResumable(eq(session.getId()), eq((short) 1),
             any());
         verify(snapshot).evict(session.getId().toString());
+    }
+
+    @Test
+    @DisplayName("作答失效快照延后到事务提交后（防提交前旧读回填缓存）")
+    void answerDefersEvictUntilAfterCommit() {
+        var q1 = candidate(1, 3, 0);
+        var session = resumableSession(new ObjectMapper().valueToTree(new InterviewSessionFacade
+            .PackSnapshot(1, List.of(3), 0, List.of(q1.id()), List.of())).toString());
+        when(sessionRepository.findByIdAndUserId(session.getId(), USER))
+            .thenReturn(Optional.of(session));
+        when(stateService.submitAnswer(session.getId(), USER, q1.id(), 0, "答")).thenReturn(true);
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            assertThat(facade.answer(USER, session.getId(), q1.id(), 0, "答")).isTrue();
+            // 提交前不得失效：否则并发 get() 会用旧 DB 状态回填缓存
+            verify(snapshot, never()).evict(any());
+            // 模拟容器提交成功：触发注册的 afterCommit 同步器
+            for (TransactionSynchronization sync
+                : TransactionSynchronizationManager.getSynchronizations()) {
+                sync.afterCommit();
+            }
+            verify(snapshot).evict(session.getId().toString());
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test

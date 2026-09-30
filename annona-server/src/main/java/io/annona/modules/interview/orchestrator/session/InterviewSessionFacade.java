@@ -29,6 +29,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 面试会话编排（P1b-04/05 端点侧）：校验 → 组卷 → 落会话 → 视图装配 → 快照维护。
@@ -155,11 +157,14 @@ public class InterviewSessionFacade {
 
     /**
      * 单题作答：终态 2702 先行（预读给可读文案），提交失败 2703；主题答完推进恢复位，
-     * DB 成功后 evict 快照（尽力）。
+     * 事务提交后 evict 快照（尽力）。
      *
      * <p>事务必须盖住两段写：{@code advanceIndexIfResumable} 是 @Modifying，
      * 无活动事务时 Hibernate 拒接（TransactionRequiredException，批 2 CI 实炸）；
      * 内部 StateService.submitAnswer 的 REQUIRED 加入本事务，不会各自提交。
+     * evict 经 afterCommit 同步器挂到提交后执行（KnowledgeDocLifecycleService 的 S3
+     * 删除同款先例）：提交前 evict 会被并发 {@code get()} 用旧 DB 状态回填缓存，
+     * 陈旧视图存活到下次写 evict 或 24h TTL；也守住 §0.3"外部 I/O 不进事务"。
      */
     @Transactional
     public boolean answer(UUID userId, UUID sessionId, UUID questionId, int followUpIndex,
@@ -177,8 +182,26 @@ public class InterviewSessionFacade {
         if (followUpIndex == 0) {
             advanceAfterMainAnswer(session, questionId);
         }
-        snapshot().evict(sessionId.toString());
+        evictAfterCommit(sessionId.toString());
         return true;
+    }
+
+    /**
+     * 快照失效挂到事务提交后；无活动事务同步（单测等非事务上下文）时退化为立即失效。
+     * 不用双删：快照本就是尽力缓存（24h TTL 兜底），提交后单删已把竞态窗口压到
+     * "提交后、evict 前的旧读"，为此维护双删时序不值。
+     */
+    private void evictAfterCommit(String sessionId) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    snapshot().evict(sessionId);
+                }
+            });
+        } else {
+            snapshot().evict(sessionId);
+        }
     }
 
     /** 交卷（幂等语义在 StateService/M8）：赢者 evict 快照；败者按 2702 出口。 */
