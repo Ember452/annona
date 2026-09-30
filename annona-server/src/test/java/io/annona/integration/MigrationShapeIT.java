@@ -64,4 +64,21 @@ class MigrationShapeIT {
         assertThat(sceneDef).contains("'INTERVIEW'", "'QUESTION_GEN'", "'QA'",
             "'EVALUATION'", "'KB_INGEST'");
     }
+
+    @Test
+    @DisplayName("V13 评估链幂等键与报告状态 CHECK 就位（评估重投不双写的 DB 级兜底）")
+    void evaluationConstraintsExist() {
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        assertThat(jdbc.queryForObject(
+            "select count(*) from pg_constraint where conname = 'uq_evaluation_slot_version'",
+            Integer.class))
+            .as("逐题评估幂等键（与 uq_answer_slot 同构，重投 upsert 不双写）").isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+            "select count(*) from pg_constraint where conname = 'uq_report_session_version'",
+            Integer.class)).isEqualTo(1);
+        String statusDef = jdbc.queryForObject(
+            "select pg_get_constraintdef(oid) from pg_constraint where conname = 'chk_report_status'",
+            String.class);
+        assertThat(statusDef).contains("'PENDING'", "'RUNNING'", "'DONE'", "'FAILED'");
+    }
 }

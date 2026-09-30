@@ -12,6 +12,7 @@
 | `retrieval` | retrieval.md | 双通道 + RRF + 重排 + 降级顺序，参数耦合多 | 待实现期写 |
 | `knowledge` | knowledge.md | ETL 状态机与幂等策略 | 待实现期写 |
 | `interview` | interview.md | 组卷流程与 SKILL 加载机制 | 待实现期写 |
+| `evaluation` | evaluation.md | 分批评估 + 二次汇总 + 幂等重放 + 可比性断开（关键取舍已有 [evaluation-pipeline ADR](../specs/2026-09-30-evaluation-pipeline-adr.md)） | 实现中（P1b-06/07 批 3），待补文档 |
 | `questionbank` | questionbank.md | 出题与容量校验、难度标定 | 待实现期写 |
 | `voice` | voice.md | 音频链路时序、并发 TTS 调度、延迟预算 | 待实现期写 |
 | `study` | study.md | 心跳→会话聚合→质量分级判定 | 已实现（P1a-04），待补文档 |
