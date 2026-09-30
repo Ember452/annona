@@ -7,8 +7,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 用量记账器（llmprovider-metering-adr §记账）：账行写入永远不阻塞、不传染业务线程
@@ -31,11 +33,14 @@ public class UsageRecorder {
 
     private final TokenUsageRepository repository;
     private final Executor aiIoExecutor;
+    private final TransactionTemplate txTemplate;
 
     public UsageRecorder(TokenUsageRepository repository,
-                         @Qualifier("aiIoExecutor") Executor aiIoExecutor) {
+                         @Qualifier("aiIoExecutor") Executor aiIoExecutor,
+                         PlatformTransactionManager transactionManager) {
         this.repository = repository;
         this.aiIoExecutor = aiIoExecutor;
+        this.txTemplate = new TransactionTemplate(transactionManager);
     }
 
     /** 记账入口（异步语义见类注释）；{@code userId==null}（无上下文调用）安静跳过。 */
@@ -46,10 +51,13 @@ public class UsageRecorder {
         }
         Runnable write = () -> {
             try {
-                repository.insertUsage(UUID.randomUUID(), entry.userId(), entry.scene(),
+                // insertUsage 是 @Modifying：异步线程无活动事务，必须自带短事务
+                // （TransactionRequiredException 型地雷与 Facade.answer 同源，QuestionGenerationService 先例）
+                txTemplate.executeWithoutResult(status -> repository.insertUsage(
+                    UUID.randomUUID(), entry.userId(), entry.scene(),
                     entry.sessionId(), entry.provider(), entry.model(), entry.purpose(),
                     entry.promptTokens(), entry.completionTokens(), entry.promptHash(),
-                    entry.evaluatorVersion());
+                    entry.evaluatorVersion()));
             } catch (RuntimeException e) {
                 log.warn("用量落库失败（丢一帧账，不阻塞业务）：{}", e.getMessage());
             }
