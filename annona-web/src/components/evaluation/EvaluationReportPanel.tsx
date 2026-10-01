@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { ApiError } from '@/api/request'
 import { evaluationApi } from '@/api/evaluation'
+import { ExplainPanel } from '@/components/decision/ExplainPanel'
 import { RadarChart } from '@/components/evaluation/RadarChart'
 import { formatScore, shouldPoll } from '@/lib/evaluationView'
 import type { EvaluationReport } from '@/types/evaluation'
@@ -117,6 +118,11 @@ export function EvaluationReportPanel({ sessionId }: { sessionId: string }) {
       {degradedCount > 0 && (
         <p className="text-xs text-muted-foreground">注：{degradedCount} 题评估降级，未计入综合分。</p>
       )}
+
+      <section className="space-y-2 border-t pt-4">
+        <h3 className="text-sm font-medium">本场决策依据（凭什么这么考你）</h3>
+        <ExplainPanel sessionId={sessionId} />
+      </section>
     </div>
   )
 }
