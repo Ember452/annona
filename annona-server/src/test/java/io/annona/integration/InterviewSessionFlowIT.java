@@ -107,7 +107,7 @@ class InterviewSessionFlowIT {
 
     private CreateSessionRequest plan(int totalCount) {
         return new CreateSessionRequest(directionId.toString(), totalCount,
-            java.util.stream.IntStream.range(0, totalCount).mapToObj(i -> 3).toList(), 0);
+            java.util.stream.IntStream.range(0, totalCount).mapToObj(i -> 3).toList(), 0, "manual");
     }
 
     @Test

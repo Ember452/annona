@@ -22,9 +22,9 @@ import org.springframework.test.context.ActiveProfiles;
  * <p>断言四件事：
  * <ol>
  *   <li>{@code flyway_schema_history} 有 V1 成功记录；</li>
- *   <li>public schema 下 25 张表齐全（V1 基线八张 + V2 采集三张 + V4 知识库两张 + V5 评测一张
+ *   <li>public schema 下 27 张表齐全（V1 基线八张 + V2 采集三张 + V4 知识库两张 + V5 评测一张
  *       + V6 问答两张 + V8 出题两张 + V9 面试会话两张 + V10 配置一张 + V11 用量一张
- *       + V13 评估两张 + V14 简历一张）；</li>
+ *       + V13 评估两张 + V14 简历一张 + V15/V16 决策两张）；</li>
  *   <li>{@code pg_extension} 含 vector、citext 与 pg_trgm；</li>
  *   <li>二次启动 skip 迁移（V1 记录数仍为 1）。</li>
  * </ol>
@@ -53,7 +53,7 @@ class FlywayBaselineIT {
     }
 
     @Test
-    @DisplayName("public schema 下 25 张业务表齐全（V1–V14 各迁移登记表）")
+    @DisplayName("public schema 下 27 张业务表齐全（V1–V16 各迁移登记表）")
     void allBaselineTablesExist() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         List<String> tables = jdbc.queryForList(
@@ -79,7 +79,9 @@ class FlywayBaselineIT {
                 // V13（P1b-06/07 评估链：逐题评估 + 会话报告）
                 "interview_evaluation", "interview_report",
                 // V14（P1b-08 简历上传与异步分析）
-                "resume");
+                "resume",
+                // V15/V16（P1c-05/07 决策留痕与规则声誉）
+                "decision_trace", "rule_reputation");
     }
 
     @Test

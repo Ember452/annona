@@ -103,7 +103,11 @@ public enum ErrorCode {
     RESUME_TOO_LARGE(3101, "简历文件过大"),
     RESUME_TYPE_NOT_SUPPORTED(3102, "简历文件格式不支持（仅 pdf/docx/txt/md）"),
     RESUME_STORAGE_NOT_CONFIGURED(3103, "对象存储未配置，无法上传简历"),
-    RESUME_ENQUEUE_FAILED(3104, "分析任务投递失败，请稍后重试");
+    RESUME_ENQUEUE_FAILED(3104, "分析任务投递失败，请稍后重试"),
+
+    // ========== planner/decision 3200–3299（P1c-06/07，可解释决策面板） ==========
+    DECISION_NOT_FOUND(3200, "该决策留痕不存在或无权限查看"),
+    DECISION_ALREADY_REJECTED(3201, "这条决策你已经驳回过了");
 
     private final int code;
     private final String message;

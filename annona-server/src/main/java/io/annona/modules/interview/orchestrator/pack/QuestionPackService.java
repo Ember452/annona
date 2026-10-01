@@ -30,6 +30,18 @@ public class QuestionPackService {
      */
     public PackResult pack(InterviewPlan plan, List<QuestionCandidate> pool,
                            Map<UUID, StemSimilarity> dedupHits) {
+        return pack(plan, pool, dedupHits, java.util.Set.of());
+    }
+
+    /**
+     * 决策驱动组卷（P1c-05）：与三参重载同算法，额外把 {@code reviewIds}（planner 选定的复习题）
+     * 在同难度桶内置顶优先。{@code reviewIds} 为空时行为与三参重载逐字节一致——既有 golden
+     * 传空集即全量兼容（接线不改变无决策时的组卷）。
+     *
+     * @param reviewIds 需优先掺入的复习题 ID（按掌握度最低的历史题，可跨难度桶）
+     */
+    public PackResult pack(InterviewPlan plan, List<QuestionCandidate> pool,
+                           Map<UUID, StemSimilarity> dedupHits, java.util.Set<UUID> reviewIds) {
         // 池内同题干折叠（去空白小写后首个存活）——局部集合，实例无可变状态
         Set<String> seenStems = new HashSet<>();
         Map<Integer, List<QuestionCandidate>> byDifficulty = new LinkedHashMap<>();
@@ -38,6 +50,11 @@ public class QuestionPackService {
                 continue;
             }
             byDifficulty.computeIfAbsent(q.difficulty(), k -> new ArrayList<>()).add(q);
+        }
+        // 复习题在同难度桶内置顶（稳定排序：reviewIds 命中者提前，其余保持题库倒序原序）
+        if (!reviewIds.isEmpty()) {
+            byDifficulty.values().forEach(bucket -> bucket.sort(
+                java.util.Comparator.comparingInt(q -> reviewIds.contains(q.id()) ? 0 : 1)));
         }
 
         Set<UUID> used = new HashSet<>();

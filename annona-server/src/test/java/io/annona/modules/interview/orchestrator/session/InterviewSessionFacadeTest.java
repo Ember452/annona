@@ -18,6 +18,7 @@ import io.annona.common.exception.ErrorCode;
 import io.annona.modules.interview.orchestrator.controller.CreateSessionRequest;
 import io.annona.modules.interview.orchestrator.pack.QuestionDedupService;
 import io.annona.modules.interview.orchestrator.pack.QuestionPackService;
+import io.annona.modules.planner.advisor.PlannerAdvisorService;
 import io.annona.shared.direction.service.DirectionQueryService;
 import io.annona.shared.question.QuestionCandidate;
 import io.annona.shared.question.QuestionQueryService;
@@ -62,6 +63,8 @@ class InterviewSessionFacadeTest {
     private ObjectProvider<SessionSnapshotPort> snapshotProvider;
     @Mock
     private SessionSnapshotPort snapshot;
+    @Mock
+    private ObjectProvider<PlannerAdvisorService> advisorProvider;
 
     private InterviewSessionFacade facade;
 
@@ -74,7 +77,7 @@ class InterviewSessionFacadeTest {
         // QuestionPackService 用真实实现（纯逻辑，mock 它等于没测装配）
         facade = new InterviewSessionFacade(stateService, sessionRepository, answerRepository,
             directionQuery, questionQuery, dedupService, new QuestionPackService(),
-            snapshotProvider);
+            snapshotProvider, advisorProvider);
         lenient().when(snapshotProvider.getIfAvailable()).thenReturn(snapshot);
         lenient().when(dedupService.findDedupHits(any(), any(), any())).thenReturn(Map.of());
         lenient().when(directionQuery.existsVisibleTo(anyString(), anyString())).thenReturn(true);
@@ -112,7 +115,7 @@ class InterviewSessionFacadeTest {
             .thenAnswer(inv -> resumableSession(inv.getArgument(2, String.class)));
 
         var view = facade.create(USER, new CreateSessionRequest(DIRECTION.toString(),
-            2, List.of(3, 4), 1));
+            2, List.of(3, 4), 1, "manual"));
 
         var snapshotJson = ArgumentCaptor.forClass(String.class);
         var slots = ArgumentCaptor.forClass(List.class);
@@ -131,7 +134,7 @@ class InterviewSessionFacadeTest {
     @DisplayName("计划非法（难度序列长度不符）→ 1001，不碰题库")
     void createRejectsBadPlan() {
         assertThatThrownBy(() -> facade.create(USER, new CreateSessionRequest(
-            DIRECTION.toString(), 2, List.of(3), 1)))
+            DIRECTION.toString(), 2, List.of(3), 1, "manual")))
             .isInstanceOfSatisfying(BusinessException.class,
                 e -> assertThat(e.getCode()).isEqualTo(ErrorCode.BAD_REQUEST.getCode()));
         verify(questionQuery, never()).activePool(any(), any());
@@ -143,7 +146,7 @@ class InterviewSessionFacadeTest {
         when(questionQuery.activePool(USER, DIRECTION)).thenReturn(List.of());
 
         assertThatThrownBy(() -> facade.create(USER, new CreateSessionRequest(
-            DIRECTION.toString(), 2, List.of(3, 4), 0)))
+            DIRECTION.toString(), 2, List.of(3, 4), 0, "manual")))
             .isInstanceOfSatisfying(BusinessException.class,
                 e -> assertThat(e.getCode())
                     .isEqualTo(ErrorCode.QB_QUESTION_CAPACITY_INSUFFICIENT.getCode()));
@@ -159,7 +162,7 @@ class InterviewSessionFacadeTest {
                 q1.id(), 0.95, false)));
 
         assertThatThrownBy(() -> facade.create(USER, new CreateSessionRequest(
-            DIRECTION.toString(), 1, List.of(3), 0)))
+            DIRECTION.toString(), 1, List.of(3), 0, "manual")))
             .isInstanceOfSatisfying(BusinessException.class, e -> {
                 assertThat(e.getCode())
                     .isEqualTo(ErrorCode.QB_QUESTION_CAPACITY_INSUFFICIENT.getCode());

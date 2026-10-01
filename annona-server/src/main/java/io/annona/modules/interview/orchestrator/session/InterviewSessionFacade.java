@@ -13,16 +13,21 @@ import io.annona.modules.interview.orchestrator.controller.SlotView;
 import io.annona.modules.interview.orchestrator.pack.QuestionDedupService;
 import io.annona.modules.interview.orchestrator.pack.QuestionPackService;
 import io.annona.modules.interview.orchestrator.plan.InterviewPlan;
+import io.annona.modules.planner.advisor.PlannerAdvisorService;
+import io.annona.modules.planner.advisor.PlanDecision;
 import io.annona.shared.direction.service.DirectionQueryService;
 import io.annona.shared.question.QuestionCandidate;
 import io.annona.shared.question.QuestionQueryService;
 import io.annona.shared.question.QuestionStemDetail;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,6 +73,7 @@ public class InterviewSessionFacade {
     private final QuestionDedupService dedupService;
     private final QuestionPackService packService;
     private final ObjectProvider<SessionSnapshotPort> snapshots;
+    private final ObjectProvider<PlannerAdvisorService> advisors;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public InterviewSessionFacade(InterviewSessionStateService stateService,
@@ -77,7 +83,8 @@ public class InterviewSessionFacade {
                                   QuestionQueryService questionQuery,
                                   QuestionDedupService dedupService,
                                   QuestionPackService packService,
-                                  ObjectProvider<SessionSnapshotPort> snapshots) {
+                                  ObjectProvider<SessionSnapshotPort> snapshots,
+                                  ObjectProvider<PlannerAdvisorService> advisors) {
         this.stateService = stateService;
         this.sessionRepository = sessionRepository;
         this.answerRepository = answerRepository;
@@ -86,16 +93,21 @@ public class InterviewSessionFacade {
         this.dedupService = dedupService;
         this.packService = packService;
         this.snapshots = snapshots;
+        this.advisors = advisors;
     }
 
     /**
-     * 开始面试：计划校验（1001）→ 方向可见（2100）→ 组卷（容量不足 2604）→ 同方向旧会话
-     * 自动 ABANDONED（返回值条数随视图 skippedReasons 提示）→ 落库并写快照。
+     * 开始面试：计划校验（1001）→ 方向可见（2100）→ 决策组卷（auto 走 planner，manual/降级走原难度）
+     * → 容量不足 2604 → 同方向旧会话自动 ABANDONED → 落库并写快照 → auto 时落决策留痕。
+     *
+     * <p>决策接线（P1c-05）：{@code planMode!=manual} 且有 advisor 时，用请求难度作基线交 planner
+     * 调整得到难度序列 + 复习题 ID，组卷后携 sessionId 落 decision_trace。advisor 抛错则 catch+log.warn
+     * 降级为请求原难度、skippedReasons 记“本次由默认策略出题”——<b>决策失败绝不阻断开面</b>。
      */
     public SessionView create(UUID userId, CreateSessionRequest request) {
-        InterviewPlan plan;
+        InterviewPlan baseline;
         try {
-            plan = new InterviewPlan(request.totalCount(), request.difficulties(),
+            baseline = new InterviewPlan(request.totalCount(), request.difficulties(),
                 request.followUpDepth());
         } catch (IllegalArgumentException | NullPointerException e) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
@@ -109,21 +121,66 @@ public class InterviewSessionFacade {
         if (pool.isEmpty()) {
             throw new BusinessException(ErrorCode.QB_QUESTION_CAPACITY_INSUFFICIENT);
         }
+
+        boolean manual = "manual".equalsIgnoreCase(request.planMode());
+        PlanDecision decision = manual ? null : tryAdvise(userId, directionId, baseline);
+        List<String> extraNotes = new ArrayList<>();
+        InterviewPlan plan = baseline;
+        Set<UUID> reviewIds = Set.of();
+        if (!manual) {
+            if (decision != null) {
+                plan = new InterviewPlan(baseline.totalCount(), decision.difficulties(),
+                    baseline.followUpDepth());
+                reviewIds = new HashSet<>(decision.reviewQuestionIds());
+            } else {
+                extraNotes.add("本次由默认策略出题（决策层未参与）");
+            }
+        }
+
         var pack = packService.pack(plan, pool,
-            dedupService.findDedupHits(userId, directionId, pool));
+            dedupService.findDedupHits(userId, directionId, pool), reviewIds);
         if (pack.questionIds().isEmpty()) {
             throw new BusinessException(ErrorCode.QB_QUESTION_CAPACITY_INSUFFICIENT,
                 "近 90 天该方向题目已答过或被去重拦截，请先补充题库");
         }
 
         List<AnswerSlot> slots = expandSlots(pack.questionIds(), pool, plan.followUpDepth());
+        List<String> skipped = new ArrayList<>(pack.skippedReasons());
+        skipped.addAll(extraNotes);
         String planJson = writeSnapshot(new PackSnapshot(plan.totalCount(), plan.difficulties(),
-            plan.followUpDepth(), pack.questionIds(), pack.skippedReasons()));
+            plan.followUpDepth(), pack.questionIds(), skipped));
         InterviewSessionEntity session = stateService.create(userId, directionId, planJson,
             pack.questionIds().size(), slots);
+        if (decision != null) {
+            persistTracesQuietly(session.getId(), userId, directionId, decision);
+        }
         SessionView view = assemble(session);
         snapshot().save(view.id(), toJson(view));
         return view;
+    }
+
+    /** advisor 可用则出决策，不可用或异常返回 null（由调用方走默认策略）——决策失败不阻断开面。 */
+    private PlanDecision tryAdvise(UUID userId, UUID directionId, InterviewPlan baseline) {
+        PlannerAdvisorService advisor = advisors.getIfAvailable();
+        if (advisor == null) {
+            return null;
+        }
+        try {
+            return advisor.advise(userId, directionId, baseline.difficulties(), LocalDate.now());
+        } catch (RuntimeException e) {
+            log.warn("planner 决策异常，降级为请求原难度：{}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /** 留痕落库尽力而为：失败只记日志，不影响已建会话（面板降级显示“无决策记录”）。 */
+    private void persistTracesQuietly(UUID sessionId, UUID userId, UUID directionId,
+                                      PlanDecision decision) {
+        try {
+            advisors.getIfAvailable().persistTraces(sessionId, userId, directionId, decision);
+        } catch (RuntimeException e) {
+            log.warn("决策留痕落库失败（会话已建，面板将显示无决策记录）：{}", e.getMessage(), e);
+        }
     }
 
     /** 会话视图（断线重进入口）：归属校 DB，slots 装配走快照尽力。 */

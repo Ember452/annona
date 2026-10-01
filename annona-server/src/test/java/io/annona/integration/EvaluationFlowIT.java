@@ -87,7 +87,7 @@ class EvaluationFlowIT {
                 + " 'ACTIVE', now())",
             questionId, userId, directionId);
         sessionId = UUID.fromString(facade.create(userId,
-            new CreateSessionRequest(directionId.toString(), 1, List.of(3), 0)).id());
+            new CreateSessionRequest(directionId.toString(), 1, List.of(3), 0, "manual")).id());
     }
 
     @AfterEach
