@@ -84,6 +84,11 @@ annona:
   # 回退值（dev 的占位 fallback / prod 强制非空由 StartupValidator 把关）。
   kek:
     secret: ${ANNONA_SECRET_KEY:}
+  # P1c-08：demo 数据合成（6 周历史，供可解释面板演示与 A/B 取证）。默认关——
+  # DemoSeedRunner 是 @ConditionalOnProperty(havingValue=true) 门控 bean，关时不装配
+  # （全门关启动 IT 不受影响）。开：--annona.demo.enabled=true 或 ANNONA_DEMO_ENABLED=true。
+  demo:
+    enabled: ${ANNONA_DEMO_ENABLED:false}
   # P1b-02：结构化输出重试（出题/评估共用，StructuredOutputInvoker）。
   # 3 次是上游同款起点：多数 JSON 形状错误在第二次带反馈重试即修复。
   ai:
@@ -112,6 +117,35 @@ annona:
     recovery:
       enabled: ${ANNONA_QUESTIONBANK_RECOVERY_ENABLED:true}
       interval-ms: ${ANNONA_QUESTIONBANK_RECOVERY_INTERVAL_MS:60000}
+  # P1c 训练决策层（planner-decision-kernel-adr）。默认值唯一出处在此（PropertiesDefaultSourceTest 机检）；
+  # 常量取值依据见 PlannerProperties / MasteryModel Javadoc。P1c-08 真模型跑通 + A/B 是第一轮校准输入。
+  planner:
+    # 掌握度模型（§6.2）：知识型默认半衰期 21 天；k 单次增益标度；追问每层 +15% 权重。
+    half-life-days: ${ANNONA_PLANNER_HALF_LIFE_DAYS:21}
+    gain-k: ${ANNONA_PLANNER_GAIN_K:0.5}
+    follow-up-weight: ${ANNONA_PLANNER_FOLLOW_UP_WEIGHT:0.15}
+    lr-base: ${ANNONA_PLANNER_LR_BASE:0.35}
+    lr-decay: ${ANNONA_PLANNER_LR_DECAY:0.02}
+    lr-sample-cap: ${ANNONA_PLANNER_LR_SAMPLE_CAP:10}
+    confidence-divisor: ${ANNONA_PLANNER_CONFIDENCE_DIVISOR:5}
+    neutral-quality-weight: ${ANNONA_PLANNER_NEUTRAL_QUALITY_WEIGHT:0.5}
+    # 规则与保护阈值（§6.4）：复习题占比上限 / 单方向占比上限 / 样本量下限 / 换模型基线场数 / 信号窗口天。
+    review-ratio: ${ANNONA_PLANNER_REVIEW_RATIO:0.25}
+    cap-ratio: ${ANNONA_PLANNER_CAP_RATIO:0.40}
+    min-sample: ${ANNONA_PLANNER_MIN_SAMPLE:3}
+    baseline-sessions: ${ANNONA_PLANNER_BASELINE_SESSIONS:3}
+    window-days: ${ANNONA_PLANNER_WINDOW_DAYS:14}
+    # 某规则被同一用户驳回累计达此次数 → rule_reputation.disabled，规则链跳过该规则（§6.4 保护 5）。
+    reject-disable-count: ${ANNONA_PLANNER_REJECT_DISABLE_COUNT:3}
+    # WEAK_DIRECTION 的低分线（均分低于此 → 加压）；FORGETTING_CURVE 的掌握度底线（现值低于此 → 掺复习）。
+    weak-score-threshold: ${ANNONA_PLANNER_WEAK_SCORE_THRESHOLD:60}
+    forgetting-floor: ${ANNONA_PLANNER_FORGETTING_FLOOR:0.5}
+    # 规则链独立开关（关任意一条其余仍产出合法计划）；matchIfMissing=true，此处显式列全为文档。
+    rule:
+      forgetting-curve:
+        enabled: ${ANNONA_PLANNER_RULE_FORGETTING_CURVE_ENABLED:true}
+      weak-direction:
+        enabled: ${ANNONA_PLANNER_RULE_WEAK_DIRECTION_ENABLED:true}
 
 management:
   endpoints:

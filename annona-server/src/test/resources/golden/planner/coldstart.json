@@ -1,0 +1,25 @@
+{
+  "params" : {
+    "halfLifeDays" : 21,
+    "gainK" : 0.5,
+    "followUpWeight" : 0.15,
+    "lrBase" : 0.35,
+    "lrDecay" : 0.02,
+    "lrSampleCap" : 10,
+    "confidenceDivisor" : 5,
+    "neutralQualityWeight" : 0.5
+  },
+  "t0" : "2026-06-01T00:00:00Z",
+  "qualityWeight" : null,
+  "asOfDayFromT0" : 0,
+  "events" : [ {
+    "weightedScore" : 1.0,
+    "followUpDepth" : 0,
+    "daysFromT0" : 0
+  } ],
+  "expected" : {
+    "mastery" : 0.68,
+    "confidence" : 0.1,
+    "sampleSize" : 1
+  }
+}

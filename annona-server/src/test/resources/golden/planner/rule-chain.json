@@ -1,0 +1,17 @@
+{
+  "halfLifeDays" : 21,
+  "gainK" : 0.5,
+  "followUpWeight" : 0.15,
+  "lrBase" : 0.35,
+  "lrDecay" : 0.02,
+  "lrSampleCap" : 10,
+  "confidenceDivisor" : 5,
+  "neutralQualityWeight" : 0.5,
+  "minSample" : 3,
+  "baselineSessions" : 3,
+  "weakScoreThreshold" : 60,
+  "forgettingFloor" : 0.5,
+  "reviewRatio" : 0.25,
+  "expectedDifficulties" : [ 3, 3, 3, 3 ],
+  "expectedRuleKeys" : [ "FORGETTING_CURVE", "WEAK_DIRECTION" ]
+}

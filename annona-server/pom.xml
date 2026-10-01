@@ -181,6 +181,13 @@
                                              它的真行为在 native SQL，行覆盖率数字对它解释力弱，
                                              但 slice 测试已盖住判定分支 -->
                                         <include>io.annona.modules.interview.orchestrator.pack.*</include>
+                                        <!-- P1c-02：掌握度衰减/增益/置信度是决策核心算法（§6.2），
+                                             纯函数 + 边界用例必须全分支覆盖 -->
+                                        <include>io.annona.modules.planner.mastery.*</include>
+                                        <!-- P1c-03/04：规则链与保护规则是决策算法（§6.3/§6.4），
+                                             “关任意一条仍产出合法计划”与五种保护场景必须全分支 -->
+                                        <include>io.annona.modules.planner.rule.*</include>
+                                        <include>io.annona.modules.planner.guard.*</include>
                                     </includes>
                                     <limits>
                                         <limit>

@@ -1,0 +1,33 @@
+{
+  "params" : {
+    "halfLifeDays" : 21,
+    "gainK" : 0.5,
+    "followUpWeight" : 0.15,
+    "lrBase" : 0.35,
+    "lrDecay" : 0.02,
+    "lrSampleCap" : 10,
+    "confidenceDivisor" : 5,
+    "neutralQualityWeight" : 0.5
+  },
+  "t0" : "2026-01-01T00:00:00Z",
+  "qualityWeight" : 0.8,
+  "asOfDayFromT0" : 45,
+  "events" : [ {
+    "weightedScore" : 0.9,
+    "followUpDepth" : 2,
+    "daysFromT0" : 0
+  }, {
+    "weightedScore" : 0.4,
+    "followUpDepth" : 1,
+    "daysFromT0" : 7
+  }, {
+    "weightedScore" : 0.7,
+    "followUpDepth" : 3,
+    "daysFromT0" : 20
+  } ],
+  "expected" : {
+    "mastery" : 0.27,
+    "confidence" : 0.48,
+    "sampleSize" : 3
+  }
+}
