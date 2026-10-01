@@ -29,6 +29,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class SignalFacade implements LearningSignalReader {
 
+    /**
+     * 掌握度事件的事件上限（= SPI 契约里的 {@code recentSessions} 上限 10 场，见
+     * {@link SignalSnapshot}）。写成常量而非配置键：它是契约的一部分（快照形状
+     * 不得随环境变），不是可调参数。
+     */
+    private static final int OUTCOME_SAMPLE_LIMIT = 10;
+
     private final ObjectProvider<StudySignalPort> studyPorts;
     private final ObjectProvider<EvaluationSignalPort> evaluationPorts;
 
@@ -48,29 +55,36 @@ public class SignalFacade implements LearningSignalReader {
     public SignalSnapshot readDirectional(String userId, UUID directionId,
                                           LocalDate from, LocalDate to) {
         UUID uid = UUID.fromString(userId);
+        // 学习侧按窗口回看（“近 N 天有专注”只在短窗口内有意义）；
+        // 面试侧取最近固定条数、不受窗口限制（久不练必须看得到，planner-adr 修订 1）
         StudySignal study = Optional.ofNullable(studyPorts.getIfAvailable())
             .map(p -> p.studySignal(uid, directionId, from, to))
             .orElseGet(() -> new StudySignal(Duration.ZERO, Duration.ZERO));
         List<SessionOutcome> outcomes = Optional.ofNullable(evaluationPorts.getIfAvailable())
-            .map(p -> p.recentOutcomes(uid, directionId, from, to))
+            .map(p -> p.latestOutcomes(uid, directionId, OUTCOME_SAMPLE_LIMIT))
             .orElse(List.of());
 
-        int sessions = outcomes.size();
-        Double avgScore = averageScore(outcomes);
+        // 有效样本 = 有非降级分的场次；sampleSize、avgScore、掌握度事件共用这一个集合，
+        // 面板里“近 N 场均分 X”的 N 才是 X 的真分母
+        List<SessionOutcome> scored = outcomes.stream()
+            .filter(s -> s.compositeScore() != null)
+            .toList();
+        int sampleSize = scored.size();
+        Double avgScore = averageScore(scored);
         DirectionSignal directional = new DirectionSignal(
             directionId.toString(),
-            sessions,
+            sampleSize,
             avgScore,
             lastPracticedAt(outcomes),
             study.verifiedMinutes(),
             study.selfReportedMinutes());
 
         Duration totalStudy = study.verifiedMinutes().plus(study.selfReportedMinutes());
-        return new SignalSnapshot(userId, from, to, totalStudy, null, sessions,
+        return new SignalSnapshot(userId, from, to, totalStudy, null, sampleSize,
             List.of(directional), outcomes);
     }
 
-    /** 非降级分（compositeScore != null）的均值，四舍五入到整数分再转 Double；全 null 或空 → null。 */
+    /** 有效样本分的均值，保留两位小数；空集 → null（无分可说，面板显“数据不足”而非 0 分）。 */
     private static Double averageScore(List<SessionOutcome> outcomes) {
         List<Integer> scores = outcomes.stream().map(SessionOutcome::compositeScore)
             .filter(java.util.Objects::nonNull).toList();

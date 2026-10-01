@@ -12,7 +12,9 @@ import io.annona.modules.planner.mastery.MasteryParams;
  * @param weakScoreThreshold   弱项低分线：方向均分低于此 → WEAK_DIRECTION 加压
  * @param forgettingFloor      遗忘底线：掌握度现值低于此 → FORGETTING_CURVE 掺复习
  * @param reviewRatio          复习槽占比上限（advisor 据此限量取最低分历史题）
- * @param windowDays           信号回看窗口天数（advisor 拉快照的时间跨度）
+ * @param windowDays           学习侧信号回看窗口天数（自习室时长聚合的时间跨度）；
+ *                             <b>面试侧样本不受它限制</b>——按条数取最近 10 场，否则
+ *                             “久不练”永远被窗口过滤成“数据不足”（planner-adr 修订 1）
  */
 public record RuleConfig(
     MasteryParams masteryParams,

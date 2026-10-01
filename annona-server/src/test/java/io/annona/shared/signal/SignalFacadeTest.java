@@ -25,7 +25,7 @@ import org.springframework.beans.factory.ObjectProvider;
 /**
  * SignalFacade（P1c-01）：组合学习侧与面试侧端口产出方向感知快照。断言三件事——
  * 同用户同日同方向可复现、方向无学习记录=学习侧空但面试侧有值（正常形态）、
- * avgScore 跳过降级场（null 分）。
+ * 降级场（compositeScore=null）不参与决策样本与均分（同一分母）。
  */
 @Tag("slice")
 @ExtendWith(MockitoExtension.class)
@@ -51,31 +51,50 @@ class SignalFacadeTest {
     }
 
     @Test
-    @DisplayName("相交方向：学习时长与面试结果都在快照里，avgScore 跳过降级场")
+    @DisplayName("相交方向：学习时长与面试结果都在快照里")
     void directionalComposesBothSides() {
         when(studyProviders.getIfAvailable()).thenReturn(studyPort);
         when(evalProviders.getIfAvailable()).thenReturn(evalPort);
         when(studyPort.studySignal(USER, DIR, FROM, TO))
             .thenReturn(new StudySignal(Duration.ofMinutes(120), Duration.ofMinutes(30)));
-        when(evalPort.recentOutcomes(USER, DIR, FROM, TO)).thenReturn(List.of(
+        when(evalPort.latestOutcomes(USER, DIR, 10)).thenReturn(List.of(
             outcome("s1", 80, Instant.parse("2026-09-20T00:00:00Z")),
             outcome("s2", null, Instant.parse("2026-09-25T00:00:00Z")), // 降级场
             outcome("s3", 60, Instant.parse("2026-09-10T00:00:00Z"))));
 
         SignalSnapshot snap = facade().readDirectional(USER.toString(), DIR, FROM, TO);
 
-        assertThat(snap.sampleSize()).isEqualTo(3);
         assertThat(snap.directionals()).hasSize(1);
         DirectionSignal d = snap.directionals().get(0);
         assertThat(d.directionId()).isEqualTo(DIR.toString());
-        assertThat(d.sessions()).isEqualTo(3);
         // 非 null 分 [80,60] 均值 = 70.0；降级场不计入
         assertThat(d.avgScore()).isEqualTo(70.0);
-        // 最近交卷 = 最新 finishedAt（倒序首条 s2 的 finishedAt 是最新）
+        // 最近交卷 = 最新 finishedAt（含降级场：练过就是练过）
         assertThat(d.lastPracticedAt()).isEqualTo(Instant.parse("2026-09-25T00:00:00Z"));
         assertThat(d.verifiedStudyMinutes()).isEqualTo(Duration.ofMinutes(120));
         assertThat(d.selfReportedMinutes()).isEqualTo(Duration.ofMinutes(30));
         assertThat(d.hasStudyRecord()).isTrue();
+    }
+
+    @Test
+    @DisplayName("降级场不计入样本量：sampleSize 与 avgScore 同分母，面板才能说清“近 N 场均分 X”")
+    void sampleSizeSharesAvgScoreDenominator() {
+        when(studyProviders.getIfAvailable()).thenReturn(studyPort);
+        when(evalProviders.getIfAvailable()).thenReturn(evalPort);
+        when(studyPort.studySignal(USER, DIR, FROM, TO))
+            .thenReturn(new StudySignal(Duration.ofMinutes(60), Duration.ZERO));
+        when(evalPort.latestOutcomes(USER, DIR, 10)).thenReturn(List.of(
+            outcome("s1", 80, Instant.parse("2026-09-20T00:00:00Z")),
+            outcome("s2", null, Instant.parse("2026-09-25T00:00:00Z")),  // 降级：无分可采
+            outcome("s3", 60, Instant.parse("2026-09-10T00:00:00Z"))));
+
+        SignalSnapshot snap = facade().readDirectional(USER.toString(), DIR, FROM, TO);
+
+        // 均分是对 [80,60] 两个数取的，所以样本量也必须是 2——否则 reason 里的“近 3 场均分 70”
+        // 把一个并不存在的分母说给了用户（可解释与诚实呈现主张）
+        assertThat(snap.sampleSize()).isEqualTo(2);
+        assertThat(snap.directionals().get(0).sessions()).isEqualTo(2);
+        assertThat(snap.directionals().get(0).avgScore()).isEqualTo(70.0);
     }
 
     @Test
@@ -85,7 +104,7 @@ class SignalFacadeTest {
         when(evalProviders.getIfAvailable()).thenReturn(evalPort);
         when(studyPort.studySignal(USER, DIR, FROM, TO))
             .thenReturn(new StudySignal(Duration.ZERO, Duration.ZERO));
-        when(evalPort.recentOutcomes(USER, DIR, FROM, TO)).thenReturn(List.of(
+        when(evalPort.latestOutcomes(USER, DIR, 10)).thenReturn(List.of(
             outcome("s1", 75, Instant.parse("2026-09-20T00:00:00Z"))));
 
         SignalSnapshot snap = facade().readDirectional(USER.toString(), DIR, FROM, TO);
@@ -95,6 +114,29 @@ class SignalFacadeTest {
         assertThat(d.sessions()).isEqualTo(1);
         assertThat(d.avgScore()).isEqualTo(75.0);
         assertThat(snap.sampleSize()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("久不练：30 天前的场次仍进事件集并计入样本（面试侧不受 window-days 截断）")
+    void staleSessionsStillCountAsSample() {
+        when(studyProviders.getIfAvailable()).thenReturn(studyPort);
+        when(evalProviders.getIfAvailable()).thenReturn(evalPort);
+        when(studyPort.studySignal(USER, DIR, FROM, TO))
+            .thenReturn(new StudySignal(Duration.ZERO, Duration.ZERO));
+        // 面试全部落在回看窗口（9 月）之外：这正是“一个月没练”的真实形状
+        when(evalPort.latestOutcomes(USER, DIR, 10)).thenReturn(List.of(
+            outcome("s1", 30, Instant.parse("2026-08-01T00:00:00Z")),
+            outcome("s2", 35, Instant.parse("2026-07-20T00:00:00Z")),
+            outcome("s3", 45, Instant.parse("2026-07-02T00:00:00Z"))));
+
+        SignalSnapshot snap = facade().readDirectional(USER.toString(), DIR, FROM, TO);
+
+        // 样本不能被窗口清零——否则 guard 会报“数据不足”，遗忘曲线在最需要它的场景下闭口
+        assertThat(snap.sampleSize()).isEqualTo(3);
+        assertThat(snap.recentSessions()).hasSize(3);
+        assertThat(snap.directionals().get(0).avgScore()).isEqualTo(36.67);
+        assertThat(snap.directionals().get(0).lastPracticedAt())
+            .isEqualTo(Instant.parse("2026-08-01T00:00:00Z"));
     }
 
     @Test
@@ -119,7 +161,7 @@ class SignalFacadeTest {
             .thenReturn(new StudySignal(Duration.ofMinutes(45), Duration.ZERO));
         List<SessionOutcome> outcomes = List.of(
             outcome("s1", 90, Instant.parse("2026-09-20T00:00:00Z")));
-        when(evalPort.recentOutcomes(USER, DIR, FROM, TO)).thenReturn(outcomes);
+        when(evalPort.latestOutcomes(USER, DIR, 10)).thenReturn(outcomes);
 
         SignalSnapshot a = facade().readDirectional(USER.toString(), DIR, FROM, TO);
         SignalSnapshot b = facade().readDirectional(USER.toString(), DIR, FROM, TO);

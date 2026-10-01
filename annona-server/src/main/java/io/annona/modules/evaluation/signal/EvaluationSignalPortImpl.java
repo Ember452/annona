@@ -6,22 +6,18 @@ import io.annona.shared.evaluation.EvaluationSignalPort;
 import io.annona.spi.dto.SessionOutcome;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * {@link EvaluationSignalPort} 的 evaluation 实现（P1c-01）：单方向窗口内 DONE 报告的逐场结果
- * （含四留痕），供掌握度事件与 VERSION_BASELINE 比对。委托 {@code findDoneOutcomes} 的原生 JOIN，
- * 不 import interview 实体。
+ * {@link EvaluationSignalPort} 的 evaluation 实现（P1c-01）：单方向最近若干场 DONE 报告的逐场结果
+ * （含四留痕），供掌握度事件与 VERSION_BASELINE 比对。委托 {@code findLatestDoneOutcomes} 的原生
+ * JOIN，不 import interview 实体。取数不按时间窗口（理由见端口 Javadoc）。
  */
 @Service
 public class EvaluationSignalPortImpl implements EvaluationSignalPort {
-
-    private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
 
     private final InterviewReportRepository reportRepository;
     private final InterviewEvaluationRepository evaluationRepository;
@@ -34,11 +30,8 @@ public class EvaluationSignalPortImpl implements EvaluationSignalPort {
 
     @Override
     @Transactional(readOnly = true)
-    public List<SessionOutcome> recentOutcomes(UUID userId, UUID directionId,
-                                               LocalDate from, LocalDate to) {
-        Instant fromInstant = from.atStartOfDay(ZONE).toInstant();
-        Instant toExclusive = to.plusDays(1).atStartOfDay(ZONE).toInstant();
-        return reportRepository.findDoneOutcomes(userId, directionId, fromInstant, toExclusive)
+    public List<SessionOutcome> latestOutcomes(UUID userId, UUID directionId, int limit) {
+        return reportRepository.findLatestDoneOutcomes(userId, directionId, limit)
             .stream()
             .map(EvaluationSignalPortImpl::toOutcome)
             .toList();

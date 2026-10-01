@@ -9,8 +9,9 @@ import java.time.Instant;
  * （设计文档 §6.1：背政治的时长对 Java 面试毫无意义）。
  *
  * @param directionId           方向主键（direction.id，全仓约定不用 key 字符串）
- * @param sessions              窗口内该方向的已完成面试场数（sampleSize 的口径来源）
- * @param avgScore              该方向逐场总分的均值（0–100）；{@code sessions=0} 时为 {@code null}——
+ * @param sessions              有效样本场数（有非降级分）——与 {@code avgScore} 同分母，也是
+ *                              {@code SignalSnapshot.sampleSize} 的口径来源（修订 1）
+ * @param avgScore              该方向有效样本总分的均值（0–100）；{@code sessions=0} 时为 {@code null}——
  *                              宁缺勿假值，面板据此显示"数据不足"而非 0 分
  * @param lastPracticedAt       该方向最后一次交卷时刻；无记录时 {@code null}（间隔天数由此推导）
  * @param verifiedStudyMinutes  窗口内该方向 VERIFIED + PARTIAL 的学习分钟数（PARTIAL 按墙钟补回，

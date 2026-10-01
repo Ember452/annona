@@ -134,6 +134,8 @@ annona:
     cap-ratio: ${ANNONA_PLANNER_CAP_RATIO:0.40}
     min-sample: ${ANNONA_PLANNER_MIN_SAMPLE:3}
     baseline-sessions: ${ANNONA_PLANNER_BASELINE_SESSIONS:3}
+    # 学习侧（自习室时长）回看窗口。面试侧样本按条数取最近 10 场、不受本值限制——
+    # 否则“久不练”会被窗口过滤成“数据不足”，遗忘曲线在最需要它的场景下失效（planner-adr 修订 1）。
     window-days: ${ANNONA_PLANNER_WINDOW_DAYS:14}
     # 某规则被同一用户驳回累计达此次数 → rule_reputation.disabled，规则链跳过该规则（§6.4 保护 5）。
     reject-disable-count: ${ANNONA_PLANNER_REJECT_DISABLE_COUNT:3}

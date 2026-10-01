@@ -40,8 +40,9 @@ public final class MasteryModel {
     /**
      * 计算某方向的当前掌握状态。
      *
-     * @param events       该方向的有效面试事件，<b>按 at 升序</b>；调用方保证有序
-     *                     （门面 {@code recentOutcomes} 是倒序，advisor 侧反转后传入）
+     * @param events       该方向的有效面试事件，<b>按 at 升序</b>；由调用方排好序传入
+     *                     （现行唯一调用方 {@code ForgettingCurveRule} 自己 {@code sorted(...)}，
+     *                     快照里的 {@code recentSessions} 是倒序）
      * @param qualityWeight 自习室质量均值 [0,1]；{@code null} = 方向无学习记录，按中性值处理
      * @param p            模型参数
      * @param asOf         决策参考时刻（衰减到此时刻；测试注入历史日期保证可复现）

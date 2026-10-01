@@ -71,21 +71,24 @@ public interface InterviewReportRepository extends JpaRepository<InterviewReport
                                           Pageable pageable);
 
     /**
-     * P1c-01 信号聚合（shared/signal 门面消费）：单方向窗口内 DONE 报告的逐场结果，
-     * 含四留痕。report 表不存 direction_id/finished_at，用原生 SQL JOIN interview_session 取回
-     * ——跨表不跨模块（不 import interview 实体，ArchUnit 只看 Java 依赖，markDone 同先例）。
-     * 返回行形状：{@code [sessionId(String), directionId(String), finishedAt(Timestamp),
-     * compositeScore(Short), chatModel, evaluatorModel, promptHash, evaluatorVersion]}。
-     * 时间倒序、上限 10 场。
+     * P1c-01 信号聚合（shared/signal 门面消费）：单方向<b>最近 {@code limit} 场</b> DONE 报告的逐场结果
+     * （时间倒序），含四留痕。report 表不存 direction_id/finished_at，用原生 SQL JOIN
+     * interview_session 取回——跨表不跨模块（不 import interview 实体，ArchUnit 只看 Java 依赖，
+     * markDone 同先例）。返回行形状：{@code [sessionId(String), directionId(String),
+     * finishedAt(Timestamp), compositeScore(Short), chatModel, evaluatorModel, promptHash,
+     * evaluatorVersion]}。
+     *
+     * <p>为何不按时间窗口过滤：掌握度事件需要看到“久不练”的历史（半衰期 21 天，衰减量
+     * 随 t 增长）；若只取最近 14 天，系统永远无法表达“30 天前练过、现在已遗忘”——而那条
+     * 遗忘曲线正是本项目的立项理由（planner-decision-kernel-adr 修订 1）。“近期表现”的
+     * 口径由调用侧的有效样本（有非降级分）承担，不靠这里截时间。
      */
     @Query(value = "select cast(r.session_id as text), cast(s.direction_id as text), s.finished_at,"
         + " r.composite_score, r.chat_model, r.evaluator_model, r.prompt_hash, r.evaluator_version"
         + " from interview_report r join interview_session s on s.id = r.session_id"
         + " where r.user_id = :userId and s.direction_id = :directionId and r.status = 'DONE'"
-        + " and s.finished_at >= :from and s.finished_at < :toExclusive"
-        + " order by s.finished_at desc limit 10", nativeQuery = true)
-    List<Object[]> findDoneOutcomes(@Param("userId") UUID userId,
-                                    @Param("directionId") UUID directionId,
-                                    @Param("from") Instant from,
-                                    @Param("toExclusive") Instant toExclusive);
+        + " order by s.finished_at desc limit :limit", nativeQuery = true)
+    List<Object[]> findLatestDoneOutcomes(@Param("userId") UUID userId,
+                                          @Param("directionId") UUID directionId,
+                                          @Param("limit") int limit);
 }

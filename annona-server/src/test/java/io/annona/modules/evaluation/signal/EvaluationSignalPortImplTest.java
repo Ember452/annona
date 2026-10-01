@@ -1,7 +1,6 @@
 package io.annona.modules.evaluation.signal;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
@@ -10,7 +9,6 @@ import io.annona.modules.evaluation.repository.InterviewReportRepository;
 import io.annona.spi.dto.SessionOutcome;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -27,8 +25,7 @@ class EvaluationSignalPortImplTest {
 
     private static final UUID USER = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID DIR = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
-    private static final LocalDate FROM = LocalDate.of(2026, 9, 1);
-    private static final LocalDate TO = LocalDate.of(2026, 9, 30);
+    private static final int LIMIT = 10;
 
     @Mock
     private InterviewReportRepository repository;
@@ -43,11 +40,11 @@ class EvaluationSignalPortImplTest {
     @DisplayName("正常行：八列按序映射，compositeScore 由 Short 转 Integer")
     void mapsFullRow() {
         Instant finished = Instant.parse("2026-09-20T08:00:00Z");
-        when(repository.findDoneOutcomes(any(), any(), any(), any())).thenReturn(List.<Object[]>of(
+        when(repository.findLatestDoneOutcomes(USER, DIR, LIMIT)).thenReturn(List.<Object[]>of(
             new Object[]{"s1", DIR.toString(), Timestamp.from(finished), (short) 82,
                 "chat-m", "eval-m", "hash123", "v2"}));
 
-        List<SessionOutcome> outcomes = impl().recentOutcomes(USER, DIR, FROM, TO);
+        List<SessionOutcome> outcomes = impl().latestOutcomes(USER, DIR, LIMIT);
 
         assertThat(outcomes).hasSize(1);
         SessionOutcome o = outcomes.get(0);
@@ -61,10 +58,10 @@ class EvaluationSignalPortImplTest {
     @Test
     @DisplayName("降级场：compositeScore 与 finished_at 皆 null，映射不 NPE")
     void mapsNullScoreAndTimestamp() {
-        when(repository.findDoneOutcomes(any(), any(), any(), any())).thenReturn(List.<Object[]>of(
+        when(repository.findLatestDoneOutcomes(USER, DIR, LIMIT)).thenReturn(List.<Object[]>of(
             new Object[]{"s2", DIR.toString(), null, null, null, null, null, "v2"}));
 
-        List<SessionOutcome> outcomes = impl().recentOutcomes(USER, DIR, FROM, TO);
+        List<SessionOutcome> outcomes = impl().latestOutcomes(USER, DIR, LIMIT);
 
         assertThat(outcomes).hasSize(1);
         assertThat(outcomes.get(0).compositeScore()).isNull();
@@ -74,9 +71,9 @@ class EvaluationSignalPortImplTest {
     @Test
     @DisplayName("无 DONE 报告：空列表")
     void emptyWhenNoReports() {
-        when(repository.findDoneOutcomes(any(), any(), any(), any())).thenReturn(List.of());
+        when(repository.findLatestDoneOutcomes(USER, DIR, LIMIT)).thenReturn(List.of());
 
-        assertThat(impl().recentOutcomes(USER, DIR, FROM, TO)).isEmpty();
+        assertThat(impl().latestOutcomes(USER, DIR, LIMIT)).isEmpty();
     }
 
     @Test
