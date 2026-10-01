@@ -1,7 +1,7 @@
 # ADR: planner 决策内核的数据契约与接线方案
 
-- 日期：2026-09-30 / 状态：Accepted
-- 相关：[direction ADR 修订 3](./2026-09-25-direction-master-data-adr.md)（遗留义务：扩展 SignalSnapshot 方向维度）·[interview-session-adr](./2026-09-29-interview-session-adr.md)（组卷与冷热分层）·[evaluation-pipeline-adr](./2026-09-30-evaluation-pipeline-adr.md)（interview_report 四留痕）·设计文档 §6.1/§6.2/§6.4
+- 日期：2026-09-30（初版）/ 2026-10-01（修订 1）/ 状态：Accepted
+- 相关：[direction ADR 修订 3](./2026-09-25-direction-master-data-adr.md)（遗留义务：扩展 SignalSnapshot 方向维度）·[interview-session-adr](./2026-09-29-interview-session-adr.md)（组卷与冷热分层、历史去重双判）·[evaluation-pipeline-adr](./2026-09-30-evaluation-pipeline-adr.md)（interview_report 四留痕）·设计文档 §6.1/§6.2/§6.4
 
 ## 背景
 
@@ -50,3 +50,55 @@ P1c 要在零实现的 `modules/planner` 上建决策内核：读信号 → 算�
 - 单方向报告数 > 200 或组卷 P95 实测退化 → 重新评估掌握度是否需物化/缓存。
 - P2-06 建 `plan_task`/`todo_item` 后 → REMIND_REVIEW 升级为真 todo 回写，`completionPercent` 接数据源。
 - 出现真实用户困扰需区分"面试方向/自习方向"下拉 → 重新评估方向体系（见 direction ADR 同条）。
+
+---
+
+## 修订 1（2026-10-01）：修正两个会让决策空转的接线缺陷
+
+**背景**（P1c 收尾后的代码审查发现，两条均在 387 测试全绿的状态下存在）：初版把“信号回看窗口”
+同时用在了学习侧与面试侧，且未安排复习选题与历史去重的相互关系。后果：
+
+1. `recentSessions` 按 `window-days`（14 天）取数 → 遗忘衰减的输入 t 被硬截在 14 天以内
+   （半衰期 H=21 天，0.5^(14/21)=0.63），而“久不练”的方向窗口内一场都没有 → sampleSize=0
+   → SAMPLE_GUARD 拦停。**产品立项场景（“一个月没练的方向被重新抽出来”）在数学上不可表达**；
+   `DemoSeedRunner` 造的 4 场面试落在 2/13/23/34 天前，默认参数下只有 2 场进窗 →
+   demo 与 A/B 取证只能演示出“数据不足”。
+2. 复习题候选来自“历史得分最低的题”（本质就是答过的题），而 `QuestionPackService` 先按
+   90 天历史去重剔除候选、再对剩下的做 review 置顶 → FORGETTING 选出的复习题**必然被去重
+   拦光**，但 `REMIND_REVIEW` 留痕仍写“已优先复习 N 题”——**可解释链给出一条做不到的承诺**。
+   `ab.py` 旧版度量的是 trace 行数（规则声称）而非卷面事实（真的做了），所以 A/B 即
+   使跑了也抽不出这个缺陷。
+
+**决策**：
+
+1. **拆两个口径**：`window-days` 只作用于学习侧（自习室时长回看）；面试侧事件集改为
+   **按条数取最近 10 场**（= SPI 既有的 `recentSessions` 上限），端口方法由
+   `recentOutcomes(userId, directionId, from, to)` 改为 `latestOutcomes(userId, directionId, limit)`，
+   SQL 去掉 `finished_at` 谓词。条数上限是契约的一部分，写为 `SignalFacade` 常量，**不加配置键**。
+2. **样本量与均分同分母**：`sampleSize` = 有非降级分的场次数（不再是“完成场次数”），
+   `avgScore` 与掌握度事件均基于同一集合——面板里“近 N 场均分 X”的 N 必须是 X 的真分母。
+3. **复习题豁免历史去重**：`pack()` 对 `reviewIds` 里的候选不应用 dedup（仍受池内同题干
+   折叠与难度置顶约束）。interview-session-adr §决策 4 的去重目的是“不出新重复题”，
+   重练已知弱项是被授权的例外。
+4. **留痕只说真做到了的事**：组卷完成后调 `reconcileReview(decision, packedIds)` 校正
+   `REMIND_REVIEW`——部分落地写 `actual/planned`，一支未进卷时 action 改为
+   `REVIEW_NONE_PACKED` 并明写未落地。不采“删掉承诺行”的方案：保护/降级也要可解释（§6.4）。
+
+**否决的备选**：
+
+| 备选 | 否决原因 |
+|---|---|
+| 只把 `window-days` 默认值提到 60/90 | 一行改完，但“近 N 场均分”会被很旧的成绩稀释，均分作为“近期表现”的语义丢失；且仍需在注释/ADR 里维护“窗口必须 ≥ 2×半衰期”这条隐式不变量 |
+| 复习题走“跳过 dedup 的旁路查询”另开一条组卷路径 | 两条路径同时改动时极易漂移；在 pack 内加一个豁免条件是一个变更点 |
+| advisor 自报“已掺入”，信任 reviewIds 非空 | 正是本次缺陷的根源：选择≠进卷，组卷结果只有组卷方知道 |
+| `REMIND_REVIEW` 直接不写 trace（静默降级） | 违反“保护与降级也要留痕”（§6.4），用户会看到“说了要复习却没出现”且无法归因 |
+
+**后果与约束**：
+
+- 契约描述同步点（已随本批改完）：`SignalSnapshot.sampleSize/recentSessions`、
+  `DirectionSignal.sessions/avgScore`、`RuleConfig.windowDays` 的 Javadoc，以及
+  `application.yaml` 的 `window-days` 注释。改口径不改注释 = 下次再犯。
+- `DecisionFlowIT` 新增两条真库断言作为不变量守卫（久不练仍命中 WEAK_DIRECTION；复习题真进卷）——
+  本机无 PG 不跑，由 CI docker-it 复验（AGENTS 规则 8）。
+- **何时重新评估**：若未来要支持“均分只看最近 N 天”的真实需求，应新增一个显式的
+  `score-window-days` 配置并与事件上限分离，而不是把窗口谓词加回 `latestOutcomes`。

@@ -69,3 +69,10 @@
 - 题目池 >10 万行：HNSW `m/ef_construction` 参数与关键词 ILIKE 的全池扫描需重测。
 - 组卷需要跨方向/混合难度策略时：`PackRules` 从常量升为 planner `DecisionRule` SPI 实现。
 - 批 3 评分对 plan 结构提出 breaking change 时：修订本 ADR 而非静默改 JSON 形状。
+
+## 后续修订
+
+- **2026-10-01（§决策 4 历史去重的一处例外）**：planner 选定的复习题（`pack(..., reviewIds)`）
+  **豁免**历史去重。去重的目的始终是“不出新重复题”，而重练已知弱项是决策层的合法输出，
+  不应当被去重静默吃掉（否则 `REMIND_REVIEW` 留痕与卷面不符）。动机、否决备选与守卫测试
+  见 [planner-decision-kernel-adr 修订 1](./2026-09-30-planner-decision-kernel-adr.md)，本文件不复述。
