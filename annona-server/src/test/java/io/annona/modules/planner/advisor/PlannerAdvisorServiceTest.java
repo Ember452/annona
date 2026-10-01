@@ -144,4 +144,49 @@ class PlannerAdvisorServiceTest {
         assertThat(decision.traces()).noneMatch(t -> t.ruleKey().equals("WEAK_DIRECTION"));
         assertThat(decision.traces()).anyMatch(t -> t.ruleKey().equals("FORGETTING_CURVE"));
     }
+
+    @Test
+    @DisplayName("复习题一支未进卷：REMIND_REVIEW 降级为如实说明，不留下假断言")
+    void reviewTraceDowngradedWhenNothingPacked() {
+        UUID weak = UUID.fromString("00000000-0000-0000-0000-0000000000f1");
+        var advisor = forgettingAdvisorWithReview(List.of(weak));
+        PlanDecision raw = advisor.advise(USER, DIR, List.of(3, 3, 3, 3), AS_OF);
+        assertThat(raw.traces()).anyMatch(t -> "REMIND_REVIEW".equals(t.ruleKey())
+            && "SUGGEST_REVIEW".equals(t.action()));
+
+        PlanDecision reconciled = advisor.reconcileReview(raw, List.of());
+
+        assertThat(reconciled.traces()).noneMatch(t -> "REMIND_REVIEW".equals(t.ruleKey())
+            && "SUGGEST_REVIEW".equals(t.action()));
+        assertThat(reconciled.traces()).anyMatch(t -> "REMIND_REVIEW".equals(t.ruleKey())
+            && "REVIEW_NONE_PACKED".equals(t.action()));
+        // 其余留痕（难度调整、保护说明）不得被校正顺带弄丢
+        assertThat(reconciled.traces()).anyMatch(t -> "FORGETTING_CURVE".equals(t.ruleKey()));
+        assertThat(reconciled.difficulties()).isEqualTo(raw.difficulties());
+    }
+
+    @Test
+    @DisplayName("复习题实际进卷：留痕按实数写 N/N，部分落地时写 actual/planned")
+    void reviewTraceReportsActualPackedCount() {
+        UUID first = UUID.fromString("00000000-0000-0000-0000-0000000000f1");
+        var advisor = forgettingAdvisorWithReview(List.of(first));
+
+        PlanDecision allIn = advisor.reconcileReview(
+            advisor.advise(USER, DIR, List.of(3, 3, 3, 3), AS_OF), List.of(first));
+        assertThat(allIn.traces()).anyMatch(t -> "REMIND_REVIEW".equals(t.ruleKey())
+            && "SUGGEST_REVIEW".equals(t.action()) && t.reason().contains("1/1"));
+    }
+
+    /** 固定构造一个“低分且久不练”的 advisor（FORGETTING 必命中，复习候选由入参给定）。 */
+    private PlannerAdvisorService forgettingAdvisorWithReview(List<UUID> weakest) {
+        var snap = snapshot(List.of(session(40, 30), session(41, 30), session(42, 30)),
+            30.0, 3, true);
+        List<DecisionRule> rules = List.of(new ForgettingCurveRule(config()),
+            new WeakDirectionRule(config()));
+        when(reputationService.disabledRuleKeys(USER)).thenReturn(Set.of());
+        when(evalProviders.getIfAvailable()).thenReturn(evalPort);
+        when(evalPort.weakestQuestionIds(eq(USER), eq(DIR), anyInt())).thenReturn(weakest);
+        return new PlannerAdvisorService(readerReturning(snap), config(), rules,
+            evalProviders, traceWriter, reputationService);
+    }
 }

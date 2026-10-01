@@ -139,6 +139,8 @@ public class InterviewSessionFacade {
 
         var pack = packService.pack(plan, pool,
             dedupService.findDedupHits(userId, directionId, pool), reviewIds);
+        // 留痕按实际卷面校正（诚实呈现：不能承诺没做到的事）
+        decision = reconcileReview(decision, pack.questionIds());
         if (pack.questionIds().isEmpty()) {
             throw new BusinessException(ErrorCode.QB_QUESTION_CAPACITY_INSUFFICIENT,
                 "近 90 天该方向题目已答过或被去重拦截，请先补充题库");
@@ -171,6 +173,15 @@ public class InterviewSessionFacade {
             log.warn("planner 决策异常，降级为请求原难度：{}", e.getMessage(), e);
             return null;
         }
+    }
+
+    /** 按实际进卷的复习题校正留痕；无决策或 advisor 缺席时原样返回。 */
+    private PlanDecision reconcileReview(PlanDecision decision, List<UUID> packedQuestionIds) {
+        if (decision == null) {
+            return null;
+        }
+        PlannerAdvisorService advisor = advisors.getIfAvailable();
+        return advisor == null ? decision : advisor.reconcileReview(decision, packedQuestionIds);
     }
 
     /** 留痕落库尽力而为：失败只记日志，不影响已建会话（面板降级显示“无决策记录”）。 */

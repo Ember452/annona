@@ -6,6 +6,7 @@ import io.annona.modules.interview.orchestrator.plan.InterviewPlan;
 import io.annona.shared.question.QuestionCandidate;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -79,6 +80,37 @@ class QuestionPackServiceTest {
         var result = packService.pack(plan, List.of(first, dup, other), Map.of());
 
         assertThat(result.questionIds()).containsExactly(first.id(), other.id());
+    }
+
+    @Test
+    @DisplayName("复习题豁免历史去重：planner 选定的复习题即便近期答过也必须能进卷（P1c-05）")
+    void reviewQuestionIsExemptFromDedup() {
+        var fresh = candidate(1, 3, "线程池核心参数设置");
+        var review = candidate(2, 3, "AQS 加锁流程");            // 近期答过 → 命中 dedup
+        var hits = Map.of(review.id(), new StemSimilarity(review.id(), 0.97, false));
+        var plan = new InterviewPlan(2, List.of(3, 3), 0);
+
+        var result = packService.pack(plan, List.of(fresh, review), hits, Set.of(review.id()));
+
+        // 复习题置顶优先，且不被 dedup 静默剔除——否则 REMIND_REVIEW 留痕与实际卷面不符
+        assertThat(result.questionIds()).containsExactly(review.id(), fresh.id());
+        assertThat(result.skippedReasons()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("reviewIds 为空时组卷结果与三参重载逐字节一致（接线不改变无决策时的行为）")
+    void emptyReviewIdsMatchesThreeArgOverload() {
+        var a = candidate(1, 1, "Redis 持久化机制");
+        var b = candidate(2, 1, "Kafka 分区再平衡");
+        var hits = Map.of(b.id(), new StemSimilarity(b.id(), 0.93, false));
+        var plan = new InterviewPlan(2, List.of(1, 1), 0);
+
+        var withEmpty = packService.pack(plan, List.of(a, b), hits, Set.of());
+        var legacy = packService.pack(plan, List.of(a, b), hits);
+
+        assertThat(withEmpty.questionIds()).isEqualTo(legacy.questionIds());
+        assertThat(withEmpty.skippedReasons()).isEqualTo(legacy.skippedReasons());
+        assertThat(withEmpty.questionIds()).containsExactly(a.id());
     }
 
     @Test

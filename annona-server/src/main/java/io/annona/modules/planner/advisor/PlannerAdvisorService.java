@@ -14,6 +14,7 @@ import io.annona.spi.planner.DecisionRule;
 import io.annona.spi.signal.LearningSignalReader;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +42,9 @@ import org.springframework.stereotype.Service;
 public class PlannerAdvisorService {
 
     private static final Logger log = LoggerFactory.getLogger(PlannerAdvisorService.class);
+
+    /** 复习提醒留痕的规则键（与 V15 {@code rule_key} 注释、前端 ruleLabel 映射同源）。 */
+    private static final String RULE_REMIND_REVIEW = "REMIND_REVIEW";
 
     private final LearningSignalReader signalReader;
     private final RuleConfig config;
@@ -103,11 +107,50 @@ public class PlannerAdvisorService {
         List<DecisionTrace> traces = new ArrayList<>(chain.traces());
         if (!reviewIds.isEmpty()) {
             // 复习提醒以 trace 行呈现（P1c-07 反哺落点；真 todo 回写待 P2-06 建表）
-            traces.add(DecisionTrace.accepted("REMIND_REVIEW", "SUGGEST_REVIEW",
+            // 条数文案先按候选写，组卷完成后由 reconcileReview 校正为实际进卷数
+            traces.add(DecisionTrace.accepted(RULE_REMIND_REVIEW, "SUGGEST_REVIEW",
                 "建议优先复习最近得分最低的 " + reviewIds.size() + " 题（遗忘曲线命中）"));
         }
         String snapshotJson = serializeSnapshot(snapshot);
         return new PlanDecision(difficulties, reviewIds, traces, snapshotJson);
+    }
+
+    /**
+     * 按实际进卷的复习题校正 {@code REMIND_REVIEW} 留痕（组卷后回调）。
+     *
+     * <p>为何需要：{@link #advise} 选出的复习题候选能不能进卷要到组卷完成才知道（受池变化、
+     * 同题干折叠影响）。面板上一句“已优先复习 N 题”若与卷面不符，就是无证据的断言（违反
+     * 诚实呈现）。无 {@code REMIND_REVIEW} 痕时原样返回（不创建新对象）。
+     *
+     * @param decision          {@link #advise} 的产出
+     * @param packedQuestionIds 本轮实际进入卷面的题目 ID
+     * @return 留痕已按实数改写的决策（难度序列与输入快照没有变化）
+     */
+    public PlanDecision reconcileReview(PlanDecision decision, Collection<UUID> packedQuestionIds) {
+        List<DecisionTrace> traces = decision.traces();
+        boolean hasRemind = traces.stream().anyMatch(t -> RULE_REMIND_REVIEW.equals(t.ruleKey()));
+        if (!hasRemind) {
+            return decision;
+        }
+        int planned = decision.reviewQuestionIds().size();
+        int packed = (int) decision.reviewQuestionIds().stream()
+            .filter(packedQuestionIds::contains)
+            .count();
+        List<DecisionTrace> replaced = traces.stream()
+            .map(t -> RULE_REMIND_REVIEW.equals(t.ruleKey()) ? reviewTrace(packed, planned) : t)
+            .toList();
+        return new PlanDecision(decision.difficulties(), decision.reviewQuestionIds(),
+            replaced, decision.inputSnapshotJson());
+    }
+
+    /** 复习留痕：一道也没进卷时明写未落地，而不是留一句做不到的承诺。 */
+    private static DecisionTrace reviewTrace(int packed, int planned) {
+        if (packed == 0) {
+            return DecisionTrace.accepted(RULE_REMIND_REVIEW, "REVIEW_NONE_PACKED",
+                String.format("本轮未能掺入选定的 %d 道历史低分题（均未进入本次卷面）", planned));
+        }
+        return DecisionTrace.accepted(RULE_REMIND_REVIEW, "SUGGEST_REVIEW",
+            String.format("本轮优先复习 %d/%d 道历史低分题", packed, planned));
     }
 
     /** 仅当本次有 FORGETTING_CURVE 命中才掺复习题，数量 = reviewRatio*槽数（下限 1、上限 totalCount）。 */

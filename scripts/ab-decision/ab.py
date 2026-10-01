@@ -10,10 +10,18 @@
 纯内存模拟——纯模拟的参数可被人为调成任意结论，那是 §6.5 明确拒绝的"伪统计"。脚本只负责
 驱动与度量；得分差由真实选题结果算出。**结论数字进 docs/benchmarks/，由部署/CI 实跑产出。**
 
+度量口径（2026-10-01 修正）：旧版把 "REMIND_REVIEW 的 trace 行数" 当成"复习题被前置的次数"，
+但 trace 行数只证明**规则声称要做**，不证明**题目真的进了卷**（复习题会被历史去重静默吃掉，
+该缺陷已同日修复）。现在一律以<b>卷面事实</b>为准：主槽的题目 ID 集合 + 校正后的留痕动作
+（SUGGEST_REVIEW=实际进卷 / REVIEW_NONE_PACKED=一道未进卷）。
+
+已知可观测边界：SessionView 不暴露逐题难度，故难度分布无法由 API 度量（不臆造）；
+需要难度分布时先给 SlotView 加 difficulty 字段，再补本脚本指标。
+
 策略：
   decision —— POST /api/interview/sessions {planMode:"auto", ...}   走 planner
   random   —— POST /api/interview/sessions {planMode:"manual", 均匀难度}  基线
-每组读回 decision_trace（decision 组）与会话题库分布，聚合指标。
+每组读回会话题集与 decision_trace，聚合指标。
 
 用法（PowerShell）：
   $env:ANNONA_BASE_URL='http://localhost:8080'; $env:ANNONA_TOKEN='<demo 会话 token>'
@@ -60,23 +68,32 @@ def _get(base: str, token: str, path: str) -> list:
 
 def run_group(base: str, token: str, direction: str, mode: str, sessions: int,
               total_count: int) -> dict:
-    """跑一组：返回每场选中的难度分布 + decision 组的复习命中证据（trace）。"""
-    difficulties_out = []
+    """跑一组：采集每场<b>实际进卷</b>的主题目与决策留痕，度量以卷面事实为准。"""
+    main_slot_counts = []
+    question_ids = []
     traces = []
     baseline = [3] * total_count   # 随机基线用均匀难度 3
     for _ in range(sessions):
         body = {"directionId": direction, "totalCount": total_count,
                 "difficulties": baseline, "followUpDepth": 1, "planMode": mode}
         view = _post(base, token, "/api/interview/sessions", body)
-        difficulties_out.append(len(view.get("slots", [])))
-        tr = _get(base, token, f"/api/decision/session/{view['id']}")
-        traces.extend(tr)
-    review_hits = sum(1 for t in traces if t.get("ruleKey") == "REMIND_REVIEW")
+        main_slots = [s for s in view.get("slots", []) if s.get("followUpIndex") == 0]
+        main_slot_counts.append(len(main_slots))
+        question_ids.extend(s["questionId"] for s in main_slots)
+        traces.extend(_get(base, token, f"/api/decision/session/{view['id']}"))
+    remind = [t for t in traces if t.get("ruleKey") == "REMIND_REVIEW"]
+    packed = [t for t in remind if t.get("action") == "SUGGEST_REVIEW"]
+    blocked = [t for t in remind if t.get("action") == "REVIEW_NONE_PACKED"]
     return {
         "mode": mode,
         "sessions": sessions,
         "traces": len(traces),
-        "review_reminders": review_hits,
+        "main_slots_per_session": main_slot_counts,
+        "distinct_questions": len(set(question_ids)),
+        # 复习题落地与否分开计：只有 packed 是真的被塞进卷面
+        "review_packed_sessions": len(packed),
+        "review_blocked_sessions": len(blocked),
+        "review_packed_reasons": [t.get("reason") for t in packed],
         "distinct_rules": sorted({t.get("ruleKey") for t in traces}),
     }
 

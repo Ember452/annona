@@ -35,8 +35,8 @@ public class QuestionPackService {
 
     /**
      * 决策驱动组卷（P1c-05）：与三参重载同算法，额外把 {@code reviewIds}（planner 选定的复习题）
-     * 在同难度桶内置顶优先。{@code reviewIds} 为空时行为与三参重载逐字节一致——既有 golden
-     * 传空集即全量兼容（接线不改变无决策时的组卷）。
+     * 在同难度桶内置顶优先，并<b>豁免历史去重</b>（否则复习题会被自己的去重规则吃掉）。
+     * {@code reviewIds} 为空时行为与三参重载逐字节一致——既有 golden 传空集即全量兼容。
      *
      * @param reviewIds 需优先掺入的复习题 ID（按掌握度最低的历史题，可跨难度桶）
      */
@@ -46,7 +46,11 @@ public class QuestionPackService {
         Set<String> seenStems = new HashSet<>();
         Map<Integer, List<QuestionCandidate>> byDifficulty = new LinkedHashMap<>();
         for (QuestionCandidate q : pool) {
-            if (dedupHits.containsKey(q.id()) || !seenStems.add(normalize(q.question()))) {
+            // 复习题豁免历史去重：planner 选定的低分题本质就是“答过的题”，若让 90 天去重
+            // 拦下它们，掺复习题就永远空转且 REMIND_REVIEW 留痕与卷面不符（interview-session-adr
+            // §决策 4 的去重目的是“不出新重复题”，重练已知弱项是被授权的例外）。
+            boolean dedupBlocked = dedupHits.containsKey(q.id()) && !reviewIds.contains(q.id());
+            if (dedupBlocked || !seenStems.add(normalize(q.question()))) {
                 continue;
             }
             byDifficulty.computeIfAbsent(q.difficulty(), k -> new ArrayList<>()).add(q);
