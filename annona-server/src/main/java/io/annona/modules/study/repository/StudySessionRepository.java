@@ -23,4 +23,20 @@ public interface StudySessionRepository extends JpaRepository<StudySessionEntity
 
     /** 打卡 hours 联动的会话（ADR §决策 3）：upsert 时按 checkin_id 定位。 */
     Optional<StudySessionEntity> findByCheckinId(UUID checkinId);
+
+    /**
+     * P1c-01 信号聚合（shared/signal 门面消费）：单方向窗口内按质量分级的时长求和。
+     * 返回单行 {@code [verifiedMinutes, selfReportedMinutes]}（VERIFIED+PARTIAL 归第一列，
+     * SELF_REPORTED 归第二列）；无行时 SUM 为 null，由调用方归零。命中索引
+     * {@code idx_study_session_user_dir_start}（V2 为本查询预建）。窗口用半开区间
+     * {@code [from, toExclusive)} 避免逐行日期转换。
+     */
+    @Query("select sum(case when s.quality in ('VERIFIED', 'PARTIAL')"
+        + " then coalesce(s.minutes, 0) else 0 end),"
+        + " sum(case when s.quality = 'SELF_REPORTED' then coalesce(s.minutes, 0) else 0 end)"
+        + " from StudySessionEntity s where s.userId = :userId and s.directionId = :directionId"
+        + " and s.startAt >= :from and s.startAt < :toExclusive")
+    List<Object[]> aggregateQualityByDirection(@Param("userId") UUID userId,
+        @Param("directionId") UUID directionId, @Param("from") Instant from,
+        @Param("toExclusive") Instant toExclusive);
 }

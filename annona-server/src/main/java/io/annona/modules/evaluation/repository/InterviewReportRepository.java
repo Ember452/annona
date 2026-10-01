@@ -69,4 +69,23 @@ public interface InterviewReportRepository extends JpaRepository<InterviewReport
     List<InterviewReportEntity> findStale(@Param("status") String status,
                                           @Param("threshold") Instant threshold,
                                           Pageable pageable);
+
+    /**
+     * P1c-01 信号聚合（shared/signal 门面消费）：单方向窗口内 DONE 报告的逐场结果，
+     * 含四留痕。report 表不存 direction_id/finished_at，用原生 SQL JOIN interview_session 取回
+     * ——跨表不跨模块（不 import interview 实体，ArchUnit 只看 Java 依赖，markDone 同先例）。
+     * 返回行形状：{@code [sessionId(String), directionId(String), finishedAt(Timestamp),
+     * compositeScore(Short), chatModel, evaluatorModel, promptHash, evaluatorVersion]}。
+     * 时间倒序、上限 10 场。
+     */
+    @Query(value = "select cast(r.session_id as text), cast(s.direction_id as text), s.finished_at,"
+        + " r.composite_score, r.chat_model, r.evaluator_model, r.prompt_hash, r.evaluator_version"
+        + " from interview_report r join interview_session s on s.id = r.session_id"
+        + " where r.user_id = :userId and s.direction_id = :directionId and r.status = 'DONE'"
+        + " and s.finished_at >= :from and s.finished_at < :toExclusive"
+        + " order by s.finished_at desc limit 10", nativeQuery = true)
+    List<Object[]> findDoneOutcomes(@Param("userId") UUID userId,
+                                    @Param("directionId") UUID directionId,
+                                    @Param("from") Instant from,
+                                    @Param("toExclusive") Instant toExclusive);
 }

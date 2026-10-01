@@ -21,6 +21,21 @@ public interface InterviewEvaluationRepository
         UUID sessionId, String evaluatorVersion);
 
     /**
+     * P1c-05 复习题选择器数据源：该用户该方向历史得分最低的题（仅当前 ACTIVE、非降级评分），
+     * 按逐题最低分升序。跨表 JOIN interview_session（定方向/归属）与 qb_question（校 ACTIVE）
+     * ——原生 SQL，不 import 其他模块实体。score IS NULL 的降级行不参与（宁缺勿假分）。
+     */
+    @Query(value = "select q.id from interview_evaluation e"
+        + " join interview_session s on s.id = e.session_id"
+        + " join qb_question q on q.id = e.question_id"
+        + " where s.user_id = :userId and s.direction_id = :directionId"
+        + " and q.user_id = :userId and q.status = 'ACTIVE' and e.score is not null"
+        + " group by q.id order by min(e.score) asc limit :limit", nativeQuery = true)
+    List<UUID> findWeakestQuestionIds(@Param("userId") UUID userId,
+                                      @Param("directionId") UUID directionId,
+                                      @Param("limit") int limit);
+
+    /**
      * 幂等 upsert：{@code strengthsJson}/{@code improvementsJson} 为调用方序列化的 JSON 字符串
      * （原生查询按 CAST AS jsonb 落列）。同幂等键冲突时用新值覆盖明细并推进 updated_at。
      */

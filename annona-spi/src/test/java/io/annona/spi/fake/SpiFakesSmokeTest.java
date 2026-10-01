@@ -3,6 +3,7 @@ package io.annona.spi.fake;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.annona.spi.dto.DecisionContext;
@@ -81,7 +82,7 @@ class SpiFakesSmokeTest {
     }
 
     @Test
-    @DisplayName("FakeLearningSignalReader：返回零值快照（totalStudy=0 sampleSize=0 completionPercent=0）")
+    @DisplayName("FakeLearningSignalReader：返回零值快照（totalStudy=0 sampleSize=0，方向/逐场为空）")
     void fakeSignalReaderReturnsZeroSnapshot() {
         FakeLearningSignalReader sut = new FakeLearningSignalReader();
         LocalDate from = LocalDate.of(2026, 9, 1);
@@ -92,7 +93,11 @@ class SpiFakesSmokeTest {
         assertEquals(to, snap.to());
         assertEquals(Duration.ZERO, snap.totalStudy());
         assertEquals(0, snap.sampleSize());
-        assertEquals(Integer.valueOf(0), snap.completionPercent());
+        // 修订 4：completionPercent 数据源（plan_task）P2-06 才建，P1c 期间恒 null；
+        // 方向与逐场结果为空集（非 null）
+        assertNull(snap.completionPercent());
+        assertTrue(snap.directionals().isEmpty());
+        assertTrue(snap.recentSessions().isEmpty());
     }
 
     @Test
