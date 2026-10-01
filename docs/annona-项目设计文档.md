@@ -247,7 +247,7 @@ direction
 | `checkin` | 每日打卡 | user_id, day, hours, mood, energy, note, snapshot_url |
 | `study_plan` / `plan_task` | 计划与任务 | plan_id, direction_id, title, day_number, status, source(用户/AI/决策层) |
 | `todo_item` | 今日待办 | user_id, day, title, done, origin |
-| `mastery` | 方向掌握度 | user_id, **direction_id**, mastery, confidence, last_practiced_at, sample_size, updated_at |
+| `mastery` | 方向掌握度 | **不落表**（P1c-02 现算）：用户×方向的掌握度是面试事件序列的纯函数，组卷时现算（golden 可复现），不物化——见 [planner ADR](./specs/2026-09-30-planner-decision-kernel-adr.md) 决策 3；公式 §6.2 |
 | `kb_doc` | 文档元数据 + 入库状态机（V4 实际表名，原写 `knowledge_doc`） | user_id, direction_id, name, original_filename, file_hash, storage_key, status, processed_chunks/total_chunks, attempt_id, recovery_count, analyzer_version, embedding_model, chunk_count |
 | `kb_doc_chunk` | 切片与向量（V4 建表 + V5 关键词列，原写 `doc_chunk`） | doc_id, chunk_index, heading_path, char_start/char_end, content, content_hash, embedding vector(1024), **tokens**, **tsv**（`GENERATED ALWAYS AS (to_tsvector('simple', tokens)) STORED`）, **tokenizer_version** |
 | `qa_session` / `qa_message` | 知识问答会话与消息（V6 + V7 miss_reason，P1a-08） | session_id, type(USER/ASSISTANT), content, message_order, completed, citations(jsonb), miss_reason——**与 `user_session`/`study_session` 不同构**，见表注释 |

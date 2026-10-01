@@ -142,6 +142,12 @@
 - 实现口径：按 `direction_id` 聚合后，方向无学习记录时信号为空且决策链正常工作（golden 测试
   锁定该形态）。
 
+> **已履行（2026-09-30，P1c-01）**：`SignalSnapshot` 增加方向维度（`List<DirectionSignal>` +
+> `SessionOutcome` 逐场）、`LearningSignalReader` 增 `default readDirectional(...)`、
+> `PlannedQuestion.directionKey → directionId`（同收修订 2 的命名待定稿）；golden 与 slice 测试
+> 已锁定"同用户同日同方向可复现"与"无学习记录=正常形态"。契约细节与取舍见
+> [planner-decision-kernel-adr](./2026-09-30-planner-decision-kernel-adr.md)。
+
 **何时重新评估**：若“方向选择器下拉混显”（自习室看到面试方向、反之亦然）成为真实用户困扰，
 在前端选择器加场景过滤（UI 层，不动数据模型）；若产品决定做“学习计划直接驱动面试”的强绑定
 功能，需重开 ADR 推翻本修订。
