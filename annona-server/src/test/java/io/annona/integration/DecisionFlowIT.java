@@ -2,13 +2,19 @@ package io.annona.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.annona.common.exception.BusinessException;
 import io.annona.modules.interview.orchestrator.controller.CreateSessionRequest;
 import io.annona.modules.interview.orchestrator.controller.SessionView;
 import io.annona.modules.interview.orchestrator.session.InterviewSessionFacade;
+import io.annona.modules.planner.service.DecisionPanelService;
 import io.annona.shared.direction.entity.DirectionEntity;
 import io.annona.shared.direction.repository.DirectionRepository;
+import io.annona.shared.evaluation.EvaluationSignalPort;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,11 +51,16 @@ class DecisionFlowIT {
     @Autowired
     private DirectionRepository directionRepository;
     @Autowired
+    private DecisionPanelService panelService;
+    @Autowired
+    private EvaluationSignalPort signalPort;
+    @Autowired
     private DataSource dataSource;
 
     private JdbcTemplate jdbc;
     private UUID userId;
     private UUID directionId;
+    private final List<UUID> extraDirections = new ArrayList<>();
 
     @BeforeEach
     void fixture() {
@@ -84,6 +95,10 @@ class DecisionFlowIT {
             + " (select id from interview_session where user_id = ?)", userId);
         jdbc.update("delete from interview_session where user_id = ?", userId);
         jdbc.update("delete from qb_question where user_id = ?", userId);
+        for (UUID extra : extraDirections) {
+            jdbc.update("delete from direction where id = ?", extra);
+        }
+        extraDirections.clear();
         jdbc.update("delete from direction where id = ?", directionId);
         jdbc.update("delete from app_user where id = ?", userId);
     }
@@ -107,6 +122,12 @@ class DecisionFlowIT {
      * 答案行是特意造的——它让该题同时命中历史去重，能证伪“复习题被 dedup 吃掉”。
      */
     private void seedHistory(int count, int daysAgo, short score, UUID answeredQuestion) {
+        seedHistory(directionId, count, daysAgo, score, answeredQuestion);
+    }
+
+    /** 同上，但场次挂在 {@code targetDirection} 上（方向隔离用例需要造第二个方向的数据）。 */
+    private void seedHistory(UUID targetDirection, int count, int daysAgo, short score,
+                             UUID answeredQuestion) {
         for (int i = 0; i < count; i++) {
             String ago = "now() - '" + (daysAgo - i) + " days'::interval";
             UUID session = UUID.randomUUID();
@@ -114,7 +135,7 @@ class DecisionFlowIT {
                     + " current_index, total_count, evaluator_version, started_at, finished_at)"
                     + " values (?, ?, ?, 'COMPLETED', '{}'::jsonb, 1, 1, 'v2',"
                     + " " + ago + ", " + ago + ")",
-                session, userId, directionId);
+                session, userId, targetDirection);
             jdbc.update("insert into interview_report (id, session_id, user_id, evaluator_version,"
                     + " status, composite_score, chat_model, evaluator_model, prompt_hash)"
                     + " values (?, ?, ?, 'v2', 'DONE', ?, 'it-chat', 'it-eval', 'it-hash')",
@@ -128,6 +149,27 @@ class DecisionFlowIT {
                     + " values (?, ?, ?, 0, 'v2', ?)",
                 UUID.randomUUID(), session, answeredQuestion, score);
         }
+    }
+
+    /** 再建一个方向（计入清理列表）并配一题 ACTIVE 题池，返回方向 ID。 */
+    private UUID newDirectionWithQuestion() {
+        UUID dir = UUID.randomUUID();
+        jdbc.update("insert into direction (id, key, name, origin, status, user_id)"
+            + " values (?, ?, ?, 'USER_CUSTOM', 'ACTIVE', ?)",
+            dir, "it-other-" + UUID.randomUUID(), "IT 另一方向", userId);
+        extraDirections.add(dir);
+        UUID question = UUID.randomUUID();
+        jdbc.update("insert into qb_question (id, user_id, direction_id, question,"
+                + " key_points, difficulty, follow_ups, sources, status, updated_at)"
+                + " values (?, ?, ?, ?, '[]'::jsonb, 3, '[]'::jsonb, '[]'::jsonb, 'ACTIVE', now())",
+            question, userId, dir, "IT 另一方向题干 " + UUID.randomUUID());
+        return dir;
+    }
+
+    /** 某方向题池里的任意一题。 */
+    private UUID questionOf(UUID dir) {
+        return jdbc.queryForObject(
+            "select id from qb_question where direction_id = ? limit 1", UUID.class, dir);
     }
 
     @Test
@@ -208,5 +250,64 @@ class DecisionFlowIT {
             "select reason from decision_trace where session_id = ?::uuid"
                 + " and rule_key = 'REMIND_REVIEW'", String.class, view.id());
         assertThat(reason).as("留痕只声明真做到了的条数").contains("1/1");
+    }
+
+    @Test
+    @DisplayName("方向隔离：另一方向的低分不串进本方向的样本、均分与复习候选")
+    void signalsAreIsolatedByDirection() {
+        // 本方向 3 场高分（均分 90 ≥ 弱项线 60，不该加压）
+        seedHistory(3, 20, (short) 90, firstPoolQuestion());
+        // 另一个方向 3 场低分：若聚合不按 direction_id 过滤，两边均值会被拉成 55 → WEAK 误触发
+        UUID other = newDirectionWithQuestion();
+        UUID otherQuestion = questionOf(other);
+        seedHistory(other, 3, 20, (short) 20, otherQuestion);
+
+        List<String> rules = ruleKeysOf(facade.create(userId, request("auto")).id());
+        assertThat(rules).as("背政治的场次不得污染 Java 方向的决策").doesNotContain("WEAK_DIRECTION");
+
+        assertThat(signalPort.latestOutcomes(userId, directionId, 10))
+            .as("事件集只含被请求方向")
+            .allMatch(o -> o.directionId().equals(directionId.toString()));
+        assertThat(signalPort.weakestQuestionIds(userId, directionId, 5))
+            .as("复习候选不得越方向拿题")
+            .doesNotContain(otherQuestion);
+    }
+
+    @Test
+    @DisplayName("驳回并发：同一条留痕被 8 路同时驳，只计 1 次声誉，其余全部 3201")
+    void concurrentRejectsCountOnce() {
+        seedHistory(3, 45, (short) 30, firstPoolQuestion());
+        String session = facade.create(userId, request("auto")).id();
+        UUID traceId = jdbc.queryForObject(
+            "select id from decision_trace where session_id = ?::uuid"
+                + " and rule_key = 'WEAK_DIRECTION'", UUID.class, session);
+
+        AtomicInteger ok = new AtomicInteger();
+        AtomicInteger blocked = new AtomicInteger();
+        // 旧实现是 findById→判 isUserRejected→改实体→save：两路都能读到未驳态并各自计数一次，
+        // 阈值 3 会被同一条留痕虚胖推爆（规则提前停用）。条件 UPDATE 后只剩一路能抢成。
+        IntStream.range(0, 8).parallel().forEach(i -> {
+            try {
+                panelService.reject(userId, traceId);
+                ok.incrementAndGet();
+            } catch (BusinessException e) {
+                blocked.incrementAndGet();
+            }
+        });
+
+        assertThat(ok.get() + blocked.get()).isEqualTo(8);
+        assertThat(ok.get()).as("一次驳回只能有一次写成").isEqualTo(1);
+        assertThat(blocked.get()).isEqualTo(7);
+        Integer count = jdbc.queryForObject(
+            "select rejected_count from rule_reputation where user_id = ?::uuid"
+                + " and rule_key = 'WEAK_DIRECTION'", Integer.class, userId);
+        assertThat(count).as("声誉计数不重复也不丢失").isEqualTo(1);
+    }
+
+    /** 某场面试已落的全部规则键。 */
+    private List<String> ruleKeysOf(String sessionId) {
+        return jdbc.queryForList(
+            "select rule_key from decision_trace where session_id = ?::uuid",
+            String.class, sessionId);
     }
 }
