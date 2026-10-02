@@ -1,5 +1,6 @@
 package io.annona.bootstrap;
 
+import io.annona.common.support.AppZones;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -43,7 +44,7 @@ public class DemoSeedRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(AppZones.DAILY);
         Boolean exists = jdbc.queryForObject(
             "select exists(select 1 from app_user where id = ?)", Boolean.class, DEMO_USER);
         if (DemoSeedPlan.shouldSkip(Boolean.TRUE.equals(exists))) {
@@ -92,7 +93,7 @@ public class DemoSeedRunner implements ApplicationRunner {
         int idx = 0;
         for (LocalDate d : dates) {
             String quality = qualities[idx % qualities.length];
-            Instant start = d.atTime(20, 0).atZone(java.time.ZoneId.of("Asia/Shanghai")).toInstant();
+            Instant start = d.atTime(20, 0).atZone(AppZones.DAILY).toInstant();
             Instant end = start.plusSeconds(45 * 60);
             jdbc.update("insert into study_session (id, user_id, direction_id, mode, start_at,"
                     + " end_at, minutes, quality) values (?, ?, ?, 'POMODORO', ?, ?, ?, ?)",
@@ -110,7 +111,7 @@ public class DemoSeedRunner implements ApplicationRunner {
             UUID sessionId = UUID.nameUUIDFromBytes(("demo-session-" + s).getBytes());
             LocalDate finishedOn = dates.get(s);
             Instant finished = finishedOn.atTime(21, 0)
-                .atZone(java.time.ZoneId.of("Asia/Shanghai")).toInstant();
+                .atZone(AppZones.DAILY).toInstant();
             jdbc.update("insert into interview_session (id, user_id, direction_id, status, plan,"
                     + " current_index, total_count, evaluator_version, started_at, finished_at,"
                     + " created_at, updated_at)"
@@ -123,7 +124,7 @@ public class DemoSeedRunner implements ApplicationRunner {
                     + " values (?, ?, ?, 'v2', 'DONE', ?, 'demo-chat', 'demo-eval',"
                     + " ?, ?, ?)",
                 UUID.randomUUID(), sessionId, DEMO_USER, (short) compositeScores[s],
-                hashOf(finishedOn), Timestamp.from(finished), Timestamp.from(finished));
+                demoPromptHash(), Timestamp.from(finished), Timestamp.from(finished));
             // 逐题低分（供 weakestQuestionIds 取到复习题）：选该难度题
             UUID questionId = UUID.nameUUIDFromBytes(
                 ("demo-q" + (s % questionCount)).getBytes());
@@ -148,8 +149,16 @@ public class DemoSeedRunner implements ApplicationRunner {
         return sb.append(']').toString();
     }
 
-    /** 稳定 prompt_hash（同场次可复现；换"模型"演示时改这里即可触发 VERSION_BASELINE）。 */
-    private static String hashOf(LocalDate day) {
-        return "demo-hash-" + day.getDayOfMonth();
+    /**
+     * 四场历史共用同一 prompt_hash：它们代表"同一评估器同一 prompt 攒下的历史"。
+     *
+     * <p>这里曾经按日期生成 hash（{@code demo-hash-<day>}）——而 {@code detectBaseline}
+     * 只要发现最近 3 场与锚点场的 prompt_hash 不同就判定"刚换过评估器"，把难度调整全部拦掉，
+     * demo 于是只能演示出"换模型基线期"一条保护——修好窗口后依然抽不出任何规则（09-30 审查发现）。
+     * 想演示 VERSION_BASELINE：把最近几场的 hash 改成与锚点不同（如加 {@code -new} 后缀），
+     * 面板应只出现该保护留痕且难度不变。
+     */
+    private static String demoPromptHash() {
+        return "demo-hash-v2";
     }
 }
