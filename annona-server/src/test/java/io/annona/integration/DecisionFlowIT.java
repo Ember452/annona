@@ -184,6 +184,32 @@ class DecisionFlowIT {
             "select id from qb_question where direction_id = ? limit 1", UUID.class, dir);
     }
 
+    /**
+     * 取数层自证：一次断言把“插进去没 / 端口读到没 / 快照算出没”三个计数打在**同一行**。
+     *
+     * <p>为什么写成这样：CI 的 job 日志在 annotations 里只能拿到单行标题，AssertJ 的
+     * “Expecting actual / but was” 块落在后面就看不到。计数分三档才能一次区分：
+     * dbDone=0 → fixture 本身没插进去；dbDone=3 但 portRows=0 → 原生 SQL / {@code limit}
+     * 绑定问题；portRows=3 但 sampleSize=0 → 门面或端口 bean 装配问题。
+     */
+    private void assertSampleVisible(UUID dir, int expected) {
+        Integer dbDone = jdbc.queryForObject(
+            "select count(*) from interview_report r join interview_session s on s.id = r.session_id"
+                + " where r.user_id = ?::uuid and s.direction_id = ?::uuid and r.status = 'DONE'",
+            Integer.class, userId, dir);
+        int portRows = signalPort.latestOutcomes(userId, dir, 10).size();
+        LocalDate today = LocalDate.now(AppZones.DAILY);
+        SignalSnapshot snap = signalReader.readDirectional(
+            userId.toString(), dir, today.minusDays(14), today);
+        if (dbDone == null || dbDone != expected || portRows != expected
+            || snap.sampleSize() != expected) {
+            throw new AssertionError("PROBE[decision-sample] dbDoneReports=" + dbDone
+                + " portRows=" + portRows + " snapshotSampleSize=" + snap.sampleSize()
+                + " avgScore=" + snap.directionals().get(0).avgScore()
+                + " expected=" + expected + " dir=" + dir);
+        }
+    }
+
     @Test
     @DisplayName("auto 开面经 planner 写出决策留痕，manual 一行不写")
     void autoWritesTracesManualDoesNot() {
@@ -234,13 +260,11 @@ class DecisionFlowIT {
     void staleHistoryStillDrivesDecision() {
         seedHistory(3, 60, (short) 30, firstPoolQuestion());
 
-        // 先直接读信号，把“数据没到手”与“到手但规则没动”分成两条不同的失败消息；
-        // 只断 trace 内容会让红掉的 CI 日志分不清到底是取数问题还是决策问题。
+        // 先自证取数：失败消息会直接指到 insert / SQL / 装配三层中的哪一层
+        assertSampleVisible(directionId, 3);
         LocalDate today = LocalDate.now(AppZones.DAILY);
         SignalSnapshot snap = signalReader.readDirectional(
             userId.toString(), directionId, today.minusDays(14), today);
-        assertThat(snap.sampleSize())
-            .as("3 场 DONE 报告全部应是有效样本；若为 0 则取数侧仍被窗口截断").isEqualTo(3);
         assertThat(snap.recentSessions()).as("事件集非空").hasSize(3);
         assertThat(snap.directionals().get(0).avgScore())
             .as("均分取的是非降级分").isEqualTo(30.0);
@@ -260,6 +284,7 @@ class DecisionFlowIT {
         UUID weakest = firstPoolQuestion();
         // 三场历史都答过 weakest 这题：它同时是“最低分待复习题”与“近 90 天已答题（去重命中）”
         seedHistory(3, 45, (short) 30, weakest);
+        assertSampleVisible(directionId, 3);
 
         // 分层断言：先确认复习候选真的被端口返出来，再看是否进了卷面——
         // 否则“空转的复习选择器”与“去重把题拦光”在日志里长得一模一样。
@@ -288,6 +313,8 @@ class DecisionFlowIT {
         UUID other = newDirectionWithQuestion();
         UUID otherQuestion = questionOf(other);
         seedHistory(other, 3, 20, (short) 20, otherQuestion);
+        assertSampleVisible(directionId, 3);
+        assertSampleVisible(other, 3);
 
         List<String> rules = ruleKeysOf(facade.create(userId, request("auto")).id());
         assertThat(rules).as("留痕行必须存在，否则下面的是空断言").isNotEmpty();
@@ -309,10 +336,15 @@ class DecisionFlowIT {
     @DisplayName("驳回并发：同一条留痕被 8 路同时驳，只计 1 次声誉，其余全部 3201")
     void concurrentRejectsCountOnce() {
         seedHistory(3, 45, (short) 30, firstPoolQuestion());
+        assertSampleVisible(directionId, 3);
         String session = facade.create(userId, request("auto")).id();
-        UUID traceId = jdbc.queryForObject(
+        // 先单行断言拿到 trace：直接 queryForObject 在缺行时只报 EmptyResultDataAccessException，
+        // 日志里看不出是“没留痕”还是“留痕了但规则不对”
+        List<UUID> traceIds = jdbc.queryForList(
             "select id from decision_trace where session_id = ?::uuid"
                 + " and rule_key = 'WEAK_DIRECTION'", UUID.class, session);
+        assertThat(traceIds).as("驳回并发用例需要一条 WEAK_DIRECTION 留痕").hasSize(1);
+        UUID traceId = traceIds.get(0);
 
         AtomicInteger ok = new AtomicInteger();
         AtomicInteger blocked = new AtomicInteger();
