@@ -98,6 +98,24 @@ class PlannerDecisionChainSliceTest {
             config, rules, evalProviders, traceWriter, reputationService);
     }
 
+    @Test
+    @DisplayName("脏行：某场 finishedAt 为 null 时，决策链降级为样本不足而不是抛异常")
+    void nullFinishedAtDoesNotKillTheChain() {
+        // 真库里 finished_at 可以为 NULL（session 未收尾），而报告可以是 DONE；
+        // 排序里的 NPE 会被 Facade 吞成“本次由默认策略出题”——整个决策层静默停摆。
+        SessionOutcome missingTime = new SessionOutcome(UUID.randomUUID().toString(),
+            DIR.toString(), 30, null, "chat-m", "eval-m", "hash-stable", "v2");
+        var advisor = chain(List.of(missingTime, outcome(30, 59), outcome(30, 58)));
+
+        PlanDecision decision = advisor.advise(USER, DIR, List.of(3, 3, 3), AS_OF);
+
+        // 无时刻的行不能当掌握度事件（衰减算不出 t），所以有效样本降到 2 → guard 拦下
+        assertThat(decision.traces()).anyMatch(t -> "SAMPLE_GUARD".equals(t.ruleKey()));
+        assertThat(decision.traces()).noneMatch(t -> "FORGETTING_CURVE".equals(t.ruleKey())
+            || "WEAK_DIRECTION".equals(t.ruleKey()));
+        assertThat(decision.difficulties()).containsExactly(3, 3, 3);
+    }
+
     private static SessionOutcome outcome(int score, int daysAgo) {
         return new SessionOutcome(UUID.randomUUID().toString(), DIR.toString(), score,
             AS_OF.minus(daysAgo, ChronoUnit.DAYS).atStartOfDay(AppZones.DAILY).toInstant(),

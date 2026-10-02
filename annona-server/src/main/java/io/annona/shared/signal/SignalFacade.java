@@ -8,8 +8,11 @@ import io.annona.spi.dto.SessionOutcome;
 import io.annona.spi.dto.SignalSnapshot;
 import io.annona.spi.signal.LearningSignalReader;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
@@ -64,13 +67,15 @@ public class SignalFacade implements LearningSignalReader {
             .map(p -> p.latestOutcomes(uid, directionId, OUTCOME_SAMPLE_LIMIT))
             .orElse(List.of());
 
-        // 有效样本 = 有非降级分的场次；sampleSize、avgScore、掌握度事件共用这一个集合，
-        // 面板里“近 N 场均分 X”的 N 才是 X 的真分母
-        List<SessionOutcome> scored = outcomes.stream()
-            .filter(s -> s.compositeScore() != null)
+        // 有效样本 = 有非降级分**且有交卷时刻**的场次。三个条件缺一不可：无分则无均分可说，
+        // 无时刻则掌握度算不出衰减天数（缺后一项时，规则链排序会直接 NPE，
+        // 被调用方吞成“决策未参与”）。sampleSize、avgScore、lastPracticedAt 与掌握度事件
+        // 共用这一个集合，面板里“近 N 场均分 X”的 N 才是 X 的真分母。
+        List<SessionOutcome> usable = outcomes.stream()
+            .filter(s -> s.compositeScore() != null && s.finishedAt() != null)
             .toList();
-        int sampleSize = scored.size();
-        Double avgScore = averageScore(scored);
+        int sampleSize = usable.size();
+        Double avgScore = averageScore(usable);
         DirectionSignal directional = new DirectionSignal(
             directionId.toString(),
             sampleSize,
@@ -81,24 +86,28 @@ public class SignalFacade implements LearningSignalReader {
 
         Duration totalStudy = study.verifiedMinutes().plus(study.selfReportedMinutes());
         return new SignalSnapshot(userId, from, to, totalStudy, null, sampleSize,
-            List.of(directional), outcomes);
+            List.of(directional), usable);
     }
 
     /** 有效样本分的均值，保留两位小数；空集 → null（无分可说，面板显“数据不足”而非 0 分）。 */
     private static Double averageScore(List<SessionOutcome> outcomes) {
-        List<Integer> scores = outcomes.stream().map(SessionOutcome::compositeScore)
-            .filter(java.util.Objects::nonNull).toList();
-        if (scores.isEmpty()) {
+        if (outcomes.isEmpty()) {
             return null;
         }
-        double mean = scores.stream().mapToInt(Integer::intValue).average().orElse(0);
+        double mean = outcomes.stream().mapToInt(SessionOutcome::compositeScore).average()
+            .orElseThrow(() -> new IllegalStateException("非空事件集的均分不应缺失"));
         return Math.round(mean * 100.0) / 100.0;
     }
 
-    /** 最近一次交卷时刻：取 finishedAt 最大值（不依赖端口返回顺序，消除顺序耦合）。 */
-    private static java.time.Instant lastPracticedAt(List<SessionOutcome> outcomes) {
+    /**
+     * 最近一次交卷时刻：取 finishedAt 最大值（不依赖端口返回顺序，消除顺序耦合）。
+     *
+     * <p>故意不跟 {@code usable} 同集合：“上次练习 N 天前”问的是练过没有，降级场也是真练过；
+     * 拿它当样本量或均分才是错的（那两项才要同一个分母）。
+     */
+    private static Instant lastPracticedAt(List<SessionOutcome> outcomes) {
         return outcomes.stream().map(SessionOutcome::finishedAt)
-            .filter(java.util.Objects::nonNull)
-            .max(java.util.Comparator.naturalOrder()).orElse(null);
+            .filter(Objects::nonNull)
+            .max(Comparator.naturalOrder()).orElse(null);
     }
 }

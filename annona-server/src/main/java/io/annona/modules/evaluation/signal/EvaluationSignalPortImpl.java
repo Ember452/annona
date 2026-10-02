@@ -6,6 +6,7 @@ import io.annona.shared.evaluation.EvaluationSignalPort;
 import io.annona.spi.dto.SessionOutcome;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -59,8 +60,22 @@ public class EvaluationSignalPortImpl implements EvaluationSignalPort {
             (String) row[7]);
     }
 
-    /** timestamptz 原样读出为 java.sql.Timestamp（PG 驱动），统一转 Instant；null 透传。 */
+    /**
+     * timestamptz 的 Java 类型取决于取数路径：pgjdbc 的 {@code getObject} 给
+     * {@link Timestamp}，而 Hibernate 6 对 {@code TIMESTAMP_WITH_TIMEZONE} 默认给
+     * {@link OffsetDateTime}——原生 {@code Object[]} 查询上两种都会出现。
+     *
+     * <p>只认 Timestamp 的代价本仓真库集测付过一次：真实行全部映射成 {@code finishedAt = null}，
+     * 掌握度事件排序直接 NPE，被 Facade 吞成“决策未参与”——整个决策层静默停摆。
+     * 未知类型不猜值也不报错：返回 null，由门面把该行排除出有效样本（<b>降级可见</b>，
+     * 面板会显“样本不足”而不是“什么都不解释”）。
+     */
     private static Instant toInstant(Object ts) {
-        return ts instanceof Timestamp t ? t.toInstant() : null;
+        return switch (ts) {
+            case Timestamp t -> t.toInstant();
+            case OffsetDateTime o -> o.toInstant();
+            case Instant i -> i;
+            case null, default -> null;
+        };
     }
 }
