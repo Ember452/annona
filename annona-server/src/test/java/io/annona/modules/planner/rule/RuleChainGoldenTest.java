@@ -24,6 +24,11 @@ import org.junit.jupiter.api.Test;
 /**
  * 规则链 golden：固定一条"低分且久不练"的轨迹，钉死最终难度序列与命中规则键序。
  * 改阈值/公式/规则顺序会让 golden 红——需 {@code -Dgolden.update=true} 显式重生并在评审确认。
+ *
+ * <p>本快照<strong>不</strong>是"决策改变了组卷"的证据：该轨迹下 FORGETTING 的 -1 与 WEAK 的 +1
+ * 正好抵消，期望序列等于基线——它钉的是规则顺序、阈值组合与键序。"净变化非零"由
+ * {@code RuleChainTest.weakDirectionRaisesDifficulty}（断言 3,3,3,3 → 4,4,4,4）钉住，
+ * 两边各管一件事，不要把这里改成基线相等就当回归通过。
  */
 @DisplayName("RuleChain golden 快照")
 class RuleChainGoldenTest {

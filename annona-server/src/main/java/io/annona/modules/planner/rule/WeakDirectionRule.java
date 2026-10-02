@@ -7,9 +7,13 @@ import io.annona.spi.planner.DecisionRule;
 import java.util.Optional;
 
 /**
- * WEAK_DIRECTION：方向均分低于 {@code weakScoreThreshold}（且覆盖题量已在 sampleSize 里体现）
- * 时，把本次难度整体上调一档，把弱项逼出来。若该方向<b>同时</b>存在自习室记录，把"近窗口专注
- * 占比"作为辅助证据写进 reason（只增强解释强度，不单独触发加权——设计文档 §6.1，禁止跨方向比较）。
+ * WEAK_DIRECTION：方向均分低于 {@code weakScoreThreshold}（且有效样本已在 sampleSize 里体现）
+ * 时，把本场难度上调一档，把弱项逼出来。
+ *
+ * <p>学习侧证据的当前形态：该方向存在自习室记录（且非全自报）时，reason 里点明"方向相交"
+ * 这一<b>布尔级</b>辅助证据，不参与数值加权（设计文档 §6.1 禁止跨方向比较）。原计划在文案里写
+ * "近窗口专注占比"——那需要窗口总时长做分母，DirectionSignal 只提供了分钟数，算不出真实占比，
+ * 所以不写假数字（诚实呈现；要上量化辅助证据先扩信号口径，见 planner-adr 修订 2）。
  */
 public class WeakDirectionRule implements DecisionRule {
 
@@ -40,10 +44,11 @@ public class WeakDirectionRule implements DecisionRule {
     }
 
     private String reason(SignalFacts facts, double avg) {
-        String base = String.format("该方向近 %d 场均分 %.1f 低于弱项线 %.0f，本次上调难度加压",
+        String base = String.format(
+            "该方向最近 %d 场有效样本均分 %.1f 低于弱项线 %.0f——本规则将本场难度上调一档",
             facts.sampleSize(), avg, config.weakScoreThreshold());
         if (facts.hasStudyRecord() && !facts.onlySelfReported()) {
-            return base + "；该方向存在自习室记录（辅助证据，不单独加权）";
+            return base + "；该方向存在自习室记录（方向相交，作为辅助证据不参与数值加权）";
         }
         return base;
     }

@@ -1,15 +1,18 @@
 package io.annona.modules.planner.rule;
 
+import io.annona.spi.dto.SessionOutcome;
 import io.annona.spi.dto.SignalSnapshot;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 从 {@link SignalSnapshot} 派生的决策事实（纯函数，无 IO）。规则与 guard 共读同一份事实，
  * 避免各自从快照重复解析出不同口径（一次决策内 SAMPLE_GUARD 与 WEAK_DIRECTION 看到的
  * sampleSize 必须是同一个数）。
  *
- * @param sampleSize       该方向窗口内的有效面试样本数
- * @param avgScore         非降级场总分均值 [0,100]；无有效分为 {@code null}
+ * @param sampleSize       有效面试样本数（最近 ≤10 场中有非降级分的场数）——与 {@code avgScore}
+ *                         同分母，<b>不按时间窗口截断</b>（planner-adr 修订 1）
+ * @param avgScore         有效样本总分均值 [0,100]；无有效分为 {@code null}
  * @param hasStudyRecord   该方向是否存在学习记录（相交）
  * @param onlySelfReported 学习记录是否全来自 SELF_REPORTED（逐出决策，只进展示）
  * @param baselineOnly     是否处于"换模型/prompt 后的基线采集期"（近 {@code baselineSessions}
@@ -45,7 +48,7 @@ public record SignalFacts(
      * 处于基线采集期（最近 baselineSessions 场只采基线）。留痕为 null 的场不参与比对
      * （无法比对时保持基线连续性，宁可不判也不误断）。
      */
-    private static boolean detectBaseline(List<io.annona.spi.dto.SessionOutcome> descSessions,
+    private static boolean detectBaseline(List<SessionOutcome> descSessions,
                                           int baselineSessions) {
         if (descSessions == null || descSessions.size() < baselineSessions + 1) {
             return false;
@@ -61,16 +64,14 @@ public record SignalFacts(
         return false;
     }
 
-    private static boolean bothTraced(io.annona.spi.dto.SessionOutcome a,
-                                      io.annona.spi.dto.SessionOutcome b) {
+    private static boolean bothTraced(SessionOutcome a, SessionOutcome b) {
         return a.promptHash() != null && b.promptHash() != null
             && a.evaluatorModel() != null && b.evaluatorModel() != null;
     }
 
-    private static boolean differs(io.annona.spi.dto.SessionOutcome a,
-                                   io.annona.spi.dto.SessionOutcome b) {
+    private static boolean differs(SessionOutcome a, SessionOutcome b) {
         return !a.promptHash().equals(b.promptHash())
             || !a.evaluatorModel().equals(b.evaluatorModel())
-            || !java.util.Objects.equals(a.chatModel(), b.chatModel());
+            || !Objects.equals(a.chatModel(), b.chatModel());
     }
 }
