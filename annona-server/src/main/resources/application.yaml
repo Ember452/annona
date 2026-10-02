@@ -129,9 +129,10 @@ annona:
     lr-sample-cap: ${ANNONA_PLANNER_LR_SAMPLE_CAP:10}
     confidence-divisor: ${ANNONA_PLANNER_CONFIDENCE_DIVISOR:5}
     neutral-quality-weight: ${ANNONA_PLANNER_NEUTRAL_QUALITY_WEIGHT:0.5}
-    # 规则与保护阈值（§6.4）：复习题占比上限 / 单方向占比上限 / 样本量下限 / 换模型基线场数 / 信号窗口天。
+    # 规则与保护阈值（§6.4）：复习题占比上限 / 样本量下限 / 换模型基线场数 / 学习侧回看窗口天。
+    # 不设 cap-ratio：单方向占比上限在单方向会话下不成立（用户自选方向），已于 P1c 重定位为
+    # review-ratio 治理（见 planner-decision-kernel-adr）；多方向自动配额落地时再加回。
     review-ratio: ${ANNONA_PLANNER_REVIEW_RATIO:0.25}
-    cap-ratio: ${ANNONA_PLANNER_CAP_RATIO:0.40}
     min-sample: ${ANNONA_PLANNER_MIN_SAMPLE:3}
     baseline-sessions: ${ANNONA_PLANNER_BASELINE_SESSIONS:3}
     # 学习侧（自习室时长）回看窗口。面试侧样本按条数取最近 10 场、不受本值限制——

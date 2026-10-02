@@ -24,7 +24,6 @@ public class PlannerProperties {
 
     // —— 规则与保护阈值（§6.4）——
     private double reviewRatio;
-    private double capRatio;
     private int minSample;
     private int baselineSessions;
     private int windowDays;
@@ -108,14 +107,6 @@ public class PlannerProperties {
 
     public void setReviewRatio(double reviewRatio) {
         this.reviewRatio = reviewRatio;
-    }
-
-    public double getCapRatio() {
-        return capRatio;
-    }
-
-    public void setCapRatio(double capRatio) {
-        this.capRatio = capRatio;
     }
 
     public int getMinSample() {
