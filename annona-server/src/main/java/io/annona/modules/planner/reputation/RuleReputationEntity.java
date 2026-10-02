@@ -11,7 +11,9 @@ import java.util.UUID;
  * 规则声誉行（V16 rule_reputation，P1c-07）：一个 (user, rule_key) 的累计驳回与停用状态。
  * 降权是数据不是代码——规则链据 {@code disabled} 过滤该用户的规则，无需重启即生效。
  *
- * <p>id 应用侧赋值（全仓约定）；updated_at 应用侧推进。
+ * <p>本实体只作<strong>读模型</strong>：建行与计数都走
+ * {@link RuleReputationRepository} 的数据库侧原子语句（计数与阈值停用不能先在 Java 里
+ * 算好再写回，那在并发下丢更新，理由见类 Javadoc）。id 仍由应用侧赋值（全仓约定）。
  */
 @Entity
 @Table(name = "rule_reputation")
@@ -40,18 +42,6 @@ public class RuleReputationEntity {
     @Column(name = "updated_at", nullable = false, columnDefinition = "timestamptz")
     private Instant updatedAt;
 
-    /** 新建一行（首次驳回某规则）。 */
-    public static RuleReputationEntity fresh(UUID userId, String ruleKey, Instant now) {
-        RuleReputationEntity e = new RuleReputationEntity();
-        e.id = UUID.randomUUID();
-        e.userId = userId;
-        e.ruleKey = ruleKey;
-        e.rejectedCount = 0;
-        e.disabled = false;
-        e.updatedAt = now;
-        return e;
-    }
-
     public UUID getId() {
         return id;
     }
@@ -64,21 +54,8 @@ public class RuleReputationEntity {
         return ruleKey;
     }
 
-    public int getRejectedCount() {
-        return rejectedCount;
-    }
-
     public boolean isDisabled() {
         return disabled;
-    }
-
-    /** 计一次驳回，达阈值置 disabled（幂等：已停用再计仍停用）。 */
-    public void recordRejection(int disableThreshold, Instant now) {
-        this.rejectedCount = this.rejectedCount + 1;
-        if (this.rejectedCount >= disableThreshold) {
-            this.disabled = true;
-        }
-        this.updatedAt = now;
     }
 
     public Instant getUpdatedAt() {

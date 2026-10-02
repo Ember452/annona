@@ -16,9 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
  * 可解释决策面板的读与反驳编排（P1c-06/07）。归属一律用 (id/direction, userId) 双条件——
  * 查不到即 {@code DECISION_NOT_FOUND}，不泄露他人决策是否存在（会话/评估同款口径）。
  *
- * <p>反驳是写路径：本方法在事务内改 decision_trace（置 USER 驳回 + 计数）并经
- * {@link RuleReputationService} 累计降权；不改面试结果、不改题库，只影响<b>后续</b>组卷
- * （advisor 下次装配时按停用键过滤规则，P1 出口③）。
+ * <p>反驳是写路径：本方法在事务内用<b>条件 UPDATE</b> 改 decision_trace（置 USER 驳回 + 计数，
+ * 并发双驳只有一路能抢成）并经 {@link RuleReputationService} 累计降权；不改面试结果、不改题库，
+ * 只影响<b>后续</b>组卷（advisor 下次装配时按停用键过滤规则，P1 出口③）。
  */
 @Service
 public class DecisionPanelService {
@@ -49,8 +49,10 @@ public class DecisionPanelService {
     }
 
     /**
-     * 反驳一条决策留痕（P1c-07）。错误码：3200 不存在/非本人 / 3201 已驳回过。
-     * 成功：置 trace 驳回 + 累计该规则声誉（达阈值停用）。返回停用后的累计驳回数。
+     * 反驳一条决策留痕（P1c-07）。错误码：3200 不存在/非本人 / 3201 已驳回过（含并发抢驳）。
+     * 成功：置 trace 驳回 + 累计该规则声誉（达阈值停用）。
+     *
+     * @return 该规则当前累计驳回数
      */
     @Transactional
     public int reject(UUID userId, UUID traceId) {
@@ -59,7 +61,11 @@ public class DecisionPanelService {
         if (trace.isUserRejected()) {
             throw new BusinessException(ErrorCode.DECISION_ALREADY_REJECTED);
         }
-        trace.markUserRejected();
+        // 上面的先判只是快路径（顺带拿到 ruleKey）；真正的"一次驳回只计一次"由条件 UPDATE 定：
+        // 0 行 = 并发对手已抢成，同一时刻不得再往声誉上叠一次计数。
+        if (traceRepository.markRejectedIfOpen(traceId, userId) == 0) {
+            throw new BusinessException(ErrorCode.DECISION_ALREADY_REJECTED);
+        }
         return reputationService.recordRejection(userId, trace.getRuleKey());
     }
 }

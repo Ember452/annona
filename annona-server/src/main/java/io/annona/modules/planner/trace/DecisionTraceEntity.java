@@ -109,15 +109,10 @@ public class DecisionTraceEntity {
         return rejectedBy;
     }
 
-    /** 是否已被用户驳回（幂等拦双驳的依据）。 */
+    /** 是否已被用户驳回（串行重复驳的快路径；并发双驳由 {@code markRejectedIfOpen} 的
+     *  条件 UPDATE 兜底，所以下游声誉计数不会被同一条 trace 加两次）。 */
     public boolean isUserRejected() {
         return "USER".equals(rejectedBy);
-    }
-
-    /** 用户驳回本条留痕：置 rejectedBy=USER 并累计驳回数（一次驳回只计一次，调用方先判 isUserRejected）。 */
-    public void markUserRejected() {
-        this.rejectedBy = "USER";
-        this.rejectionCount = this.rejectionCount + 1;
     }
 
     public int getRejectionCount() {
