@@ -20,12 +20,12 @@
 | AI 协作规范 | ✅ [`AGENTS.md`](./AGENTS.md) |
 | 仓库入口文件 | ✅ `README` / `LICENSE`(AGPL-3.0 全文) / `SECURITY` / `CONTRIBUTING` / `CODE_OF_CONDUCT` / `.editorconfig` / `.env.example` |
 | **Maven 结构** | ✅ 已拆为 4 个 Java 模块（`annona-common` / `annona-spi` / `annona-infrastructure` / `annona-server`）+ 聚合根 pom；`annona-web` 为 Vite 子项目 |
-| **业务代码** | ✅ P1a + P1b 已落地：`identity` `study` `shared/direction` `knowledge`（入库+分块+向量化）`retrieval`（双通道 RRF）`qa`（SSE 流式问答）`questionbank`（SKILL 驱动异步出题+容量校验）`interview`（组卷去重+fencing 状态机+续面+交卷幂等）`evaluation`（异步评估+难度加权+可比性+PDF 导出）`resume`（上传解析+AI 分析）`llmprovider`/`usage`（BYOK 六用途加密+token 计量+日配额）；前端有登录/自习室/知识库/问答/面试中心/报告等页面；语音/计划日程/agent 等模块仍只有 `package-info.java` |
-| 已落地的技术基座 | ✅ `Result`/异常体系、`traceId` 过滤器、四类线程池 + Micrometer、启动 fail-fast（缺 KEK / 缺 pgvector 拒起）、Flyway V1–V14（身份/方向 → 学习采集 → 知识库+pgvector → 问答 → 面试会话 → 计量 → 题库 → 评估 → 简历），已应用迁移由 pre-commit 冻结+登记双机检、`@Modifying` 事务覆盖机检、JaCoCo 60% 底线（关键包 85% 专项）、前端 ESLint/vitest 机检、ArchUnit 七条、`.githooks/`、六 job 的 `ci.yml`（含 docker-it 真库集测，action 全 SHA pin）、compose 三阶段 Dockerfile、`Makefile`、CI 密钥扫描 |
-| **施工阶段** | ✅ **P1b 已关账（2026-09-30，用户裁决：出口① 真模型人工取证接受为遗留，见阶段总结）**；下一阶段 P1c 训练决策层；任务清单与状态以 [docs/annona-开发计划.md](./docs/annona-开发计划.md) 为唯一真相源 |
+| **业务代码** | ✅ **P1（a/b/c）已落地**：`identity` `study` `shared/direction` `knowledge`（入库+分块+向量化）`retrieval`（双通道 RRF）`qa`（SSE 流式问答）`questionbank`（SKILL 驱动异步出题+容量校验）`interview`（组卷去重+fencing 状态机+续面+交卷幂等）`evaluation`（异步评估+难度加权+可比性+PDF 导出）`resume`（上传解析+AI 分析）`llmprovider`/`usage`（BYOK 六用途加密+token 计量+日配额）`planner`（掌握度+规则链+保护前置+decision_trace+反驳降权）；前端有登录/自习室/知识库/问答/面试中心/报告与**可解释决策面板**页面；`voice`/`schedule`/`plan`/`agent` **尚不存在包**（P3/P4 再建，不是“只有 package-info”） |
+| 已落地的技术基座 | ✅ `Result`/异常体系、`traceId` 过滤器、四类线程池 + Micrometer、启动 fail-fast（缺 KEK / 缺 pgvector 拒起）、Flyway V1–V16（身份/方向 → 学习采集 → 知识库+pgvector → 问答 → 面试会话 → 计量 → 题库 → 评估 → 简历 → 决策留痕/规则声誉），已应用迁移由 pre-commit 冻结+登记双机检、`@Modifying` 事务覆盖机检、JaCoCo 60% 底线（关键包 85% 专项）、前端 ESLint/vitest 机检、ArchUnit 结构规则（含跨模块白名单边与“该边确实存在”的反空转断言）、`.githooks/`、六 job 的 `ci.yml`（含 docker-it 真库集测，action 全 SHA pin）、compose 三阶段 Dockerfile、`Makefile`、CI 密钥扫描 |
+| **施工阶段** | ✅ **P1 已关账（P1a/P1b/P1c 各自用户裁决关账，最后一片 P1c 于 2026-10-01）**——出口①（真模型面板取证）与出口④（A/B 真实数字）接受为部署/CI 待办遗留；**下一站 P2 自习室体验与留存**；P2–P5 全部 todo。任务清单与状态以 [docs/annona-开发计划.md](./docs/annona-开发计划.md) 为唯一真相源 |
 | Docker 相关 | 📄 文件已交，**本机不跑**（无 Docker），验证全部在 CI（见下） |
 
-> **一句话定位现状**：地基与门禁就位；真实资料可流式问答（P1a 出口），两个方向可完成一场带评分标准与可解释报告的 AI 面试（P1b 出口：内置方向 + 知识库派生方向，取证口径以 CI/单测为准，真模型人工走查为登记在案的遗留）。P1c 出口 = 面试决策可解释。
+> **一句话定位现状**：地基与门禁就位；真实资料可流式问答（P1a 出口），两个方向可完成一场带评分标准与可解释报告的 AI 面试（P1b 出口），**面试不再是随机出卷且能逐条回答“凭什么这么考我”**（P1c 出口：规则链/保护留痕 + 面板 + 反驳降权改变后续决策）。遗留：真模型端到端取证与 A/B 真实数字未跑（出口①④），且**这两个取证必须跑在 P0 修复后的版本上**——修复前 demo 在默认参数下触发不了任何调整规则（见 [planner ADR 修订 1](./docs/specs/2026-09-30-planner-decision-kernel-adr.md)）。
 > 目标结构与当前代码的差异，以 [docs/annona-项目结构.md](./docs/annona-项目结构.md) §12 的状态列与 [开发计划](./docs/annona-开发计划.md) 「当前进度」表为准。
 
 ---

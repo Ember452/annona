@@ -346,6 +346,10 @@ mastery'   = clamp(mastery * (1 - lr) + (mastery * decay(t) + gain * k) * lr, 0,
 lr         = 0.35 - 0.02 * min(sample_size, 10)          # 冷启动快、后期稳
 confidence = min(sample_size / 5, 1) * quality_weight     # 样本量与数据质量共同决定可信度
 # quality_weight = 该方向自习室记录的质量均值；方向无学习记录时取 0.5（中性），掌握度纯由面试样本驱动
+# 实现现状（2026-10-01 审查回写）：调用侧目前永远走“无学习记录”分支（传 null → 0.5），
+# confidence 也只进 golden、无生产消费方（面板尚未展示可信度）。所以上面那条质量均值
+# 公式尚未落地：接一个没人读的数不算交付，要接就连面板展示一起接。
+# 取舍与否决见 specs/2026-09-30-planner-decision-kernel-adr.md 修订 2（本文不复述）。
 ```
 
 ### 6.3 输出映射

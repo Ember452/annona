@@ -443,7 +443,10 @@ docs/                              # 结构见 docs/README.md（导航 + 各目�
 
 ```text
 io.annona.modules..                 禁止依赖 io.annona.infrastructure..（编译期不可见实现类）
-io.annona.modules.<a>..             禁止依赖 io.annona.modules.<b>..（除 planner→interview 白名单）
+io.annona.modules.<a>..             禁止与 io.annona.modules.<b>.. 成环（只拦环，不拦新增单向边）
+io.annona.modules..                 除 interview/orchestrator.. 外禁止依赖 modules.planner..
+io.annona.modules.interview.orchestrator..
+                                    禁止伸进 planner 的 rule/guard/trace/reputation/service/mastery 内部
 io.annona..controller..             禁止出现在 service/repository 之上以外的反向依赖
 io.annona..entity..                 禁止作为 controller 方法出入参类型
 io.annona.spi..                     禁止依赖 Spring / Jakarta Persistence / 任何 SDK
@@ -451,11 +454,17 @@ io.annona.modules.planner..         禁止依赖 interview/voice/schedule（只�
 全局                                  禁止 java.util.concurrent.Executors 的 newCached/newFixed 等方法
 ```
 
+第三条与第四条是同一条边的两面：**正向禁尽、例外只放 `orchestrator → planner/advisor`**
+（[planner ADR](./specs/2026-09-30-planner-decision-kernel-adr.md) 的白名单例外②）。另配一条
+「该边确实存在」的反空转断言——纯禁止规则会因为没人违反而静默通过（本仓假绿复盘同款教训）。
+
 另有一条 **不在 ArchUnit 而在 enforcer** 的结构约束：`annona-spi` 不得传递携带
 Spring / Persistence / SDK 依赖（ArchUnit 只看 import，看不到传递依赖，而 spi 是要发到
 Maven Central 的对外契约）。两边分工写清，免得后人误以为 ArchUnit 能兜住依赖。
 
-新增例外只能通过在 `docs/specs/` 提交一条 ADR 后修改白名单，不允许在代码里 `// noop` 绕过。
+新增例外只能通过在 `docs/specs/` 提交一条 ADR 后修改 `ArchitectureTest` 里的规则，不允许在
+代码里 `// noop` 绕过。白名单**以规则形式住在代码里**——本仓没有
+`archunit-whitelist.properties`（旧文档提到过但从未实现，2026-10-01 核实后回写）。
 
 ---
 

@@ -1,6 +1,6 @@
 # ADR: planner 决策内核的数据契约与接线方案
 
-- 日期：2026-09-30（初版）/ 2026-10-01（修订 1）/ 状态：Accepted
+- 日期：2026-09-30（初版）/ 2026-10-01（修订 1、修订 2）/ 状态：Accepted
 - 相关：[direction ADR 修订 3](./2026-09-25-direction-master-data-adr.md)（遗留义务：扩展 SignalSnapshot 方向维度）·[interview-session-adr](./2026-09-29-interview-session-adr.md)（组卷与冷热分层、历史去重双判）·[evaluation-pipeline-adr](./2026-09-30-evaluation-pipeline-adr.md)（interview_report 四留痕）·设计文档 §6.1/§6.2/§6.4
 
 ## 背景
@@ -102,3 +102,37 @@ P1c 要在零实现的 `modules/planner` 上建决策内核：读信号 → 算�
   本机无 PG 不跑，由 CI docker-it 复验（AGENTS 规则 8）。
 - **何时重新评估**：若未来要支持“均分只看最近 N 天”的真实需求，应新增一个显式的
   `score-window-days` 配置并与事件上限分离，而不是把窗口谓词加回 `latestOutcomes`。
+
+---
+
+## 修订 2（2026-10-01）：驳回到达、日界口径与注释真相
+
+**背景**：修订 1 之后再把 P1c 逐文件过了一遍。六处问题**先逐条确认存在再动手**（包括 1 条
+确认后发现不是缺陷，故只补注释不改代码）。
+
+| # | 确认到的事实（怎么确认的） | 处置 |
+|---|---|---|
+| 1 | 驳回与声誉计数都是 `findById → 判 → 改实体 → save`（grep 确认无 `@Version`、无 CAS）：并发驳同一条 trace 会各计一次，阈值 3 被虚胖推爆；两路同时建行还会撞 `uq_reputation_user_rule` 把 500 透给用户 | trace 走条件 UPDATE（`markRejectedIfOpen`，0 行即 3201）；声誉走 `on conflict do nothing` 建行 + 一条 UPDATE 把计数与停用求完（与登录锁定计数、interview fencing 同口径）；新增 `DecisionFlowIT.concurrentRejectsCountOnce` |
+| 2 | 日界在一次决策里有三种口径：学习端口 `Asia/Shanghai`、mastery 参考时刻 `ZoneOffset.UTC`、Facade `LocalDate.now()` 跟 JVM 默认区 | 新增 `common/support/AppZones.DAILY` 单一出处，收敛 study×3 + planner + Facade + demo；**不做成配置键**（它是产品口径不是部署差异） |
+| 3 | `DecisionTrace.rejectedBy` 注释说“记否决者 ruleKey”，但 grep 证实全仓除 `"USER"` 外无任何生产者（guard 是前置拦截，规则被拦时根本不执行）；`action` 举例的 `CAP_DIRECTION` 也不存在 | SPI 注释改为实际取值集合并标为“语义位”（发 Central 的契约不能写做不到的语义）；ADR 决策 5 的“rejectedBy 改写 replaced trace”按实现形态作废，以本表为准 |
+| 4 | `DecisionRule` SPI 注释宣称“已定五条规则（P1c 落地）”，实现只有 2 条 `DecisionRule`，其余四条在 `GuardEngine`，CAP_RATIO 一条都没有 | 注释按职责边界重写（调整型走 SPI，保护型走 guard），不再列不存在的实现 |
+| 5 | `cap-ratio: 0.40` 与 `PlannerProperties.capRatio` 零消费方（修订 1 前就已被重定位）| 删键删字段；`application.yaml` 留一句“为什么不设这个键”，避免下个新人当漏配补回来 |
+| 6 | V15 头注释写“trace 随会话事务写入”，而 `create()` 无 `@Transactional`、Writer 独立事务（两者必有一个在说谎）| **不回改 V15**：已应用迁移被 Flyway checksum 冻结，改一行注释就会让所有持久库启动失败（AGENTS §4）；以本 ADR 与 `DecisionTraceWriter` 的 Javadoc 为准 |
+
+**确认过后发现“不是缺陷”的一条**：修订 1 报告里怀疑“golden 的期望难度序列等于基线，钉不住‘决策真改变了组卷’”。实跑核对：
+`RuleChainTest.weakDirectionRaisesDifficulty` 已经断言了 `3,3,3,3 → 4,4,4,4` 的非中性序列，该职责并不缺位；
+golden 钉的是规则顺序与阈值组合。所以**没改 golden**，只在两个测试的 Javadoc 里把“各自钉什么”写清。
+
+**后果与约束**
+
+- “保护与降级也要留痕”多了一个实例：复习题一支未进卷时不得静默删痕，而是写
+  `REVIEW_NONE_PACKED`（修订 1 已定），本修订把它的验证补到了真库 IT。
+- 日界新增代码只能引用 `AppZones`：再出现第四处 `ZoneId.of(...)` 就按 §4 元规则配机检
+  （下一条触发即上 ArchUnit/脚本断言，不靠 review 记忆）。`MeteredModelProvider` 的配额日键与
+  上传路径日期仍用系统默认区（属 P1b 语义，本批未动）——若改成 `AppZones.DAILY` 要先确认
+  已有配额/对象键不跨日重建。
+- `orchestrator → planner/advisor` 这条白名单边从本批起有 ArchUnit 规则 8 守（含一条“边确实存在”
+  的反空转断言）；旧文档提到的 `archunit-whitelist.properties` 从未存在，白名单以规则形式住在代码里。
+
+**何时重新评估**：面板要展示“这条判断有多可信”时，再把 §6.2 的 `quality_weight` 与 `confidence`
+一起接上（需要定死质量均值的量化口径，属产品决策，不先写没人读的数）。
