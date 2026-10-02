@@ -3,6 +3,7 @@ package io.annona.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.annona.common.exception.BusinessException;
+import io.annona.common.support.AppZones;
 import io.annona.modules.interview.orchestrator.controller.CreateSessionRequest;
 import io.annona.modules.interview.orchestrator.controller.SessionView;
 import io.annona.modules.interview.orchestrator.session.InterviewSessionFacade;
@@ -10,6 +11,9 @@ import io.annona.modules.planner.service.DecisionPanelService;
 import io.annona.shared.direction.entity.DirectionEntity;
 import io.annona.shared.direction.repository.DirectionRepository;
 import io.annona.shared.evaluation.EvaluationSignalPort;
+import io.annona.spi.dto.SignalSnapshot;
+import io.annona.spi.signal.LearningSignalReader;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -54,6 +58,8 @@ class DecisionFlowIT {
     private DecisionPanelService panelService;
     @Autowired
     private EvaluationSignalPort signalPort;
+    @Autowired
+    private LearningSignalReader signalReader;
     @Autowired
     private DataSource dataSource;
 
@@ -108,10 +114,16 @@ class DecisionFlowIT {
             java.util.stream.IntStream.range(0, 3).mapToObj(i -> 3).toList(), 0, mode);
     }
 
-    /** 池里取一道现有 ACTIVE 题作为“反复答过的弱题”（复习候选与 dedup 靶子）。 */
+    /**
+     * 池里取该方向的一道现有 ACTIVE 题（复习候选与 dedup 靶子）。
+     *
+     * <p>必须按 direction_id 筛：只按 user_id 取会在多方向用例里拿错题，
+     * 于是“复习候选越方向”这类真 bug 会被 fixture 自己掩盖掉。
+     */
     private UUID firstPoolQuestion() {
-        return jdbc.queryForObject("select id from qb_question where user_id = ? limit 1",
-            UUID.class, userId);
+        return jdbc.queryForObject(
+            "select id from qb_question where user_id = ? and direction_id = ? limit 1",
+            UUID.class, userId, directionId);
     }
 
     /**
@@ -222,12 +234,21 @@ class DecisionFlowIT {
     void staleHistoryStillDrivesDecision() {
         seedHistory(3, 60, (short) 30, firstPoolQuestion());
 
-        String session = facade.create(userId, request("auto")).id();
-        List<String> rules = jdbc.queryForList(
-            "select rule_key from decision_trace where session_id = ?::uuid", String.class, session);
+        // 先直接读信号，把“数据没到手”与“到手但规则没动”分成两条不同的失败消息；
+        // 只断 trace 内容会让红掉的 CI 日志分不清到底是取数问题还是决策问题。
+        LocalDate today = LocalDate.now(AppZones.DAILY);
+        SignalSnapshot snap = signalReader.readDirectional(
+            userId.toString(), directionId, today.minusDays(14), today);
+        assertThat(snap.sampleSize())
+            .as("3 场 DONE 报告全部应是有效样本；若为 0 则取数侧仍被窗口截断").isEqualTo(3);
+        assertThat(snap.recentSessions()).as("事件集非空").hasSize(3);
+        assertThat(snap.directionals().get(0).avgScore())
+            .as("均分取的是非降级分").isEqualTo(30.0);
 
-        // 旧实现按 window-days=14 取数，这 3 场全部被过滤掉→ guard 只会报 SAMPLE_GUARD，
-        // 产品核心场景“久不练的方向被重新抽出来”在默认参数下永远演示不出来
+        List<String> rules = ruleKeysOf(facade.create(userId, request("auto")).id());
+        assertThat(rules).as("留痕行必须存在（auto 至少写保护说明）").isNotEmpty();
+
+        // 旧实现按 window-days=14 取数，这 3 场全被过滤→ guard 只会报 SAMPLE_GUARD
         assertThat(rules).as("久不练必须被识别为弱项，而不是查不到样本")
             .contains("WEAK_DIRECTION");
         assertThat(rules).doesNotContain("SAMPLE_GUARD");
@@ -240,16 +261,22 @@ class DecisionFlowIT {
         // 三场历史都答过 weakest 这题：它同时是“最低分待复习题”与“近 90 天已答题（去重命中）”
         seedHistory(3, 45, (short) 30, weakest);
 
+        // 分层断言：先确认复习候选真的被端口返出来，再看是否进了卷面——
+        // 否则“空转的复习选择器”与“去重把题拦光”在日志里长得一模一样。
+        assertThat(signalPort.weakestQuestionIds(userId, directionId, 3))
+            .as("复习候选选择器应命中这题").contains(weakest);
+
         SessionView view = facade.create(userId, request("auto"));
         List<String> packed = view.slots().stream()
             .map(s -> s.questionId())
             .toList();
 
-        assertThat(packed).as("复习题不得被自己的历史去重静默吃掉").contains(weakest.toString());
-        String reason = jdbc.queryForObject(
+        List<String> remind = jdbc.queryForList(
             "select reason from decision_trace where session_id = ?::uuid"
                 + " and rule_key = 'REMIND_REVIEW'", String.class, view.id());
-        assertThat(reason).as("留痕只声明真做到了的条数").contains("1/1");
+        assertThat(remind).as("遗忘曲线应命中并留下复习提醒").isNotEmpty();
+        assertThat(remind.get(0)).as("留痕只声明真做到了的条数").contains("1/1");
+        assertThat(packed).as("复习题不得被自己的历史去重静默吃掉").contains(weakest.toString());
     }
 
     @Test
@@ -263,11 +290,16 @@ class DecisionFlowIT {
         seedHistory(other, 3, 20, (short) 20, otherQuestion);
 
         List<String> rules = ruleKeysOf(facade.create(userId, request("auto")).id());
+        assertThat(rules).as("留痕行必须存在，否则下面的是空断言").isNotEmpty();
         assertThat(rules).as("背政治的场次不得污染 Java 方向的决策").doesNotContain("WEAK_DIRECTION");
 
-        assertThat(signalPort.latestOutcomes(userId, directionId, 10))
-            .as("事件集只含被请求方向")
-            .allMatch(o -> o.directionId().equals(directionId.toString()));
+        // 隔离的硬证据：两侧各自读到的场数与均分（污染会把 A 的 90 拉低）
+        assertThat(signalPort.latestOutcomes(userId, directionId, 10)).hasSize(3);
+        assertThat(signalPort.latestOutcomes(userId, other, 10)).hasSize(3);
+        LocalDate today = LocalDate.now(AppZones.DAILY);
+        assertThat(signalReader.readDirectional(userId.toString(), directionId,
+            today.minusDays(14), today).directionals().get(0).avgScore())
+            .as("本方向均分不受另一方向低分影响").isEqualTo(90.0);
         assertThat(signalPort.weakestQuestionIds(userId, directionId, 5))
             .as("复习候选不得越方向拿题")
             .doesNotContain(otherQuestion);
