@@ -3,6 +3,7 @@ package io.annona.modules.study.service;
 import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
 import io.annona.common.study.HeartbeatTimeline;
+import io.annona.common.support.AppZones;
 import io.annona.modules.study.dto.ManualSessionRequest;
 import io.annona.modules.study.dto.SessionResponse;
 import io.annona.modules.study.dto.StartSessionRequest;
@@ -39,8 +40,8 @@ public class StudySessionService {
 
     private static final int MAX_PLANNED_MINUTES = 240;
     private static final Duration MAX_MANUAL_SPAN = Duration.ofHours(24);
-    /** "今日"口径固定 Asia/Shanghai（ADR §后果；per-user 时区推迟到有海外用户需求）。 */
-    private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
+    /** "今日"口径见 {@link AppZones#DAILY}（全仓日界单一出处；per-user 时区推迟到有海外需求）。 */
+    private static final ZoneId ZONE = AppZones.DAILY;
 
     private final StudySessionRepository sessionRepository;
     private final StudyEventRepository eventRepository;

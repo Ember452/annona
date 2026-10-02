@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.annona.common.cache.SessionSnapshotPort;
 import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
+import io.annona.common.support.AppZones;
 import io.annona.modules.interview.orchestrator.controller.CreateSessionRequest;
 import io.annona.modules.interview.orchestrator.controller.FinalizeView;
 import io.annona.modules.interview.orchestrator.controller.SessionSummary;
@@ -168,7 +169,10 @@ public class InterviewSessionFacade {
             return null;
         }
         try {
-            return advisor.advise(userId, directionId, baseline.difficulties(), LocalDate.now());
+            // 参考日走全仓日界（AppZones）：跟 JVM 默认区会随部署环境变（容器普遍 UTC），
+            // 同一用户同一时刻算出不同决策 → “可复现”不成立
+            return advisor.advise(userId, directionId, baseline.difficulties(),
+                LocalDate.now(AppZones.DAILY));
         } catch (RuntimeException e) {
             log.warn("planner 决策异常，降级为请求原难度：{}", e.getMessage(), e);
             return null;

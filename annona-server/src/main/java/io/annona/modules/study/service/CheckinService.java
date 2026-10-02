@@ -2,6 +2,7 @@ package io.annona.modules.study.service;
 
 import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
+import io.annona.common.support.AppZones;
 import io.annona.modules.study.dto.CheckinResponse;
 import io.annona.modules.study.dto.UpsertCheckinRequest;
 import io.annona.modules.study.entity.CheckinEntity;
@@ -35,7 +36,8 @@ public class CheckinService {
     private static final int MAX_MOOD_LENGTH = 32;
     private static final int MAX_NOTE_LENGTH = 500;
     private static final int MAX_SNAPSHOT_URL_LENGTH = 255;
-    private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
+    /** 打卡日界与学习侧“今日”同一口径（全仓单一出处，见 {@link AppZones}）。 */
+    private static final ZoneId ZONE = AppZones.DAILY;
 
     private final CheckinRepository checkinRepository;
     private final StudySessionRepository sessionRepository;
