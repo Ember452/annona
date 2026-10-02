@@ -136,3 +136,37 @@ golden 钉的是规则顺序与阈值组合。所以**没改 golden**，只在�
 
 **何时重新评估**：面板要展示“这条判断有多可信”时，再把 §6.2 的 `quality_weight` 与 `confidence`
 一起接上（需要定死质量均值的量化口径，属产品决策，不先写没人读的数）。
+
+---
+
+## 修订 3（2026-10-02）：时间戳类型与“一行脏数据停摆整个决策层”
+
+**背景**：修订 1/2 推上去后，docker-it 里四条带 seeded 历史的 IT 全红、三条无历史的绿。本机无 PG，
+靠一个无数据库的全链切片测试（`PlannerDecisionChainSliceTest`，修订 2 里补的那类接缝测试）定位到：
+原生 `Object[]` 查询上的 `timestamptz` 由 Hibernate 6 返回 `OffsetDateTime`，而行映射只认
+`java.sql.Timestamp` → 真实行的 `finishedAt` 全为 null → 掌握度事件排序 NPE → `advise()` 抛出 →
+`InterviewSessionFacade` 的 `catch (RuntimeException)` 把它降级成“本次由默认策略出题”——
+**决策层不是“没调到难度”，而是一整条链静默停摆，一行类型不匹配就能做到**。
+既有 slice 测试都注入 `Timestamp`，所以这个错在本机永远不可能出现——这就是 mock 行为代替真行为的代价。
+
+**决策**：
+
+1. `toInstant` 同时接受 `Timestamp` / `OffsetDateTime` / `Instant`；未知类型不猜值也不抛，返回 null。
+2. “有效样本”同时要求 `compositeScore` 与 `finishedAt` 非空（SPI 已写明）：无时刻的行算不出
+   衰减天数，喂进事件集只会在下游炸。现在它走 `SAMPLE_GUARD` → 面板显“数据不足”，
+   **降级可见而不是静默停摆**（§6.4 保护 1 与诚实呈现的同一条要求）。
+3. `lastPracticedAt` **故意不跟着收窄**：降级场也是真练过，“上次练习 N 天前”问的是练没练，
+   不是评分成没成功。要同一分母的是 sampleSize 与 avgScore，不是这个字段。
+4. `DecisionFlowIT` 的三计数探针（`dbDoneReports / portRows / snapshotSampleSize`）留下：
+   它是本次能在一行日志里定位到类型映射的原因，也是以后区分“没插进去 / 没读出来 /
+   读出来但不可用”的唯一手段。
+
+**后果与约束**
+
+- 真实类型差异只能在真库上暴露：**凡新增读 `timestamptz` / `jsonb` 的原生 `Object[]` 查询，
+  必须配一条 `@Tag("docker")` 真库断言**，不能只靠 mock 行形状（本仓已有四次假绿同源教训）。
+  触发条件：下一次出现同类映射 bug 时，把它升级成机检（例如约定一个行映射类型的 ArchUnit/脚本断言）。
+- Facade 对 `advise()` 的兜底仍保留（决策失败不得阻断开面是对的），但它把一切异常变成一行
+  warn 日志，现场只能从“没有留痕”反推。要改成可区分的降级原因需动 `SessionView.skippedReasons`
+  语义，属面板改版范围（P2 触发），本批不预置。
+- **何时重新评估**：若以后引入自定义 `@Converter` 或改用投影接口读时间列，本条映射层可废弃。
