@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/card'
 import DirectionSelector from '@/components/direction/DirectionSelector'
 import FocusTimer from '@/components/study/FocusTimer'
+import ImmersiveOverlay from '@/components/study/ImmersiveOverlay'
 import { BREAK_MINUTES, usePomodoro } from '@/hooks/usePomodoro'
 import { cn } from '@/lib/utils'
 import type { Direction } from '@/types/direction'
@@ -25,19 +26,30 @@ interface PomodoroStationProps {
 /**
  * 番茄钟工作站（借鉴 🅢 pomodoro-station 的 25/45/60 预设 + focus/break 轮转）：
  * 开始前必选方向（session 直接挂 direction_id，禁止自由文本）；预设切换在会话进行中禁用
- * （plannedMinutes 已随 start 落库）；放弃用简单 confirm（上游 long-press-exit 属 P2 沉浸
- * 模式场景，已扫描、判定不适配）。
+ * （plannedMinutes 已随 start 落库）；放弃用简单 confirm（上游 long-press-exit 在沉浸层内，
+ * 见 ImmersiveOverlay）。「沉浸专注」与「开始专注」同一条会话链路，只多一个 IMMERSIVE 标记。
  */
 export default function PomodoroStation({ onSessionSettled }: PomodoroStationProps) {
   const [direction, setDirection] = useState<Direction | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  const pomodoro = usePomodoro({ onSessionSettled })
+  const [immersive, setImmersive] = useState(false)
+  // 会话落定（到期/放弃）时关掉沉浸层——计时没了还留全屏就是黑洞
+  const handleSessionSettled = useCallback(() => {
+    setImmersive(false)
+    onSessionSettled()
+  }, [onSessionSettled])
+  const pomodoro = usePomodoro({ onSessionSettled: handleSessionSettled })
 
-  async function handleStart() {
+  async function handleStart(mode: 'POMODORO' | 'IMMERSIVE') {
     if (!direction) return
     setActionError(null)
     try {
-      await pomodoro.start(direction.id)
+      await pomodoro.start(direction.id, mode)
+      if (mode === 'IMMERSIVE') {
+        // 进入全屏前先失焦，避免页面光标残影透过覆盖层闪烁（上游同款处理）
+        ;(document.activeElement as HTMLElement | null)?.blur?.()
+        setImmersive(true)
+      }
     } catch (e) {
       setActionError(toErrorMessage(e, '开始失败，请稍后重试'))
     }
@@ -97,13 +109,23 @@ export default function PomodoroStation({ onSessionSettled }: PomodoroStationPro
 
         <div className="flex flex-wrap items-center justify-center gap-3">
           {!pomodoro.hasSession && pomodoro.mode === 'focus' && (
-            <Button
-              size="lg"
-              disabled={!direction || pomodoro.starting}
-              onClick={() => void handleStart()}
-            >
-              {pomodoro.starting ? '启动中…' : '开始专注'}
-            </Button>
+            <>
+              <Button
+                size="lg"
+                disabled={!direction || pomodoro.starting}
+                onClick={() => void handleStart('POMODORO')}
+              >
+                {pomodoro.starting ? '启动中…' : '开始专注'}
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                disabled={!direction || pomodoro.starting}
+                onClick={() => void handleStart('IMMERSIVE')}
+              >
+                沉浸专注
+              </Button>
+            </>
           )}
           {pomodoro.hasSession && (
             <Button
@@ -145,6 +167,17 @@ export default function PomodoroStation({ onSessionSettled }: PomodoroStationPro
           </div>
         )}
       </CardContent>
+
+      {immersive && pomodoro.hasSession && (
+        <ImmersiveOverlay
+          mode={pomodoro.mode}
+          round={pomodoro.round}
+          completed={pomodoro.completed}
+          remaining={pomodoro.remaining}
+          totalSeconds={(pomodoro.mode === 'focus' ? pomodoro.focusMinutes : BREAK_MINUTES) * 60}
+          onExit={() => setImmersive(false)}
+        />
+      )}
     </Card>
   )
 }

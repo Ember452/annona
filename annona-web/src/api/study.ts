@@ -2,7 +2,9 @@ import { request } from '@/api/request'
 import type {
   Checkin,
   ManualSessionInput,
+  PresenceStatus,
   StartSessionInput,
+  StatsOverview,
   StudySession,
   UpsertCheckinInput,
 } from '@/types/study'
@@ -56,5 +58,15 @@ export const studyApi = {
   /** GET /api/study/checkins/today：今天还没打过返回 null。 */
   todayCheckin(): Promise<Checkin | null> {
     return request.get<Checkin | null>(`${BASE}/checkins/today`)
+  },
+
+  /** GET /api/study/stats/overview?year=：年度统计（P2-01，日×质量 + 方向分布）。 */
+  statsOverview(year: number): Promise<StatsOverview> {
+    return request.get<StatsOverview>(`${BASE}/stats/overview?year=${year}`)
+  },
+
+  /** GET /api/study/presence：匿名共学在线数（P2-05；轮询即心跳，服务端顺带刷新自己在场）。 */
+  presence(): Promise<PresenceStatus> {
+    return request.get<PresenceStatus>(`${BASE}/presence`)
   },
 }

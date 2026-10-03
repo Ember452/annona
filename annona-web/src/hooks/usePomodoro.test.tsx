@@ -1,6 +1,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { studyApi } from '@/api/study'
 import { BREAK_MINUTES, usePomodoro } from './usePomodoro'
 
 vi.mock('@/api/study', () => ({
@@ -90,6 +91,33 @@ describe('usePomodoro：到期转移（P1a-04 加固回归）', () => {
 
     expect(result.current.mode).toBe('break')
     expect(result.current.completed).toBe(1)
+    expect(result.current.isRunning).toBe(true)
+  })
+})
+
+describe('usePomodoro：沉浸模式开始（P2-03）', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    localStorage.clear()
+  })
+
+  it('start 携带 mode=IMMERSIVE 建会话，本地轮转状态不受影响', async () => {
+    ;(studyApi.startSession as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ id: 's-immersive' })
+    const { result } = renderHook(() => usePomodoro())
+
+    await act(async () => {
+      await result.current.start('dir-immersive', 'IMMERSIVE')
+    })
+
+    expect(studyApi.startSession).toHaveBeenCalledWith({
+      directionId: 'dir-immersive',
+      plannedMinutes: 25,
+      mode: 'IMMERSIVE',
+    })
+    expect(result.current.hasSession).toBe(true)
     expect(result.current.isRunning).toBe(true)
   })
 })

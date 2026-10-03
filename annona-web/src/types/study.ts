@@ -43,6 +43,8 @@ export interface StartSessionInput {
   directionId: string
   /** 1–240 分钟。 */
   plannedMinutes: number
+  /** 缺省 POMODORO；IMMERSIVE 为沉浸模式（P2-03）。CHECKIN 不开放给本端点。 */
+  mode?: SessionMode
 }
 
 /** POST /api/study/sessions/manual 请求体（quality 恒 SELF_REPORTED）。 */
@@ -62,4 +64,36 @@ export interface UpsertCheckinInput {
   energy: number | null
   note: string | null
   snapshotUrl: string | null
+}
+
+/** GET /api/study/stats/overview 单日聚合（服务端只回有记录日，全年补零由前端做）。 */
+export interface StatsDayMinutes {
+  /** YYYY-MM-DD（Asia/Shanghai 日界）。 */
+  day: string
+  /** VERIFIED+PARTIAL 分钟（有效专注，与 planner 信号同口径）。 */
+  verifiedMinutes: number
+  /** SELF_REPORTED 分钟（含打卡联动，单独分列）。 */
+  selfReportedMinutes: number
+}
+
+/** GET /api/study/stats/overview 方向聚合（已按有效时长降序；归档方向落占位名）。 */
+export interface StatsDirectionMinutes {
+  directionId: string
+  name: string
+  verifiedMinutes: number
+  selfReportedMinutes: number
+}
+
+/** GET /api/study/stats/overview?year= 响应。 */
+export interface StatsOverview {
+  year: number
+  days: StatsDayMinutes[]
+  directions: StatsDirectionMinutes[]
+  /** 累计打卡天数（全量口径，跨年——小岛解锁生长用）。 */
+  totalCheckins: number
+}
+
+/** GET /api/study/presence 响应（匿名共学，只有计数无身份）。 */
+export interface PresenceStatus {
+  online: number
 }

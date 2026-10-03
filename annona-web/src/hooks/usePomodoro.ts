@@ -279,8 +279,12 @@ export function usePomodoro(options: PomodoroOptions = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, isRunning])
 
-  /** 开始专注：先建后端会话（拿 sessionId），失败抛给调用侧展示。方向必选由 UI 保证。 */
-  const start = useCallback(async (directionId: string) => {
+  /**
+   * 开始专注：先建后端会话（拿 sessionId），失败抛给调用侧展示。方向必选由 UI 保证。
+   * mode 缺省 POMODORO；IMMERSIVE 走同一条会话链路（心跳/判定完全一致），只影响落库
+   * 的会话类型标记。
+   */
+  const start = useCallback(async (directionId: string, mode: 'POMODORO' | 'IMMERSIVE' = 'POMODORO') => {
     if (sessionIdRef.current || startingRef.current) return
     startingRef.current = true
     setStarting(true)
@@ -288,6 +292,7 @@ export function usePomodoro(options: PomodoroOptions = {}) {
       const session = await studyApi.startSession({
         directionId,
         plannedMinutes: focusMinRef.current,
+        mode,
       })
       const seconds = focusMinRef.current * 60
       applyState({

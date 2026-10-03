@@ -162,6 +162,182 @@
   --theme-sidebar: rgba(8, 23, 19, 0.9);
 }
 
+/* —— 雪日（灰白蓝低饱和；值借 🅢 summer-checkin 同名场景再裁剪） —— */
+[data-scene="snow"] {
+  --theme-background: #1e2730;
+  --theme-foreground: #eef2f7;
+  --theme-card: rgba(255, 255, 255, 0.08);
+  --theme-card-foreground: #eef2f7;
+  --theme-popover: rgba(30, 39, 48, 0.85);
+  --theme-popover-foreground: #eef2f7;
+  --theme-primary: #d4e2f0;
+  --theme-primary-foreground: #1e2a38;
+  --theme-secondary: rgba(212, 226, 240, 0.08);
+  --theme-secondary-foreground: #c8d8ea;
+  --theme-muted: rgba(255, 255, 255, 0.06);
+  --theme-muted-foreground: #8a9aaa;
+  --theme-accent: rgba(200, 216, 234, 0.12);
+  --theme-accent-foreground: #e0eaf2;
+  --theme-border: rgba(255, 255, 255, 0.1);
+  --theme-input: rgba(255, 255, 255, 0.06);
+  --theme-ring: #d4e2f0;
+  --theme-chart-1: #d4e2f0;
+  --theme-chart-2: #dee8f3;
+  --theme-chart-3: #c8d8ea;
+  --theme-chart-4: #e8eef4;
+  --theme-chart-5: #b8cce0;
+  --theme-sidebar-background: rgba(30, 39, 48, 0.9);
+  --theme-sidebar-foreground: #eef2f7;
+  --theme-sidebar-primary: #d4e2f0;
+  --theme-sidebar-primary-foreground: #1e2a38;
+  --theme-sidebar-accent: rgba(200, 216, 234, 0.12);
+  --theme-sidebar-accent-foreground: #e0eaf2;
+  --theme-sidebar-border: rgba(255, 255, 255, 0.1);
+  --theme-sidebar-ring: #d4e2f0;
+  --theme-sidebar: rgba(30, 39, 48, 0.9);
+
+  --surface-card-bg: rgba(30, 39, 48, 0.55);
+  --surface-card-border: rgba(255, 255, 255, 0.08);
+  --surface-card-shadow: 0 8px 32px rgba(10, 15, 20, 0.35);
+  --surface-input-bg: rgba(255, 255, 255, 0.04);
+  --surface-input-border: rgba(212, 226, 240, 0.15);
+  --surface-glass-bg: rgba(30, 39, 48, 0.4);
+  --surface-glass-border: rgba(255, 255, 255, 0.08);
+  --surface-glass-shadow: 0 12px 40px rgba(10, 15, 20, 0.35);
+  --surface-glass-strong-bg: rgba(20, 27, 34, 0.72);
+  --surface-glass-strong-border: rgba(212, 226, 240, 0.12);
+  --surface-glass-strong-shadow: 0 16px 48px rgba(10, 15, 20, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --surface-page-bg: rgba(30, 39, 48, 0.38);
+  --surface-page-border: rgba(255, 255, 255, 0.06);
+  --surface-page-shadow: 0 16px 48px rgba(10, 15, 20, 0.35);
+  --surface-darkglass-bg: rgba(20, 27, 34, 0.65);
+  --surface-darkglass-border: rgba(255, 255, 255, 0.08);
+  --surface-darkglass-shadow: 0 12px 40px rgba(10, 15, 20, 0.4);
+  --surface-panel-bg: rgba(22, 30, 38, 0.52);
+  --surface-panel-border: rgba(212, 226, 240, 0.08);
+  --surface-panel-shadow: 0 18px 46px rgba(10, 15, 20, 0.18);
+  --surface-row-hover-bg: rgba(25, 34, 44, 0.72);
+  --surface-row-hover-border: rgba(212, 226, 240, 0.2);
+
+  --surface-nav-bg: rgba(22, 30, 38, 0.66);
+  --surface-nav-hover-bg: rgba(22, 30, 38, 0.85);
+  --surface-nav-hover-border: rgba(212, 226, 240, 0.2);
+
+  --text-eyebrow: #d4e2f0;
+  --text-title: #f0f4f8;
+  --text-subtitle: rgba(200, 210, 220, 0.5);
+  --text-heading: rgba(240, 244, 248, 0.85);
+  --text-heading-muted: rgba(200, 210, 220, 0.38);
+  --text-field-label: rgba(200, 210, 220, 0.6);
+}
+
+[data-scene="snow"].dark {
+  --theme-background: #141c24;
+  --theme-card: rgba(255, 255, 255, 0.06);
+  --theme-popover: rgba(24, 32, 40, 0.88);
+  --theme-secondary: rgba(212, 226, 240, 0.06);
+  --theme-secondary-foreground: #c8d8ea;
+  --theme-muted: rgba(255, 255, 255, 0.04);
+  --theme-muted-foreground: #7a8a9a;
+  --theme-accent: rgba(200, 216, 234, 0.1);
+  --theme-accent-foreground: #e0eaf2;
+  --theme-border: rgba(255, 255, 255, 0.08);
+  --theme-input: rgba(255, 255, 255, 0.05);
+  --theme-sidebar-background: rgba(24, 32, 40, 0.92);
+  --theme-sidebar-accent: rgba(200, 216, 234, 0.1);
+  --theme-sidebar-accent-foreground: #e0eaf2;
+  --theme-sidebar-border: rgba(255, 255, 255, 0.06);
+  --theme-sidebar: rgba(24, 32, 40, 0.92);
+}
+
+/* —— 暖云（淡白卡其米黄系；值借 🅢 同名场景再裁剪） —— */
+[data-scene="cloud"] {
+  --theme-background: #1f2736;
+  --theme-foreground: #f1ead9;
+  --theme-card: rgba(241, 234, 217, 0.07);
+  --theme-card-foreground: #f1ead9;
+  --theme-popover: rgba(44, 50, 66, 0.85);
+  --theme-popover-foreground: #f1ead9;
+  --theme-primary: #e0d4b8;
+  --theme-primary-foreground: #3e2f1a;
+  --theme-secondary: rgba(224, 212, 184, 0.08);
+  --theme-secondary-foreground: #e6dcc5;
+  --theme-muted: rgba(255, 255, 255, 0.05);
+  --theme-muted-foreground: #a89f8b;
+  --theme-accent: rgba(230, 222, 203, 0.12);
+  --theme-accent-foreground: #e6e0d1;
+  --theme-border: rgba(241, 234, 217, 0.09);
+  --theme-input: rgba(255, 255, 255, 0.05);
+  --theme-ring: #e0d4b8;
+  --theme-chart-1: #e0d4b8;
+  --theme-chart-2: #dec9a6;
+  --theme-chart-3: #e6d4b4;
+  --theme-chart-4: #c9ac7f;
+  --theme-chart-5: #e6decb;
+  --theme-sidebar-background: rgba(31, 39, 54, 0.9);
+  --theme-sidebar-foreground: #f1ead9;
+  --theme-sidebar-primary: #e0d4b8;
+  --theme-sidebar-primary-foreground: #3e2f1a;
+  --theme-sidebar-accent: rgba(230, 222, 203, 0.1);
+  --theme-sidebar-accent-foreground: #e6e0d1;
+  --theme-sidebar-border: rgba(241, 234, 217, 0.08);
+  --theme-sidebar-ring: #e0d4b8;
+  --theme-sidebar: rgba(31, 39, 54, 0.9);
+
+  --surface-card-bg: rgba(31, 39, 54, 0.5);
+  --surface-card-border: rgba(241, 234, 217, 0.08);
+  --surface-card-shadow: 0 8px 32px rgba(30, 36, 50, 0.3);
+  --surface-input-bg: rgba(255, 255, 255, 0.03);
+  --surface-input-border: rgba(214, 190, 152, 0.14);
+  --surface-glass-bg: rgba(31, 39, 54, 0.38);
+  --surface-glass-border: rgba(241, 234, 217, 0.08);
+  --surface-glass-shadow: 0 12px 40px rgba(30, 36, 50, 0.3);
+  --surface-glass-strong-bg: rgba(26, 33, 46, 0.68);
+  --surface-glass-strong-border: rgba(214, 190, 152, 0.14);
+  --surface-glass-strong-shadow: 0 16px 48px rgba(30, 36, 50, 0.36), inset 0 1px 0 rgba(241, 234, 217, 0.04);
+  --surface-page-bg: rgba(31, 39, 54, 0.35);
+  --surface-page-border: rgba(241, 234, 217, 0.06);
+  --surface-page-shadow: 0 16px 48px rgba(30, 36, 50, 0.3);
+  --surface-darkglass-bg: rgba(26, 33, 46, 0.6);
+  --surface-darkglass-border: rgba(241, 234, 217, 0.08);
+  --surface-darkglass-shadow: 0 12px 40px rgba(30, 36, 50, 0.36);
+  --surface-panel-bg: rgba(32, 40, 56, 0.48);
+  --surface-panel-border: rgba(214, 190, 152, 0.07);
+  --surface-panel-shadow: 0 18px 46px rgba(30, 36, 50, 0.2);
+  --surface-row-hover-bg: rgba(44, 52, 70, 0.7);
+  --surface-row-hover-border: rgba(214, 190, 152, 0.22);
+
+  --surface-nav-bg: rgba(32, 40, 56, 0.62);
+  --surface-nav-hover-bg: rgba(32, 40, 56, 0.82);
+  --surface-nav-hover-border: rgba(214, 190, 152, 0.22);
+
+  --text-eyebrow: #e0d4b8;
+  --text-title: #f3eddf;
+  --text-subtitle: rgba(230, 220, 197, 0.5);
+  --text-heading: rgba(243, 237, 223, 0.85);
+  --text-heading-muted: rgba(230, 220, 197, 0.36);
+  --text-field-label: rgba(230, 220, 197, 0.58);
+}
+
+[data-scene="cloud"].dark {
+  --theme-background: #181f2c;
+  --theme-card: rgba(241, 234, 217, 0.06);
+  --theme-popover: rgba(36, 42, 58, 0.88);
+  --theme-secondary: rgba(214, 190, 152, 0.06);
+  --theme-secondary-foreground: #e6dcc5;
+  --theme-muted: rgba(255, 255, 255, 0.04);
+  --theme-muted-foreground: #968d7a;
+  --theme-accent: rgba(230, 222, 203, 0.1);
+  --theme-accent-foreground: #e6e0d1;
+  --theme-border: rgba(241, 234, 217, 0.07);
+  --theme-input: rgba(255, 255, 255, 0.04);
+  --theme-sidebar-background: rgba(24, 31, 44, 0.92);
+  --theme-sidebar-accent: rgba(230, 222, 203, 0.09);
+  --theme-sidebar-accent-foreground: #e6e0d1;
+  --theme-sidebar-border: rgba(241, 234, 217, 0.07);
+  --theme-sidebar: rgba(24, 31, 44, 0.92);
+}
+
 /* ───────────────────────────────────────────────────────────────
    Tailwind 绑定
    ─────────────────────────────────────────────────────────────── */
@@ -285,4 +461,54 @@
     box-shadow: var(--surface-darkglass-shadow);
     backdrop-filter: blur(28px) saturate(130%);
   }
+
+  /* ── 沉浸模式（P2-03）：覆盖层本体吃 bg-background，这里只放长按退出与滚动锁。
+     进度条动画时长必须与 LongPressExit 的 IMMERSIVE_HOLD_MS（1400ms）一致 ── */
+  .immersive-exit {
+    position: fixed;
+    left: 50%;
+    bottom: 2.5rem;
+    z-index: 10;
+    width: 180px;
+    height: 42px;
+    overflow: hidden;
+    transform: translateX(-50%);
+    border: 1px solid var(--theme-border, rgba(255, 255, 255, 0.14));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--theme-background) 28%, transparent);
+    color: var(--text-subtitle, rgba(255, 255, 255, 0.52));
+    font-size: 0.72rem;
+    backdrop-filter: blur(14px);
+    user-select: none;
+    touch-action: none;
+  }
+
+  .immersive-exit::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0;
+    background: color-mix(in oklab, var(--theme-primary, #d7ef83) 35%, transparent);
+  }
+
+  .immersive-exit.is-holding::before {
+    animation: immersive-hold 1.4s linear forwards;
+  }
+
+  @keyframes immersive-hold {
+    to {
+      width: 100%;
+    }
+  }
+
+  @media (max-width: 767px) {
+    .immersive-exit {
+      bottom: 1.5rem;
+    }
+  }
+}
+
+/* 沉浸层挂载时锁 body 滚动（覆盖层 opaque，导航无需隐藏） */
+body.annona-immersive {
+  overflow: hidden;
 }
