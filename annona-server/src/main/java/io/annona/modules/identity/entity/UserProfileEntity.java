@@ -20,6 +20,13 @@ public class UserProfileEntity {
     @Column(name = "nickname")
     private String nickname;
 
+    /** 当前头像的对象 key（非 URL）；字节在 ObjectStorage，展示经代理端点回读。 */
+    @Column(name = "avatar_object_key")
+    private String avatarObjectKey;
+
+    @Column(name = "bio")
+    private String bio;
+
     @Column(name = "timezone", nullable = false)
     private String timezone = "Asia/Shanghai";
 
@@ -40,6 +47,22 @@ public class UserProfileEntity {
 
     public void setNickname(String nickname) {
         this.nickname = nickname;
+    }
+
+    public String getAvatarObjectKey() {
+        return avatarObjectKey;
+    }
+
+    public void setAvatarObjectKey(String avatarObjectKey) {
+        this.avatarObjectKey = avatarObjectKey;
+    }
+
+    public String getBio() {
+        return bio;
+    }
+
+    public void setBio(String bio) {
+        this.bio = bio;
     }
 
     public String getTimezone() {

@@ -41,6 +41,10 @@ public enum ErrorCode {
     INVALID_CREDENTIALS(2002, "邮箱或密码不正确"),
     ACCOUNT_LOCKED(2003, "登录失败次数过多，账号已临时锁定，请稍后再试"),
     SESSION_EXPIRED(2004, "登录状态已失效，请重新登录"),
+    AVATAR_TOO_LARGE(2005, "头像图片过大（上限 5MB）"),
+    AVATAR_TYPE_NOT_SUPPORTED(2006, "头像仅支持 jpg/png/webp"),
+    AVATAR_STORAGE_NOT_CONFIGURED(2007, "对象存储未配置，无法上传头像"),
+    AVATAR_NO_HISTORY(2008, "没有可回滚的历史头像"),
 
     // ========== direction 2100–2199（P1a-03，shared 主数据） ==========
     DIRECTION_NOT_FOUND(2100, "方向不存在"),
@@ -107,7 +111,12 @@ public enum ErrorCode {
 
     // ========== planner/decision 3200–3299（P1c-06/07，可解释决策面板） ==========
     DECISION_NOT_FOUND(3200, "该决策留痕不存在或无权限查看"),
-    DECISION_ALREADY_REJECTED(3201, "这条决策你已经驳回过了");
+    DECISION_ALREADY_REJECTED(3201, "这条决策你已经驳回过了"),
+
+    // ========== plan 3300–3399（P2-06，计划与任务） ==========
+    PLAN_NOT_FOUND(3300, "计划不存在"),
+    PLAN_TASK_NOT_FOUND(3301, "计划任务不存在"),
+    PLAN_SPLIT_UNAVAILABLE(3302, "任务拆分服务暂不可用");
 
     private final int code;
     private final String message;
