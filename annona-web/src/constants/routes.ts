@@ -18,6 +18,9 @@ export const ROUTES = {
  * PLATEAU_ICONS 对 RouteKey 穷举，无关 key 会破坏映射完整性）。 */
 export const LOGIN_PATH = '/login'
 
+/** 个人主页与设置（P2-07）：同 LOGIN_PATH，二级页不是平级入口，经侧栏底部链接进入。 */
+export const PROFILE_PATH = '/profile'
+
 export type RouteKey = keyof typeof ROUTES
 
 /** Router 内部嵌套 <Route path=...> 用的相对路径，去掉前导 `/`。 */
@@ -27,6 +30,8 @@ export const CHILD_PATHS = {
   QA: 'qa',
   KNOWLEDGE: 'knowledge',
   PLAN: 'plan',
+  /** 计划工作室（P2-06）：嵌在 /plan 下的详情路由。 */
+  PLAN_DETAIL: 'plan/:planId',
 } as const
 
 /** 侧边栏展示用的元数据（label + 一行 hint）。 */

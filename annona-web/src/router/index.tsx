@@ -4,7 +4,7 @@ import AppLayout from '@/layouts/AppLayout'
 import LoginPage from '@/pages/login'
 import NotFoundPage from '@/pages/not-found'
 import RouteError from '@/pages/error'
-import { CHILD_PATHS, LOGIN_PATH, ROUTES } from '@/constants/routes'
+import { CHILD_PATHS, LOGIN_PATH, PROFILE_PATH, ROUTES } from '@/constants/routes'
 
 /**
  * 路由集中表。<b>入口平级</b>是本项目三条设计主张之一（见
@@ -22,6 +22,8 @@ const InterviewPage = lazy(() => import('../pages/interview'))
 const QaPage = lazy(() => import('../pages/qa'))
 const KnowledgePage = lazy(() => import('../pages/knowledge'))
 const PlanPage = lazy(() => import('../pages/plan'))
+const PlanStudioPage = lazy(() => import('../pages/plan/PlanStudioPage'))
+const ProfilePage = lazy(() => import('../pages/profile'))
 
 export const router = createBrowserRouter([
   {
@@ -40,6 +42,9 @@ export const router = createBrowserRouter([
           { path: CHILD_PATHS.QA, element: <QaPage /> },
           { path: CHILD_PATHS.KNOWLEDGE, element: <KnowledgePage /> },
           { path: CHILD_PATHS.PLAN, element: <PlanPage /> },
+          { path: CHILD_PATHS.PLAN_DETAIL, element: <PlanStudioPage /> },
+          // 个人主页与设置（P2-07）：二级页，经侧栏底部链接进入，不占平级入口
+          { path: PROFILE_PATH.slice(1), element: <ProfilePage /> },
         ],
       },
       { path: '*', element: <NotFoundPage /> },

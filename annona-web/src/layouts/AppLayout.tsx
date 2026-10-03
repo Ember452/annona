@@ -8,12 +8,13 @@ import {
   MessagesSquareIcon,
   SparklesIcon,
   SproutIcon,
+  UserRoundIcon,
   type LucideIcon,
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { LOGIN_PATH, PLATEAUS, ROUTES, type RouteKey } from '@/constants/routes'
+import { LOGIN_PATH, PLATEAUS, PROFILE_PATH, ROUTES, type RouteKey } from '@/constants/routes'
 import { useAuth } from '@/stores/auth'
 
 /** 入口图标映射：key 与 PLATEAUS 对应，图标语义随文案走。 */
@@ -135,7 +136,13 @@ export default function AppLayout() {
         </nav>
 
         <footer className="flex shrink-0 items-center justify-between gap-2 px-3 text-[10px] text-sidebar-foreground/30">
-          <span>基座就绪 · 内容按 P1 计划渐进落地</span>
+          <NavLink
+            to={PROFILE_PATH}
+            className="flex items-center gap-1 rounded px-1 py-0.5 transition-colors hover:text-sidebar-foreground"
+          >
+            <UserRoundIcon className="size-3.5" />
+            主页与设置
+          </NavLink>
           <button
             type="button"
             onClick={() => void logout()}

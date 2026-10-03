@@ -1,7 +1,13 @@
 import type { AxiosAdapter, AxiosRequestConfig, AxiosResponse } from 'axios'
 
 import type { Direction } from '@/types/direction'
-import type { Checkin, StudySession } from '@/types/study'
+import type {
+  Checkin,
+  StatsDayMinutes,
+  StatsDirectionMinutes,
+  StatsOverview,
+  StudySession,
+} from '@/types/study'
 
 /**
  * 纯前端模式（VITE_MOCK_BACKEND=1，2026-09-27）：不启动后端时调前端样式/交互用。
@@ -37,6 +43,18 @@ if (MOCK_ENABLED) {
 export const MOCK_USER_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 
 const MOCK_USER = { id: MOCK_USER_ID, displayName: 'Mock User', roles: ['USER'] }
+
+/** P2-07 资料/头像的内存态：patch 与回滚直接改这两个对象，刷新后保持一致。 */
+const MOCK_PROFILE = {
+  id: MOCK_USER_ID,
+  email: 'mock@annona.local',
+  nickname: 'Mock 同学',
+  bio: '正在准备秋招',
+  timezone: 'Asia/Shanghai',
+  themeKey: 'rainforest',
+  avatarObjectKey: 'avatars/mock/current.png' as string | null,
+}
+const MOCK_AVATAR_HISTORY: string[] = ['avatars/mock/previous.png']
 
 function iso(msAgo: number): string {
   return new Date(Date.now() - msAgo).toISOString()
@@ -189,11 +207,14 @@ export function mockRespond(method: string, url: string, body: AxiosRequestConfi
   if (path === '/api/study/sessions/today') return success(SESSIONS)
   if (path === '/api/study/sessions' && m === 'post') {
     const b = parseBody(body)
-    return success(mockSession('dddddddd-dddd-dddd-dddd-dddddddddddd', String(b.directionId ?? ''), {
-      endAt: null,
-      minutes: null,
-      quality: null,
-    }))
+    return success({
+      ...mockSession('dddddddd-dddd-dddd-dddd-dddddddddddd', String(b.directionId ?? ''), {
+        endAt: null,
+        minutes: null,
+        quality: null,
+      }),
+      mode: b.mode === 'IMMERSIVE' ? 'IMMERSIVE' : 'POMODORO',
+    })
   }
   if (/^\/api\/study\/sessions\/[^/]+\/heartbeat$/.test(path)) return success(null)
   if (/^\/api\/study\/sessions\/[^/]+\/events$/.test(path)) return success(null)
@@ -228,7 +249,57 @@ export function mockRespond(method: string, url: string, body: AxiosRequestConfi
     })
   }
 
+  // study 统计（P2-01）：确定性伪随机年度数据，让热力图/柱状/分布都有形可调
+  if (path === '/api/study/stats/overview') return success(mockStatsOverview())
+
+  // study 共学（P2-05）：固定在线数供徽章样式开发
+  if (path === '/api/study/presence') return success({ online: 3 })
+
+  // 个人资料与头像（P2-07）：内存态可改，供资料编辑/头像历史 UI 样式开发；
+  // 头像字节端点是 img src（不走 axios），mock 模式下自然 404 → 前端回退首字母占位
+  if (path === '/api/me/profile' && m === 'get') return success(MOCK_PROFILE)
+  if (path === '/api/me/profile' && m === 'patch') {
+    const b = parseBody(body)
+    if (typeof b.nickname === 'string') MOCK_PROFILE.nickname = b.nickname
+    if (typeof b.bio === 'string') MOCK_PROFILE.bio = b.bio
+    return success(MOCK_PROFILE)
+  }
+  if (path === '/api/me/avatar/history') return success(MOCK_AVATAR_HISTORY)
+  if (path === '/api/me/avatar/rollback' && m === 'post') {
+    if (MOCK_AVATAR_HISTORY.length === 0) {
+      return { code: 2008, message: '没有可回滚的历史头像', data: null }
+    }
+    const prev = MOCK_AVATAR_HISTORY[0]
+    MOCK_AVATAR_HISTORY[0] = MOCK_PROFILE.avatarObjectKey as string
+    MOCK_PROFILE.avatarObjectKey = prev
+    return success({ success: true, previousKey: prev })
+  }
+
   return notImplemented(m, path)
+}
+
+/** 年度统计 fixture：约 55% 的日子有记录，有效/自报比例固定，量级够看出色阶层次。 */
+function mockStatsOverview(): StatsOverview {
+  const year = Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date()).slice(0, 4))
+  const start = Date.UTC(year, 0, 1)
+  const dayCount = Math.round((Date.UTC(year + 1, 0, 1) - start) / 86_400_000)
+  const todayShanghai = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date())
+  const days: StatsDayMinutes[] = []
+  for (let i = 0; i < dayCount; i++) {
+    const date = new Date(start + i * 86_400_000).toISOString().slice(0, 10)
+    if (date > todayShanghai) break
+    const seed = (i * 13 + 7) % 100
+    if (seed < 45) continue
+    const self = seed % 4 === 0 ? 15 + (seed % 30) : 0
+    const verified = seed % 4 === 0 ? 0 : 20 + (seed % 110)
+    days.push({ day: date, verifiedMinutes: verified, selfReportedMinutes: self })
+  }
+  const directions: StatsDirectionMinutes[] = [
+    { directionId: DIRECTIONS[0].id, name: DIRECTIONS[0].name, verifiedMinutes: 1240, selfReportedMinutes: 90 },
+    { directionId: DIRECTIONS[1].id, name: DIRECTIONS[1].name, verifiedMinutes: 620, selfReportedMinutes: 45 },
+    { directionId: DIRECTIONS[2].id, name: DIRECTIONS[2].name, verifiedMinutes: 180, selfReportedMinutes: 0 },
+  ]
+  return { year, days, directions, totalCheckins: 37 }
 }
 
 /** 模拟一点网络延迟，让 loading/骨架态在纯前端模式下也可见、可调。 */
