@@ -69,11 +69,17 @@ public class StudySessionService {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
                 "计划专注分钟需为 1–240，实际收到：" + planned);
         }
+        // mode 缺省 POMODORO；CHECKIN 不经由本端点（只能由打卡事务联动创建，防绕过）
+        String mode = request.mode() == null ? StudySessionEntity.MODE_POMODORO : request.mode();
+        if (!StudySessionEntity.MODE_POMODORO.equals(mode)
+            && !StudySessionEntity.MODE_IMMERSIVE.equals(mode)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "会话类型需为 POMODORO 或 IMMERSIVE");
+        }
         StudySessionEntity entity = new StudySessionEntity();
         entity.setId(UUID.randomUUID());
         entity.setUserId(UUID.fromString(userId));
         entity.setDirectionId(UUID.fromString(request.directionId()));
-        entity.setMode(StudySessionEntity.MODE_POMODORO);
+        entity.setMode(mode);
         entity.setStartAt(Instant.now());
         // 预置主键 save 走 merge 分支：必须映射受管返回值——原引用拿不到 created_at
         // 等 DB-default 列，SessionResponse 未来加字段时不会在这里悄悄变 null（AGENTS §4 约定）

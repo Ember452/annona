@@ -39,4 +39,34 @@ public interface StudySessionRepository extends JpaRepository<StudySessionEntity
     List<Object[]> aggregateQualityByDirection(@Param("userId") UUID userId,
         @Param("directionId") UUID directionId, @Param("from") Instant from,
         @Param("toExclusive") Instant toExclusive);
+
+    /**
+     * P2-01 年度热力图日聚合：日界时区注入（AppZones.DAILY）分日 × 质量分桶求和，
+     * 返回 {@code [day(java.sql.Date), verifiedMinutes, selfReportedMinutes]}，按日升序。
+     * 原生 SQL：timestamptz → 本地日的 {@code at time zone} 转换是 PG 方言，JPQL 表达不了
+     * （这正是 docker-it 要钉的真库行为）；用 {@code CAST} 而非 {@code ::}，避免与
+     * Hibernate 命名参数的冒号解析相撞。窗口同口径半开 {@code [from, toExclusive)}。
+     */
+    @Query(value = "select cast(s.start_at at time zone :zone as date) as day,"
+        + " sum(case when s.quality in ('VERIFIED', 'PARTIAL') then coalesce(s.minutes, 0) else 0 end),"
+        + " sum(case when s.quality = 'SELF_REPORTED' then coalesce(s.minutes, 0) else 0 end)"
+        + " from study_session s"
+        + " where s.user_id = :userId and s.start_at >= :from and s.start_at < :toExclusive"
+        + " group by cast(s.start_at at time zone :zone as date)"
+        + " order by cast(s.start_at at time zone :zone as date)", nativeQuery = true)
+    List<Object[]> aggregateDailyQuality(@Param("userId") UUID userId, @Param("zone") String zone,
+        @Param("from") Instant from, @Param("toExclusive") Instant toExclusive);
+
+    /**
+     * P2-01 方向维度聚合：窗口内按方向 × 质量分桶求和，
+     * 返回 {@code [directionId, verifiedMinutes, selfReportedMinutes]}。方向名由服务层经
+     * DirectionQueryService 只读补齐（归档方向不在 visible 列表，落占位名）。
+     */
+    @Query("select s.directionId,"
+        + " sum(case when s.quality in ('VERIFIED', 'PARTIAL') then coalesce(s.minutes, 0) else 0 end),"
+        + " sum(case when s.quality = 'SELF_REPORTED' then coalesce(s.minutes, 0) else 0 end)"
+        + " from StudySessionEntity s where s.userId = :userId"
+        + " and s.startAt >= :from and s.startAt < :toExclusive group by s.directionId")
+    List<Object[]> aggregateQualityPerDirection(@Param("userId") UUID userId,
+        @Param("from") Instant from, @Param("toExclusive") Instant toExclusive);
 }

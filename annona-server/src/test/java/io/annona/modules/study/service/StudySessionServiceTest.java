@@ -88,7 +88,7 @@ class StudySessionServiceTest {
             when(directions.existsVisibleTo(OWNER, DIRECTION_ID)).thenReturn(false);
 
             assertThatThrownBy(() -> service.start(OWNER,
-                new StartSessionRequest(DIRECTION_ID, 25)))
+                new StartSessionRequest(DIRECTION_ID, 25, null)))
                 .isInstanceOfSatisfying(BusinessException.class,
                     e -> assertThat(e.getCode()).isEqualTo(2100));
         }
@@ -99,14 +99,14 @@ class StudySessionServiceTest {
             when(directions.existsVisibleTo(OWNER, DIRECTION_ID)).thenReturn(true);
 
             assertThatThrownBy(() -> service.start(OWNER,
-                new StartSessionRequest(DIRECTION_ID, 0)))
+                new StartSessionRequest(DIRECTION_ID, 0, null)))
                 .isInstanceOfSatisfying(BusinessException.class,
                     e -> assertThat(e.getCode()).isEqualTo(1001));
             assertThatThrownBy(() -> service.start(OWNER,
-                new StartSessionRequest(DIRECTION_ID, 241)))
+                new StartSessionRequest(DIRECTION_ID, 241, null)))
                 .isInstanceOf(BusinessException.class);
             assertThatThrownBy(() -> service.start(OWNER,
-                new StartSessionRequest(DIRECTION_ID, null)))
+                new StartSessionRequest(DIRECTION_ID, null, null)))
                 .isInstanceOf(BusinessException.class);
         }
 
@@ -117,7 +117,7 @@ class StudySessionServiceTest {
             when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             SessionResponse response = service.start(OWNER,
-                new StartSessionRequest(DIRECTION_ID, 25));
+                new StartSessionRequest(DIRECTION_ID, 25, null));
 
             ArgumentCaptor<StudySessionEntity> sessionCaptor =
                 ArgumentCaptor.forClass(StudySessionEntity.class);
@@ -139,6 +139,23 @@ class StudySessionServiceTest {
 
             assertThat(response.mode()).isEqualTo("POMODORO");
             assertThat(response.endAt()).isNull();
+        }
+
+        @Test
+        @DisplayName("mode=IMMERSIVE 接受并落库；CHECKIN 拒绝（只能由打卡事务创建）")
+        void startAcceptsImmersiveAndRejectsCheckin() {
+            when(directions.existsVisibleTo(OWNER, DIRECTION_ID)).thenReturn(true);
+            when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            service.start(OWNER, new StartSessionRequest(DIRECTION_ID, 45, "IMMERSIVE"));
+            ArgumentCaptor<StudySessionEntity> captor = ArgumentCaptor.forClass(StudySessionEntity.class);
+            verify(sessionRepository).save(captor.capture());
+            assertThat(captor.getValue().getMode()).isEqualTo("IMMERSIVE");
+
+            assertThatThrownBy(() -> service.start(OWNER,
+                new StartSessionRequest(DIRECTION_ID, 45, "CHECKIN")))
+                .isInstanceOfSatisfying(BusinessException.class,
+                    e -> assertThat(e.getCode()).isEqualTo(1001));
         }
     }
 

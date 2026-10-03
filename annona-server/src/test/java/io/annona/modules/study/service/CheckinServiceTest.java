@@ -17,10 +17,13 @@ import io.annona.modules.study.mapper.StudyMapperImpl;
 import io.annona.modules.study.repository.CheckinRepository;
 import io.annona.modules.study.repository.StudySessionRepository;
 import io.annona.shared.direction.service.DirectionQueryService;
+import io.annona.shared.domain.CheckinLinkedEvent;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,7 +67,8 @@ class CheckinServiceTest {
     @BeforeEach
     void setUp() {
         service = new CheckinService(checkinRepository, sessionRepository,
-            directions, new StudyMapperImpl(), entityManager);
+            directions, new StudyMapperImpl(), entityManager, event -> {
+            });
     }
 
     private CheckinEntity todayCheckin() {
@@ -245,6 +249,73 @@ class CheckinServiceTest {
                 new UpsertCheckinRequest(DIRECTION_ID, new BigDecimal("2"), "好".repeat(33), null, null, null)))
                 .isInstanceOf(BusinessException.class);
             verifyNoInteractions(checkinRepository);
+        }
+    }
+
+    private CheckinService withEventCollector(List<CheckinLinkedEvent> sink) {
+        return new CheckinService(checkinRepository, sessionRepository,
+            directions, new StudyMapperImpl(), entityManager,
+            event -> {
+                if (event instanceof CheckinLinkedEvent linked) {
+                    sink.add(linked);
+                }
+            });
+    }
+
+    @Nested
+    @DisplayName("打卡联动事件（plan-module-adr §决策 3）")
+    class LinkedEvent {
+
+        @Test
+        @DisplayName("首建且 hours>0 → 发布 CheckinLinkedEvent（分钟 = 归一后 hours×60）")
+        void firstInsertPublishesEventOnce() {
+            when(directions.existsVisibleTo(OWNER, DIRECTION_ID)).thenReturn(true);
+            when(checkinRepository.findByUserIdAndDay(UUID.fromString(OWNER), LocalDate.now(ZONE)))
+                .thenReturn(Optional.empty());
+            when(checkinRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(sessionRepository.findByCheckinId(any())).thenReturn(Optional.empty());
+            List<CheckinLinkedEvent> published = new ArrayList<>();
+
+            withEventCollector(published).upsertToday(OWNER, new UpsertCheckinRequest(DIRECTION_ID,
+                new BigDecimal("1.5"), null, null, null, null));
+
+            assertThat(published).hasSize(1);
+            CheckinLinkedEvent event = published.get(0);
+            assertThat(event.minutes()).isEqualTo(90);
+            assertThat(event.directionId()).isEqualTo(UUID.fromString(DIRECTION_ID));
+            assertThat(event.userId()).isEqualTo(UUID.fromString(OWNER));
+        }
+
+        @Test
+        @DisplayName("当日重打（非首建）→ 不补发事件，差额重算被 ADR 否决")
+        void repeatedCheckinPublishesNothing() {
+            when(directions.existsVisibleTo(OWNER, DIRECTION_ID)).thenReturn(true);
+            when(checkinRepository.findByUserIdAndDay(UUID.fromString(OWNER), LocalDate.now(ZONE)))
+                .thenReturn(Optional.of(todayCheckin()));
+            when(checkinRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(sessionRepository.findByCheckinId(any())).thenReturn(Optional.of(linkedSession(todayCheckin())));
+            when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            List<CheckinLinkedEvent> published = new ArrayList<>();
+
+            withEventCollector(published).upsertToday(OWNER, new UpsertCheckinRequest(DIRECTION_ID,
+                new BigDecimal("3"), null, null, null, null));
+
+            assertThat(published).isEmpty();
+        }
+
+        @Test
+        @DisplayName("首建但 hours=0 → 不发事件（零时长无可累计）")
+        void zeroHoursFirstInsertPublishesNothing() {
+            when(directions.existsVisibleTo(OWNER, DIRECTION_ID)).thenReturn(true);
+            when(checkinRepository.findByUserIdAndDay(UUID.fromString(OWNER), LocalDate.now(ZONE)))
+                .thenReturn(Optional.empty());
+            when(checkinRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+            List<CheckinLinkedEvent> published = new ArrayList<>();
+
+            withEventCollector(published).upsertToday(OWNER, new UpsertCheckinRequest(DIRECTION_ID,
+                BigDecimal.ZERO, null, null, null, null));
+
+            assertThat(published).isEmpty();
         }
     }
 

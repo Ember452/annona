@@ -10,14 +10,17 @@ import io.annona.modules.study.entity.StudySessionEntity;
 import io.annona.modules.study.mapper.StudyMapper;
 import io.annona.modules.study.repository.CheckinRepository;
 import io.annona.modules.study.repository.StudySessionRepository;
+import io.annona.shared.domain.CheckinLinkedEvent;
 import io.annona.shared.direction.service.DirectionQueryService;
 import jakarta.persistence.EntityManager;
+import org.springframework.context.ApplicationEventPublisher;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +31,9 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>hours &gt; 0 时同事务联动一条 mode=CHECKIN / quality=SELF_REPORTED 的会话，
  * 打卡更新按 {@code study_session.checkin_id} 定位同步；hours 归 0 则删除联动会话——
  * study_session 是时长的单一真相源，P1c 信号聚合只读它（ADR §决策 3）。
+ *
+ * <p>同 user×day 的并发 upsert 由事务级 advisory lock 串行化（保 plan-module-adr §决策 3
+ * “联动事件只发一次”的判定可靠）；本方法必须在事务内调用（锁随事务释放）。
  */
 @Service
 public class CheckinService {
@@ -44,17 +50,20 @@ public class CheckinService {
     private final DirectionQueryService directions;
     private final StudyMapper mapper;
     private final EntityManager entityManager;
+    private final ApplicationEventPublisher eventPublisher;
 
     public CheckinService(CheckinRepository checkinRepository,
                           StudySessionRepository sessionRepository,
                           DirectionQueryService directions,
                           StudyMapper mapper,
-                          EntityManager entityManager) {
+                          EntityManager entityManager,
+                          ApplicationEventPublisher eventPublisher) {
         this.checkinRepository = checkinRepository;
         this.sessionRepository = sessionRepository;
         this.directions = directions;
         this.mapper = mapper;
         this.entityManager = entityManager;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -80,14 +89,19 @@ public class CheckinService {
         UUID directionId = UUID.fromString(request.directionId());
         LocalDate today = LocalDate.now(ZONE);
 
-        CheckinEntity entity = checkinRepository.findByUserIdAndDay(owner, today)
-            .orElseGet(() -> {
-                CheckinEntity fresh = new CheckinEntity();
-                fresh.setId(UUID.randomUUID());
-                fresh.setUserId(owner);
-                fresh.setDay(today);
-                return fresh;
-            });
+        // 首建判定的竞态防线（2026-10-03 P2 审查）：READ COMMITTED 下“查后插”两事务可互
+        // 不可见，双发 CheckinLinkedEvent 让进度重复累计。唯一约束只防重复行不防事件；
+        // 用事务级 advisory lock 把同 user×day 的 upsert 串行化（CheckinRepository 注释含取舍）。
+        checkinRepository.lockUserDay(owner.toString(), today.toString());
+        Optional<CheckinEntity> found = checkinRepository.findByUserIdAndDay(owner, today);
+        boolean firstInsert = found.isEmpty();
+        CheckinEntity entity = found.orElseGet(() -> {
+            CheckinEntity fresh = new CheckinEntity();
+            fresh.setId(UUID.randomUUID());
+            fresh.setUserId(owner);
+            fresh.setDay(today);
+            return fresh;
+        });
         entity.setDirectionId(directionId);
         entity.setHours(hours);
         entity.setMood(request.mood());
@@ -103,6 +117,12 @@ public class CheckinService {
         entityManager.refresh(entity);
 
         syncLinkedSession(entity);
+        // 打卡联动（plan-module-adr §决策 3）：仅首建且 hours>0 时发布——当日改 hours
+        // 不补发事件（幂等靠"只发一次"，差额重算被 ADR 否决）。监听器在 AFTER_COMMIT 执行。
+        if (firstInsert && hours.signum() > 0) {
+            eventPublisher.publishEvent(new CheckinLinkedEvent(owner, directionId,
+                entity.getHours().multiply(BigDecimal.valueOf(60)).intValue(), today, entity.getId()));
+        }
         return mapper.toResponse(entity);
     }
 
