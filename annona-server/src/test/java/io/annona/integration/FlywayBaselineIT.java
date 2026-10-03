@@ -81,7 +81,9 @@ class FlywayBaselineIT {
                 // V14（P1b-08 简历上传与异步分析）
                 "resume",
                 // V15/V16（P1c-05/07 决策留痕与规则声誉）
-                "decision_trace", "rule_reputation");
+                "decision_trace", "rule_reputation",
+                // V17（P2-06 计划与任务：plan-module-adr）
+                "plan", "plan_task");
     }
 
     @Test
