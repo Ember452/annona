@@ -1,7 +1,7 @@
 #!/bin/sh
 # annona pre-commit hook
 #
-# 五个动作：Flyway 迁移冻结检查 → workflow YAML 结构自检 → 测试侧配置遮蔽检查 → 迁移↔基线清单登记守卫 → @Modifying 调用点事务覆盖机检 → gitleaks 密钥扫描。
+# 七个动作：Flyway 迁移冻结检查 → workflow YAML 结构自检 → 测试侧配置遮蔽检查 → 迁移↔基线清单登记守卫 → @Modifying 调用点事务覆盖机检 → void @Modifying×原生 SELECT 必炸组合机检 → gitleaks 密钥扫描。
 # 权威门禁在 CI（.github/workflows/ci.yml 的 gitleaks job + branch protection）；
 # 这里是**本地第一道**，让开发者在 commit 前就看到，而不是等 CI 红。
 #
@@ -68,6 +68,16 @@ if git diff --cached --name-only | grep -qE '^annona-server/src/main/java/.*\.ja
     exit 1
   fi
   python scripts/ci/check-modifying-callers.py || exit 1
+fi
+
+# 第七道：void @Modifying × 原生 SELECT 必炸组合。pg_advisory_xact_lock 首版写成这种形状，
+# CI docker-it 实炸 7 例（executeUpdate 拒收结果集）；本机 mock EM 探不到，故上机检。
+if git diff --cached --name-only | grep -qE '^annona-server/src/main/java/.*Repository\.java$'; then
+  if ! command -v python >/dev/null 2>&1; then
+    printf '%s\n' "pre-commit: 本次改了 Repository 接口，需要 python 跑 @Modifying×SELECT 检查。" >&2
+    exit 1
+  fi
+  python scripts/ci/check-modifying-native-select.py || exit 1
 fi
 
 if ! command -v gitleaks >/dev/null 2>&1; then
