@@ -91,8 +91,8 @@ public class CheckinService {
 
         // 首建判定的竞态防线（2026-10-03 P2 审查）：READ COMMITTED 下“查后插”两事务可互
         // 不可见，双发 CheckinLinkedEvent 让进度重复累计。唯一约束只防重复行不防事件；
-        // 用事务级 advisory lock 把同 user×day 的 upsert 串行化（CheckinRepository 注释含取舍）。
-        checkinRepository.lockUserDay(owner.toString(), today.toString());
+        // 用事务级 advisory lock 把同 user×day 的 upsert 串行化（取舍见 lockUserDay）。
+        lockUserDay(owner, today);
         Optional<CheckinEntity> found = checkinRepository.findByUserIdAndDay(owner, today);
         boolean firstInsert = found.isEmpty();
         CheckinEntity entity = found.orElseGet(() -> {
@@ -131,6 +131,23 @@ public class CheckinService {
         return checkinRepository.findByUserIdAndDay(UUID.fromString(userId), LocalDate.now(ZONE))
             .map(mapper::toResponse)
             .orElse(null);
+    }
+
+    /**
+     * 事务级 advisory lock（键 = user×day 哈希）：同用户同日并发 upsert 串行化，随事务提交
+     * 自动释放；阻塞而非失败，无需重试。选锁而非 upsert-RETURNING：后者绕过 JPA 实体
+     * 生命周期，拆掉 saveAndFlush+refresh 受管语义。PG 专属（storage-single-postgres-adr）。
+     *
+     * <p>必须走 EntityManager 且用 {@code getResultList}：{@code pg_advisory_xact_lock} 返回
+     * void，作为查询没有可映射的行——getSingleResult 会招 NoResultException；也不能标
+     * {@code @Modifying}（走 executeUpdate，驱动对返回结果集的语句报
+     * "A result was returned when none was expected"，CI docker-it 实测）。
+     */
+    private void lockUserDay(UUID owner, LocalDate day) {
+        entityManager.createNativeQuery(
+                "SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))")
+            .setParameter("k", owner + "@" + day)
+            .getResultList();
     }
 
     private void syncLinkedSession(CheckinEntity checkin) {

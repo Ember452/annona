@@ -3,6 +3,9 @@ package io.annona.modules.study.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -19,6 +22,7 @@ import io.annona.modules.study.repository.StudySessionRepository;
 import io.annona.shared.direction.service.DirectionQueryService;
 import io.annona.shared.domain.CheckinLinkedEvent;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -69,6 +73,11 @@ class CheckinServiceTest {
         service = new CheckinService(checkinRepository, sessionRepository,
             directions, new StudyMapperImpl(), entityManager, event -> {
             });
+        // 每次 upsert 都先取 user×day 事务 advisory lock（void 函数，只验调用不验结果）；
+        // lenient：Validation/Today 组不进 upsert 路径，严格桩会报未用。
+        Query lockQuery = mock(Query.class);
+        lenient().when(entityManager.createNativeQuery(anyString())).thenReturn(lockQuery);
+        lenient().when(lockQuery.setParameter(anyString(), any())).thenReturn(lockQuery);
     }
 
     private CheckinEntity todayCheckin() {
@@ -316,6 +325,36 @@ class CheckinServiceTest {
                 BigDecimal.ZERO, null, null, null, null));
 
             assertThat(published).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("首建串行化 advisory lock（CI docker-it 踩坑回归）")
+    class AdvisoryLock {
+
+        @Test
+        @DisplayName("upsert 前以原生 SELECT 取事务锁，且必须走 getResultList")
+        void locksUserDayViaNativeSelectBeforeLookup() {
+            when(directions.existsVisibleTo(OWNER, DIRECTION_ID)).thenReturn(true);
+            when(checkinRepository.findByUserIdAndDay(UUID.fromString(OWNER), LocalDate.now(ZONE)))
+                .thenReturn(Optional.empty());
+            when(checkinRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(sessionRepository.findByCheckinId(any())).thenReturn(Optional.empty());
+            Query lockQuery = mock(Query.class);
+            when(entityManager.createNativeQuery(anyString())).thenReturn(lockQuery);
+            when(lockQuery.setParameter(anyString(), any())).thenReturn(lockQuery);
+
+            service.upsertToday(OWNER, new UpsertCheckinRequest(DIRECTION_ID,
+                new BigDecimal("1"), null, null, null, null));
+
+            ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+            verify(entityManager).createNativeQuery(sql.capture());
+            assertThat(sql.getValue()).contains("pg_advisory_xact_lock");
+            // 回归点：pg_advisory_xact_lock 返 void 无映射行——getSingleResult 招
+            // NoResultException；标 @Modifying 走 executeUpdate 则被驱动拒
+            // "A result was returned when none was expected"（CI 实测）。只认 getResultList。
+            verify(lockQuery).getResultList();
+            verify(lockQuery, never()).getSingleResult();
         }
     }
 
