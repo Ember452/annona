@@ -7,6 +7,7 @@ import io.annona.modules.study.dto.StatsOverviewResponse;
 import io.annona.modules.study.service.StudyStatsService;
 import io.annona.shared.direction.entity.DirectionEntity;
 import io.annona.shared.direction.repository.DirectionRepository;
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -138,9 +139,12 @@ class StudyStatsFlowIT {
     /** 以 Asia/Shanghai 指定日期的 HH:mm 落一条会话（start=end），直接写绝对时刻。 */
     private void insertShanghai(LocalDate day, int hour, int minute, int minutes, String quality) {
         var start = day.atTime(hour, minute).atZone(AppZones.DAILY).toInstant();
+        // JdbcTemplate 对未知类型走裸 setObject，pgjdbc 推断不了 Instant 的 SQL 类型
+        // （CI 实测 "Can't infer the SQL type to use for an instance of java.time.Instant"）；
+        // 按仓内先例（StudyFlowIT 会话改期、DemoSeedRunner 演示数据）绑 java.sql.Timestamp。
         jdbc.update("insert into study_session (id, user_id, direction_id, mode, start_at,"
                 + " end_at, minutes, quality) values (?, ?, ?, 'POMODORO', ?, ?, ?, ?)",
-            UUID.randomUUID(), userId, directionId, start, start.plusSeconds(60), minutes,
-            quality);
+            UUID.randomUUID(), userId, directionId, Timestamp.from(start),
+            Timestamp.from(start.plusSeconds(60)), minutes, quality);
     }
 }
