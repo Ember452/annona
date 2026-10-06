@@ -1,7 +1,7 @@
 #!/bin/sh
 # annona pre-commit hook
 #
-# 七个动作：Flyway 迁移冻结检查 → workflow YAML 结构自检 → 测试侧配置遮蔽检查 → 迁移↔基线清单登记守卫 → @Modifying 调用点事务覆盖机检 → void @Modifying×原生 SELECT 必炸组合机检 → gitleaks 密钥扫描。
+# 八个动作：Flyway 迁移冻结检查 → workflow YAML 结构自检 → 测试侧配置遮蔽检查 → 迁移↔基线清单登记守卫 → @Modifying 调用点事务覆盖机检 → void @Modifying×原生 SELECT 必炸组合机检 → 原生 datetime 标量硬转型机检 → gitleaks 密钥扫描。
 # 权威门禁在 CI（.github/workflows/ci.yml 的 gitleaks job + branch protection）；
 # 这里是**本地第一道**，让开发者在 commit 前就看到，而不是等 CI 红。
 #
@@ -78,6 +78,18 @@ if git diff --cached --name-only | grep -qE '^annona-server/src/main/java/.*Repo
     exit 1
   fi
   python scripts/ci/check-modifying-native-select.py || exit 1
+fi
+
+# 第八道：原生查询 datetime 标量硬转型。Hibernate 7（Boot 4）起原生标量默认
+# LocalDate/LocalDateTime（6.x 默认 java.sql.*），硬转型在本机 slice 全绿、真库 CI
+# 才炸（StudyStatsFlowIT 三连 ClassCastException 实测；timestamptz 轴同款先付过一次）。
+# 改任一主源 .java 都重扫（纯 python、秒级）。
+if git diff --cached --name-only | grep -qE '^annona-(server|common|spi|infrastructure)/src/main/java/.*\.java$'; then
+  if ! command -v python >/dev/null 2>&1; then
+    printf '%s\n' "pre-commit: 本次改了后端主源，需要 python 跑 datetime 标量转型检查。" >&2
+    exit 1
+  fi
+  python scripts/ci/check-native-datetime-cast.py || exit 1
 fi
 
 if ! command -v gitleaks >/dev/null 2>&1; then
