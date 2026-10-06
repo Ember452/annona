@@ -48,14 +48,18 @@ public interface StudySessionRepository extends JpaRepository<StudySessionEntity
      * 原生 SQL：timestamptz → 本地日的 {@code at time zone} 转换是 PG 方言，JPQL 表达不了
      * （这正是 docker-it 要钉的真库行为）；用 {@code CAST} 而非 {@code ::}，避免与
      * Hibernate 命名参数的冒号解析相撞。窗口同口径半开 {@code [from, toExclusive)}。
+     *
+     * <p>GROUP BY/ORDER BY 写序号 {@code group by 1 order by 1} 而非重复表达式：
+     * 命名参数在每个出现处展开成独立占位符，PG 做分组匹配要求表达式逐字一致，
+     * {@code cast(start_at at time zone $1)} 与 {@code $2} 不被认作同一表达式，
+     * 会报 "column s.start_at must appear in the GROUP BY clause"（docker-it 实测）。
      */
     @Query(value = "select cast(s.start_at at time zone :zone as date) as day,"
         + " sum(case when s.quality in ('VERIFIED', 'PARTIAL') then coalesce(s.minutes, 0) else 0 end),"
         + " sum(case when s.quality = 'SELF_REPORTED' then coalesce(s.minutes, 0) else 0 end)"
         + " from study_session s"
         + " where s.user_id = :userId and s.start_at >= :from and s.start_at < :toExclusive"
-        + " group by cast(s.start_at at time zone :zone as date)"
-        + " order by cast(s.start_at at time zone :zone as date)", nativeQuery = true)
+        + " group by 1 order by 1", nativeQuery = true)
     List<Object[]> aggregateDailyQuality(@Param("userId") UUID userId, @Param("zone") String zone,
         @Param("from") Instant from, @Param("toExclusive") Instant toExclusive);
 
