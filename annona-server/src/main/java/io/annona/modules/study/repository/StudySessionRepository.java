@@ -42,7 +42,9 @@ public interface StudySessionRepository extends JpaRepository<StudySessionEntity
 
     /**
      * P2-01 年度热力图日聚合：日界时区注入（AppZones.DAILY）分日 × 质量分桶求和，
-     * 返回 {@code [day(java.sql.Date), verifiedMinutes, selfReportedMinutes]}，按日升序。
+     * 返回 {@code [day, verifiedMinutes, selfReportedMinutes]}，按日升序。day 的 Java
+     * 类型随 Hibernate 版本/设置漂移（7 起默认 LocalDate，6.x 起默认 java.sql.Date），
+     * 调用方经 {@code StudyStatsService#toLocalDate} 适配，不得硬转型。
      * 原生 SQL：timestamptz → 本地日的 {@code at time zone} 转换是 PG 方言，JPQL 表达不了
      * （这正是 docker-it 要钉的真库行为）；用 {@code CAST} 而非 {@code ::}，避免与
      * Hibernate 命名参数的冒号解析相撞。窗口同口径半开 {@code [from, toExclusive)}。

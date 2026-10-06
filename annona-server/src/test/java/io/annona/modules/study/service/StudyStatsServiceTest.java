@@ -84,12 +84,14 @@ class StudyStatsServiceTest {
     class RowMapping {
 
         @Test
-        @DisplayName("日聚合行转 DTO；SUM 空集 null 归零")
+        @DisplayName("日聚合行转 DTO（LocalDate 与 java.sql.Date 两型都收）；SUM 空集 null 归零")
         void mapsDailyRows() {
             Instant from = Instant.EPOCH;
             when(sessionRepository.aggregateDailyQuality(eq(userId), eq("Asia/Shanghai"), any(), any()))
                 .thenReturn(List.of(
-                    new Object[]{Date.valueOf("2026-01-10"), 90L, 15L},
+                    // Hibernate 7 原生查询 date 标量默认给 LocalDate（真库集测付过学费的形状）
+                    new Object[]{LocalDate.of(2026, 1, 10), 90L, 15L},
+                    // Hibernate 6.x（prefer_jdbc_datetime_types=true）给 java.sql.Date——转换两条路都收
                     new Object[]{Date.valueOf("2026-01-11"), null, null}));
             when(sessionRepository.aggregateQualityPerDirection(eq(userId), any(), any()))
                 .thenReturn(List.of());

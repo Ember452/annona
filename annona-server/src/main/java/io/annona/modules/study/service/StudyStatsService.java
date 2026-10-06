@@ -10,6 +10,7 @@ import io.annona.modules.study.repository.CheckinRepository;
 import io.annona.modules.study.repository.StudySessionRepository;
 import io.annona.shared.direction.dto.DirectionResponse;
 import io.annona.shared.direction.service.DirectionQueryService;
+import java.sql.Date;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -64,8 +65,7 @@ public class StudyStatsService {
         List<DayMinutes> days = sessionRepository
             .aggregateDailyQuality(userId, ZONE.getId(), from, toExclusive)
             .stream()
-            .map(row -> new DayMinutes(((java.sql.Date) row[0]).toLocalDate(),
-                minutes(row[1]), minutes(row[2])))
+            .map(row -> new DayMinutes(toLocalDate(row[0]), minutes(row[1]), minutes(row[2])))
             .toList();
 
         List<DirectionMinutes> directionTotals = new ArrayList<>();
@@ -98,5 +98,20 @@ public class StudyStatsService {
     /** SUM 对空集返回 null（或 0）：统一转非负分钟数。 */
     private static long minutes(Object sum) {
         return sum instanceof Number n ? Math.max(0L, n.longValue()) : 0L;
+    }
+
+    /**
+     * 原生查询 date 标量的类型适配：Hibernate 7 起默认给 {@link LocalDate}，
+     * Hibernate 6.x（{@code prefer_jdbc_datetime_types=true}）给 {@link Date}——
+     * 升级 Boot 4 后按单一类型硬转型在真库上炸过一次（StudyStatsFlowIT 三连 ClassCastException）。
+     * 与 {@code EvaluationSignalPortImpl#toInstant}（timestamptz 轴同款教训）同型；
+     * 未知类型抛错而非静默丢行——丢日是数据错误，必须响。
+     */
+    private static LocalDate toLocalDate(Object day) {
+        return switch (day) {
+            case LocalDate d -> d;
+            case Date d -> d.toLocalDate();
+            default -> throw new IllegalStateException("意外的日期标量类型: " + day.getClass());
+        };
     }
 }
