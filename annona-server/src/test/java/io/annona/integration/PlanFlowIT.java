@@ -101,8 +101,8 @@ class PlanFlowIT {
     @Test
     @DisplayName("V17 形状：scene 'PLAN' 可入账、非法 category 被约束拒绝")
     void v17Constraints() {
-        // PLAN scene（V17 CHECK 放宽后合法）
-        jdbc.update("insert into token_usage (id, user_id, scene, model, provider, kind,"
+        // PLAN scene（V17 CHECK 放宽后合法）；模型用途列是 purpose（V11），不是 kind
+        jdbc.update("insert into token_usage (id, user_id, scene, model, provider, purpose,"
                 + " prompt_tokens, completion_tokens) values (?, ?, 'PLAN', 'm', 'fake', 'chat', 1, 1)",
             UUID.randomUUID(), userId);
         Integer planRows = jdbc.queryForObject(
