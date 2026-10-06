@@ -80,10 +80,10 @@ if git diff --cached --name-only | grep -qE '^annona-server/src/main/java/.*Repo
   python scripts/ci/check-modifying-native-select.py || exit 1
 fi
 
-# 第八道：原生查询 datetime 标量硬转型。Hibernate 7（Boot 4）起原生标量默认
-# LocalDate/LocalDateTime（6.x 默认 java.sql.*），硬转型在本机 slice 全绿、真库 CI
-# 才炸（StudyStatsFlowIT 三连 ClassCastException 实测；timestamptz 轴同款先付过一次）。
-# 改任一主源 .java 都重扫（纯 python、秒级）。
+# 第八道：原生查询真库地雷。① datetime 标量硬转型：Hibernate 7（Boot 4）起原生标量
+# 默认 LocalDate/LocalDateTime（6.x 默认 java.sql.*），硬转型在本机 slice 全绿、真库 CI
+# 才炸（StudyStatsFlowIT 三连 ClassCastException 实测）；② 命名参数写进 GROUP BY/ORDER
+# BY 表达式：PG 逐字匹配分组表达式必炸（同查询实测）。改任一主源 .java 都重扫（纯 python、秒级）。
 if git diff --cached --name-only | grep -qE '^annona-(server|common|spi|infrastructure)/src/main/java/.*\.java$'; then
   if ! command -v python >/dev/null 2>&1; then
     printf '%s\n' "pre-commit: 本次改了后端主源，需要 python 跑 datetime 标量转型检查。" >&2
