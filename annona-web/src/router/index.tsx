@@ -19,6 +19,7 @@ import { CHILD_PATHS, LOGIN_PATH, PROFILE_PATH, ROUTES } from '@/constants/route
 const HomePage = lazy(() => import('../pages/home'))
 const StudyPage = lazy(() => import('../pages/study'))
 const InterviewPage = lazy(() => import('../pages/interview'))
+const VoicePage = lazy(() => import('../pages/interview/VoicePage'))
 const QaPage = lazy(() => import('../pages/qa'))
 const KnowledgePage = lazy(() => import('../pages/knowledge'))
 const PlanPage = lazy(() => import('../pages/plan'))
@@ -39,6 +40,8 @@ export const router = createBrowserRouter([
           { index: true, element: <HomePage /> },
           { path: CHILD_PATHS.STUDY, element: <StudyPage /> },
           { path: CHILD_PATHS.INTERVIEW, element: <InterviewPage /> },
+          // 语音面试（P3-01）：嵌在模拟面试下的语音模态，非平级入口
+          { path: CHILD_PATHS.INTERVIEW_VOICE, element: <VoicePage /> },
           { path: CHILD_PATHS.QA, element: <QaPage /> },
           { path: CHILD_PATHS.KNOWLEDGE, element: <KnowledgePage /> },
           { path: CHILD_PATHS.PLAN, element: <PlanPage /> },

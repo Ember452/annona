@@ -32,6 +32,8 @@ export const CHILD_PATHS = {
   PLAN: 'plan',
   /** 计划工作室（P2-06）：嵌在 /plan 下的详情路由。 */
   PLAN_DETAIL: 'plan/:planId',
+  /** 语音面试（P3-01）：嵌在 /interview 下的语音模态骨架，不是平级入口。 */
+  INTERVIEW_VOICE: 'interview/voice',
 } as const
 
 /** 侧边栏展示用的元数据（label + 一行 hint）。 */

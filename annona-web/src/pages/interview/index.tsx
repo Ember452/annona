@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { API_BASE_URL } from '@/api/request'
 import { questionbankApi } from '@/api/questionbank'
+import { CHILD_PATHS } from '@/constants/routes'
 import DirectionSelector from '@/components/direction/DirectionSelector'
 import InterviewCenter from '@/pages/interview/InterviewCenter'
 import { Button } from '@/components/ui/button'
@@ -221,6 +223,9 @@ export default function InterviewPage() {
         <h1 className="font-heading text-2xl font-semibold tracking-tight">模拟面试 · 题库</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           选择方向，从其绑定的知识库讲义生成带评分标准的题目；组卷与逐题作答在 P1b 后续批次落地。
+          <Link to={CHILD_PATHS.INTERVIEW_VOICE} className="ml-2 underline underline-offset-4" data-testid="voice-entry">
+            试试语音面试（内测）
+          </Link>
         </p>
       </div>
 
