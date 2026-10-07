@@ -360,12 +360,19 @@ public class VoiceWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    /**
+     * 握手属性里的主体 id 是 {@link io.annona.spi.dto.Principal#id()} 的<b>字符串</b>形态
+     * （local/none 模式即 app_user.id 的 UUID 文本；CI docker-it 走 local）。platform 模式
+     * 的 unionId 非 UUID，本批语音链路不支持——解析失败在这里显式炸掉连接，而不是让
+     * 后续每条 SQL 拿着非法 id 撞约束。
+     */
     private UUID userIdOf(WebSocketSession wsSession) {
         Object userId = wsSession.getAttributes().get(VoiceHandshakeInterceptor.ATTR_USER_ID);
-        if (userId instanceof UUID id) {
-            return id;
+        try {
+            return UUID.fromString(String.valueOf(userId));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("voice: 握手主体不是合法用户 id（platform 模式暂不支持语音）", e);
         }
-        throw new IllegalStateException("WS handshake did not resolve a principal");
     }
 
     /** 连接级状态（一 WS 连接一路；字段单线程写（WS 消息线程）+ 多线程读（ASR 回调线程）， volatile 兜底）。 */
