@@ -75,6 +75,35 @@ annona:
       api-key: ${ANNONA_CHAT_API_KEY:}
       model: ${ANNONA_DEFAULT_CHAT_MODEL:}
       timeout-seconds: ${ANNONA_CHAT_TIMEOUT_SECONDS:60}
+    # P3 语音通道（voice-adr §决策 2）：provider=none（默认）不装配，voice 使用点报
+    # 语音段错误码并走降级路径（TTS 无 → 字幕面试；ASR 无 → 手动提交文字）；fake =
+    # 确定性转写/音频（CI 与本机跑通链路）；dashscope = Omni realtime WebSocket 直连
+    # （JDK WebSocket，无 SDK）。VAD 形状对齐 🅖 先例（server_vad + 400ms 静音断句）。
+    asr:
+      provider: ${ANNONA_MODEL_ASR_PROVIDER:none}
+      url: ${ANNONA_ASR_URL:}
+      api-key: ${ANNONA_ASR_API_KEY:}
+      model: ${ANNONA_DEFAULT_ASR_MODEL:}
+      language: ${ANNONA_ASR_LANGUAGE:zh}
+      input-audio-format: ${ANNONA_ASR_INPUT_FORMAT:pcm,16000}
+      vad-type: ${ANNONA_ASR_VAD_TYPE:server_vad}
+      vad-threshold: ${ANNONA_ASR_VAD_THRESHOLD:0.5}
+      vad-silence-ms: ${ANNONA_ASR_VAD_SILENCE_MS:400}
+    tts:
+      provider: ${ANNONA_MODEL_TTS_PROVIDER:none}
+      url: ${ANNONA_TTS_URL:}
+      api-key: ${ANNONA_TTS_API_KEY:}
+      model: ${ANNONA_DEFAULT_TTS_MODEL:}
+      voice: ${ANNONA_TTS_VOICE:}
+      language-type: ${ANNONA_TTS_LANGUAGE_TYPE:}
+      speech-rate: ${ANNONA_TTS_SPEECH_RATE:1.0}
+      volume: ${ANNONA_TTS_VOLUME:50}
+      connect-timeout-seconds: ${ANNONA_TTS_CONNECT_TIMEOUT_SECONDS:5}
+      synthesize-timeout-seconds: ${ANNONA_TTS_SYNTHESIZE_TIMEOUT_SECONDS:30}
+  # P3 语音链路总开关（voice-adr）：关 = /ws/voice 整块不装配（无 DB/无 WS 冒烟上下文用，
+  # 与 questionbank/evaluation 门控同先例）；开 = WebSocket 端点随 servlet 语境装配。
+  voice:
+    enabled: ${ANNONA_VOICE_ENABLED:true}
   # P1b-10：计量与配额（llmprovider-metering-adr）。daily-token-limit 每用户每日 token 上限
   # （0=不限；自部署默认宽松，托管收紧）；model-prices 单价在部署侧 yaml 手改（无 env 映射），
   # 缺键=成本列隐藏，只供面板估算不是对账单。
