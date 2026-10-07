@@ -137,6 +137,10 @@ class VoiceFlowIT {
         JsonNode opening = awaitFrame(listener.frames, n -> "text".equals(n.path("type").asText()), "text");
         assertThat(opening.path("content").asText()).isNotBlank();
 
+        // 开场白音频触发了回声半双工静音窗（100ms 音频 ×1.5 + 300ms 冷却 ≈ 450ms）：
+        // 窗内上行会被正确丢弃——真实用户不可能在开场白后 100ms 内开口，测试同样等过窗口
+        Thread.sleep(600);
+
         // 两帧出一句：partial → final（FakeAsr 确定性脚本）
         ws.sendText("{\"type\":\"audio\",\"data\":\"" + base64Of(64) + "\"}", true);
         awaitFrame(listener.frames, n -> "subtitle".equals(n.path("type").asText())
