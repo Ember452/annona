@@ -2,21 +2,12 @@ package io.annona.config.web;
 
 import io.annona.common.exception.BusinessException;
 import io.annona.common.exception.ErrorCode;
-import io.annona.modules.identity.service.IdentityProperties;
-import io.annona.modules.identity.service.SessionProperties;
-import io.annona.spi.dto.Principal;
-import io.annona.spi.identity.IdentityProvider;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.stereotype.Component;
@@ -27,7 +18,8 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
  * 对 {@code /api/**} 做身份解析与<b>强制鉴权</b>：
  * <ol>
  *   <li>按 {@code annona.identity.mode} 取凭据（{@code local} → 会话 Cookie；{@code platform} →
- *       受信反代请求头；{@code none} → 无需凭据），交给装配中的 {@link IdentityProvider} 校验；</li>
+ *       受信反代请求头；{@code none} → 无需凭据），交给装配中的身份源校验——凭据读取
+ *       委托 {@link RequestCredentials}（P3-01 抽取：WS 握手是第二个消费方）；</li>
  *   <li>命中则把 userId 放入请求属性 {@link #ATTR_USER_ID}，供 {@link CurrentPrincipalArgumentResolver}
  *       组装主体视图；</li>
  *   <li>未命中且路径不在白名单 → 经 {@link HandlerExceptionResolver} 复抛
@@ -64,18 +56,12 @@ public class SessionAuthFilter extends OncePerRequestFilter {
     /** 公开前缀：元信息接口（版本、能力开关）在未登录时也应可读。 */
     private static final List<String> PUBLIC_PREFIXES = List.of("/api/meta/");
 
-    private final IdentityProvider identityProvider;
-    private final IdentityProperties identityProperties;
-    private final SessionProperties sessionProperties;
+    private final RequestCredentials credentials;
     private final HandlerExceptionResolver exceptionResolver;
 
-    public SessionAuthFilter(IdentityProvider identityProvider,
-                             IdentityProperties identityProperties,
-                             SessionProperties sessionProperties,
+    public SessionAuthFilter(RequestCredentials credentials,
                              @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver) {
-        this.identityProvider = identityProvider;
-        this.identityProperties = identityProperties;
-        this.sessionProperties = sessionProperties;
+        this.credentials = credentials;
         this.exceptionResolver = exceptionResolver;
     }
 
@@ -87,7 +73,7 @@ public class SessionAuthFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
         throws ServletException, IOException {
-        Optional<Principal> principal = identityProvider.authenticate(readCredential(request));
+        var principal = credentials.authenticate(request);
         if (principal.isPresent()) {
             request.setAttribute(ATTR_USER_ID, principal.get().id());
         } else if (!isPublicPath(request.getRequestURI())) {
@@ -98,56 +84,8 @@ public class SessionAuthFilter extends OncePerRequestFilter {
         chain.doFilter(request, response);
     }
 
-    /** 按模式取凭据：local 读会话 Cookie，platform 读受信反代头，none 不看凭据。 */
-    private String readCredential(HttpServletRequest request) {
-        return switch (identityProperties.getMode()) {
-            case LOCAL -> readCookie(request);
-            case PLATFORM -> readPlatformCredential(request);
-            case NONE -> null;
-        };
-    }
-
-    /**
-     * platform 凭据读取，叠加两道代码强制（L3 评审 CWE-290：不把信任只写在文档里）：
-     * <ol>
-     *   <li><b>拒绝重复身份头</b>：{@code X-Auth-Request-Email} 出现 0 或 ≥2 个值都视为不可信
-     *       （头走私 / 反代未剥离），凭据按空；</li>
-     *   <li><b>共享密钥证明（配了才强制）</b>：{@code platformSecret} 非空时，请求必须携带常数时间
-     *       匹配的密钥头，否则凭据按空——使“实例被直连”也无法伪造身份。</li>
-     * </ol>
-     */
-    private String readPlatformCredential(HttpServletRequest request) {
-        List<String> values = Collections.list(request.getHeaders(identityProperties.getPlatformHeader()));
-        if (values.size() != 1) {
-            return null;
-        }
-        String secret = identityProperties.getPlatformSecret();
-        if (secret != null && !secret.isBlank()) {
-            String provided = request.getHeader(identityProperties.getPlatformSecretHeader());
-            if (provided == null || !MessageDigest.isEqual(
-                secret.getBytes(StandardCharsets.UTF_8), provided.getBytes(StandardCharsets.UTF_8))) {
-                return null;
-            }
-        }
-        return values.get(0);
-    }
-
-    /** 包级可见，便于直接断言白名单边界（不依赖过滤器实例）。 */
+    /** 未登录也必须可达的端点与公开前缀的包级可见判断（测试直接断言白名单边界）。 */
     static boolean isPublicPath(String uri) {
         return PUBLIC_PATHS.contains(uri) || PUBLIC_PREFIXES.stream().anyMatch(uri::startsWith);
-    }
-
-    private String readCookie(HttpServletRequest request) {
-        Cookie[] cookies = request.getCookies();
-        if (cookies == null) {
-            return null;
-        }
-        String name = sessionProperties.getCookie();
-        for (Cookie c : cookies) {
-            if (name.equals(c.getName())) {
-                return c.getValue();
-            }
-        }
-        return null;
     }
 }

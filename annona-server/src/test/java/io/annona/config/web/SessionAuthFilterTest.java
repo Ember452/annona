@@ -77,7 +77,9 @@ class SessionAuthFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new SessionAuthFilter(identityProvider, identityProperties, sessionProperties, exceptionResolver);
+        filter = new SessionAuthFilter(
+            new RequestCredentials(identityProvider, identityProperties, sessionProperties),
+            exceptionResolver);
     }
 
     private static MockHttpServletRequest request(String uri) {

@@ -37,6 +37,7 @@ class SessionAuthFilterRegistrationTest {
         .withBean(IdentityProvider.class, () -> identityProvider)
         .withBean(IdentityProperties.class)
         .withBean(SessionProperties.class)
+        .withBean(RequestCredentials.class)
         .withUserConfiguration(SessionAuthFilter.class)
         .run(context -> {
           assertThat(context).hasNotFailed();
@@ -51,6 +52,7 @@ class SessionAuthFilterRegistrationTest {
         .withBean(IdentityProvider.class, () -> identityProvider)
         .withBean(IdentityProperties.class)
         .withBean(SessionProperties.class)
+        .withBean(RequestCredentials.class)
         .withBean(
             "handlerExceptionResolver", HandlerExceptionResolver.class, () -> exceptionResolver)
         .withUserConfiguration(SessionAuthFilter.class)
