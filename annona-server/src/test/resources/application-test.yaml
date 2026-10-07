@@ -54,3 +54,7 @@ annona:
     enabled: false
     recovery:
       enabled: false
+  # 语音链同构（voice-adr）：VoiceWebSocketConfig 是 WebSocketConfigurer，
+  # DelegatingWebSocketConfiguration 强制实例化会把 voiceSessionService→JPA repository 拉醒，无 DB 冒烟上下文必须关
+  voice:
+    enabled: false

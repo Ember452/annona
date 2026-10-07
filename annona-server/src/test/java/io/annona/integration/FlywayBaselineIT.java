@@ -83,7 +83,9 @@ class FlywayBaselineIT {
                 // V15/V16（P1c-05/07 决策留痕与规则声誉）
                 "decision_trace", "rule_reputation",
                 // V17（P2-06 计划与任务：plan-module-adr）
-                "plan", "plan_task");
+                "plan", "plan_task",
+                // V18（P3-01 语音会话：voice-adr）
+                "voice_session");
     }
 
     @Test

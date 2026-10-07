@@ -1,7 +1,7 @@
 #!/bin/sh
 # annona pre-commit hook
 #
-# 八个动作：Flyway 迁移冻结检查 → workflow YAML 结构自检 → 测试侧配置遮蔽检查 → 迁移↔基线清单登记守卫 → @Modifying 调用点事务覆盖机检 → void @Modifying×原生 SELECT 必炸组合机检 → 原生 datetime 标量硬转型机检 → gitleaks 密钥扫描。
+# 九个动作：Flyway 迁移冻结检查 → workflow YAML 结构自检 → 测试侧配置遮蔽检查 → 迁移↔基线清单登记守卫 → @Modifying 调用点事务覆盖机检 → void @Modifying×原生 SELECT 必炸组合机检 → 原生 datetime 标量硬转型机检 → test profile 门控键存在性机检 → gitleaks 密钥扫描。
 # 权威门禁在 CI（.github/workflows/ci.yml 的 gitleaks job + branch protection）；
 # 这里是**本地第一道**，让开发者在 commit 前就看到，而不是等 CI 红。
 #
@@ -90,6 +90,17 @@ if git diff --cached --name-only | grep -qE '^annona-(server|common|spi|infrastr
     exit 1
   fi
   python scripts/ci/check-native-datetime-cast.py || exit 1
+fi
+
+# 第九道：test profile 门控键存在性。application-test.yaml 靠一串 enabled=false 把
+# 强制实例化的后台 bean 关在无 DB 冒烟上下文外；中段插块破坏嵌套会让键凭空消失
+# （2026-10-07 实测：voice 块插进 resume 块中间，recovery 键消失 → 上下文连坐失败）。
+if git diff --cached --name-only | grep -qE '^annona-server/src/test/resources/application-test\.yaml$'; then
+  if ! command -v python >/dev/null 2>&1; then
+    printf '%s\n' "pre-commit: 本次改了 application-test.yaml，需要 python 跑门控键检查。" >&2
+    exit 1
+  fi
+  python scripts/ci/check-test-gate-keys.py || exit 1
 fi
 
 if ! command -v gitleaks >/dev/null 2>&1; then

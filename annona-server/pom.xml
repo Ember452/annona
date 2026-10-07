@@ -41,6 +41,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
+        <!-- P3-01 语音面试（voice-adr §决策 5）：/ws/voice 双向音频必须 WebSocket——
+             SSE 只能服务端单向推送，上行 PCM 无通道；握手鉴权与 HTTP 会话体系共用 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
 
         <!-- B2 启动与基线：P0-05/P0-06/P0-08 共同引入
              - starter-flyway：Flyway autoconfig（Boot 4 已改名，不是 -flyway-core）
