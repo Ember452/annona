@@ -4,7 +4,9 @@ import io.annona.modules.evaluation.entity.InterviewReportEntity;
 import io.annona.modules.evaluation.repository.InterviewReportRepository;
 import io.annona.modules.evaluation.service.EvaluationService;
 import io.annona.shared.domain.InterviewFinalizedEvent;
+import io.annona.shared.domain.VoiceSessionFinalizedEvent;
 import java.time.Instant;
+import java.util.UUID;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,22 +45,38 @@ public class EvaluationTrigger {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onVoiceSessionFinalized(VoiceSessionFinalizedEvent event) {
+        createReportAndDispatch(event.sessionId(), event.userId(),
+            InterviewReportEntity.SESSION_TYPE_VOICE);
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onInterviewFinalized(InterviewFinalizedEvent event) {
+        createReportAndDispatch(event.sessionId(), event.userId(),
+            InterviewReportEntity.SESSION_TYPE_INTERVIEW);
+    }
+
+    /**
+     * 报告创建 + 投递（文字/语音共用，voice-adr 修订 1）：同 session+version 已有报告行
+     * （事件重投/重复收口）则不重建，只确保投递。
+     */
+    private void createReportAndDispatch(UUID sessionId, UUID userId, String sessionType) {
         // 幂等：同 session+version 已有报告行（事件重投/重复交卷）则不重建，只确保投递
         boolean created = reportRepository
-            .findBySessionIdAndEvaluatorVersion(event.sessionId(), EvaluationService.EVALUATOR_VERSION)
+            .findBySessionIdAndEvaluatorVersion(sessionId, EvaluationService.EVALUATOR_VERSION)
             .isEmpty();
         if (created) {
-            reportRepository.save(InterviewReportEntity.pending(event.sessionId(), event.userId(),
-                EvaluationService.EVALUATOR_VERSION, Instant.now()));
+            reportRepository.save(InterviewReportEntity.pending(sessionId, userId,
+                EvaluationService.EVALUATOR_VERSION, sessionType, Instant.now()));
         }
         Optional<EvaluationStream> streamBean = Optional.ofNullable(stream.getIfAvailable());
         if (streamBean.isEmpty()) {
-            log.info("评估流未启用，交卷 {} 的报告留待恢复调度", event.sessionId());
+            log.info("评估流未启用，收口 {} 的报告留待恢复调度", sessionId);
             return;
         }
-        if (!streamBean.get().send(event.sessionId())) {
-            log.warn("评估投递失败，报告 {} 留 PENDING 待恢复调度补投", event.sessionId());
+        if (!streamBean.get().send(sessionId)) {
+            log.warn("评估投递失败，报告 {} 留 PENDING 待恢复调度补投", sessionId);
         }
     }
 }

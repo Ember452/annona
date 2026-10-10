@@ -87,6 +87,12 @@ class InterviewSessionFlowIT {
 
     @AfterEach
     void cleanup() {
+        // V21 后 session_id 不再有外键与级联：交卷用例会让评估链写下逐题明细，残留行的
+        // question_id 会顶住下面的 qb_question 删除（voice-adr 修订 1 §2 代价 3）
+        jdbc.update("delete from interview_evaluation where session_id in"
+            + " (select id from interview_session where user_id = ?)", userId);
+        jdbc.update("delete from interview_report where session_id in"
+            + " (select id from interview_session where user_id = ?)", userId);
         jdbc.update("delete from interview_answer where session_id in"
             + " (select id from interview_session where user_id = ?)", userId);
         jdbc.update("delete from interview_session where user_id = ?", userId);

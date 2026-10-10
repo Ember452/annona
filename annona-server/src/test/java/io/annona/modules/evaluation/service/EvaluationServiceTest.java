@@ -61,6 +61,8 @@ class EvaluationServiceTest {
     @Mock
     private InterviewEvalQueryService evalQuery;
     @Mock
+    private io.annona.shared.voice.VoiceEvalQueryService voiceQuery;
+    @Mock
     private QuestionQueryService questionQuery;
     @Mock
     private ObjectProvider<StructuredOutputInvoker> invokerProvider;
@@ -81,7 +83,7 @@ class EvaluationServiceTest {
     void setUp() {
         when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         service = new EvaluationService(reportRepository, evaluationRepository, evalQuery,
-            questionQuery, invokerProvider, modelProvider, transactionManager);
+            voiceQuery, questionQuery, invokerProvider, modelProvider, transactionManager);
 
         InterviewReportEntity pending = InterviewReportEntity.pending(sessionId, userId, "v2",
             Instant.now());

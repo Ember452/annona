@@ -15,6 +15,7 @@ import io.annona.modules.evaluation.repository.InterviewReportRepository;
 import io.annona.shared.ai.StructuredOutputInvoker;
 import io.annona.shared.interview.EvalAnswer;
 import io.annona.shared.interview.InterviewEvalQueryService;
+import io.annona.shared.voice.VoiceEvalQueryService;
 import io.annona.shared.question.QuestionGrading;
 import io.annona.shared.question.QuestionQueryService;
 import io.annona.spi.model.ModelProvider;
@@ -63,6 +64,7 @@ public class EvaluationService implements TaskStreamPort.TaskMessageHandler {
     private final InterviewReportRepository reportRepository;
     private final InterviewEvaluationRepository evaluationRepository;
     private final InterviewEvalQueryService evalQuery;
+    private final VoiceEvalQueryService voiceQuery;
     private final QuestionQueryService questionQuery;
     private final ObjectProvider<StructuredOutputInvoker> invoker;
     private final ObjectProvider<ModelProvider> modelProvider;
@@ -78,6 +80,7 @@ public class EvaluationService implements TaskStreamPort.TaskMessageHandler {
     public EvaluationService(InterviewReportRepository reportRepository,
                              InterviewEvaluationRepository evaluationRepository,
                              InterviewEvalQueryService evalQuery,
+                             VoiceEvalQueryService voiceQuery,
                              QuestionQueryService questionQuery,
                              ObjectProvider<StructuredOutputInvoker> invoker,
                              ObjectProvider<ModelProvider> modelProvider,
@@ -85,6 +88,7 @@ public class EvaluationService implements TaskStreamPort.TaskMessageHandler {
         this.reportRepository = reportRepository;
         this.evaluationRepository = evaluationRepository;
         this.evalQuery = evalQuery;
+        this.voiceQuery = voiceQuery;
         this.questionQuery = questionQuery;
         this.invoker = invoker;
         this.modelProvider = modelProvider;
@@ -129,7 +133,7 @@ public class EvaluationService implements TaskStreamPort.TaskMessageHandler {
             return TaskStreamPort.Outcome.ACK;
         }
         try {
-            doEvaluate(sessionId, report.getUserId());
+            doEvaluate(sessionId, report.getUserId(), report.getSessionType());
             return TaskStreamPort.Outcome.ACK;
         } catch (Exception e) {
             log.warn("评估任务 {} 失败（retryCount={}）：{}", sessionId, retryCount, e.getMessage());
@@ -142,8 +146,12 @@ public class EvaluationService implements TaskStreamPort.TaskMessageHandler {
         }
     }
 
-    private void doEvaluate(UUID sessionId, UUID userId) {
-        List<EvalAnswer> answers = evalQuery.submittedAnswers(sessionId, userId);
+    private void doEvaluate(UUID sessionId, UUID userId, String sessionType) {
+        // 作答装配按报告类型分流（voice-adr 修订 1）：两种会话同一评分口径与 prompt，
+        // 可比性由"同一题库 + 同一 gradingByIds"保证
+        List<EvalAnswer> answers = InterviewReportEntity.SESSION_TYPE_VOICE.equals(sessionType)
+            ? voiceQuery.submittedAnswers(sessionId, userId)
+            : evalQuery.submittedAnswers(sessionId, userId);
         // 执行线程内 bind 归属：逐题 LLM 经 @Primary ModelProvider → MeteredModelProvider 读此上下文记账
         try (UsageContext.Scope ignored = UsageContext.bind(userId.toString(), "EVALUATION",
             sessionId, EVALUATOR_VERSION)) {

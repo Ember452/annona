@@ -94,4 +94,33 @@ class MigrationShapeIT {
             String.class);
         assertThat(statusDef).contains("'PENDING'", "'PROCESSING'", "'DONE'", "'FAILED'");
     }
+
+    @Test
+    @DisplayName("V19–V21：语音轮 seq 唯一就位，报告 session_id 外键已解除、user_id 级联仍保留")
+    void voiceTurnAndPolymorphicReportShape() {
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        assertThat(jdbc.queryForObject(
+            "select count(*) from pg_constraint where conname = 'uq_voice_message_seq'",
+            Integer.class)).as("会话内轮次唯一的 DB 级兜底（seq 竞态不双写）").isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+            "select pg_get_constraintdef(oid) from pg_constraint where conname = 'chk_report_session_type'",
+            String.class)).contains("'INTERVIEW'", "'VOICE'");
+        // V20 扩 scene 到 VOICE：有人重建旧版 CHECK 时，计量写入只在真库上炸（V12 同型坑）
+        assertThat(jdbc.queryForObject(
+            "select pg_get_constraintdef(oid) from pg_constraint where conname = 'chk_usage_scene'",
+            String.class)).contains("'VOICE'");
+        // V21 多态化（voice-adr 修订 1 §2）：VOICE 行的宿主是 voice_session，两外键必须不在——
+        // 残留则语音报告插行直接撞 FK（就是本批修掉的雷）
+        assertThat(jdbc.queryForObject(
+            "select count(*) from pg_constraint where conname = 'interview_report_session_id_fkey'",
+            Integer.class)).isZero();
+        assertThat(jdbc.queryForObject(
+            "select count(*) from pg_constraint where conname = 'interview_evaluation_session_id_fkey'",
+            Integer.class)).isZero();
+        // user_id 外键与级联是账号删除清理报告的唯一兜底，不得一起被解除
+        assertThat(jdbc.queryForObject(
+            "select count(*) from pg_constraint where conname = 'interview_report_user_id_fkey'"
+                + " and confdeltype = 'c'",
+            Integer.class)).as("interview_report.user_id 的 ON DELETE CASCADE 仍在").isEqualTo(1);
+    }
 }

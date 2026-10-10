@@ -27,6 +27,10 @@ public class InterviewReportEntity {
     public static final String STATUS_DONE = "DONE";
     public static final String STATUS_FAILED = "FAILED";
 
+    /** 会话类型（V20 chk_report_session_type）：作答装配按类型分流，评分口径同源（voice-adr 修订 1）。 */
+    public static final String SESSION_TYPE_INTERVIEW = "INTERVIEW";
+    public static final String SESSION_TYPE_VOICE = "VOICE";
+
     @Id
     @Column(name = "id", nullable = false)
     private UUID id;
@@ -39,6 +43,10 @@ public class InterviewReportEntity {
 
     @Column(name = "evaluator_version", nullable = false)
     private String evaluatorVersion;
+
+    /** INTERVIEW | VOICE（V20 chk_report_session_type）。 */
+    @Column(name = "session_type", nullable = false)
+    private String sessionType = SESSION_TYPE_INTERVIEW;
 
     /** PENDING | RUNNING | DONE | FAILED（chk_report_status）。 */
     @Column(name = "status", nullable = false)
@@ -74,14 +82,25 @@ public class InterviewReportEntity {
     /** 交卷触发时建的 PENDING 行（其余字段由消费者在 DONE 时补）。 */
     public static InterviewReportEntity pending(UUID sessionId, UUID userId,
                                                 String evaluatorVersion, Instant now) {
+        return pending(sessionId, userId, evaluatorVersion, SESSION_TYPE_INTERVIEW, now);
+    }
+
+    /** 语音会话报告入口：sessionType=VOICE，作答装配走 VoiceEvalQueryService（voice-adr 修订 1）。 */
+    public static InterviewReportEntity pending(UUID sessionId, UUID userId,
+                                                String evaluatorVersion, String sessionType, Instant now) {
         InterviewReportEntity r = new InterviewReportEntity();
         r.id = UUID.randomUUID();
         r.sessionId = sessionId;
         r.userId = userId;
         r.evaluatorVersion = evaluatorVersion;
+        r.sessionType = sessionType;
         r.status = STATUS_PENDING;
         r.updatedAt = now;
         return r;
+    }
+
+    public String getSessionType() {
+        return sessionType;
     }
 
     public UUID getId() {

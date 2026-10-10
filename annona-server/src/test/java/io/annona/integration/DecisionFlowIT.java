@@ -97,6 +97,12 @@ class DecisionFlowIT {
     void cleanup() {
         jdbc.update("delete from decision_trace where user_id = ?", userId);
         jdbc.update("delete from rule_reputation where user_id = ?", userId);
+        // V21 后 session_id 不再有外键与级联（voice-adr 修订 1 §2）：评估两表必须显式清，
+        // 否则残留的 interview_evaluation.question_id 会把下面的 qb_question 删除顶住
+        jdbc.update("delete from interview_evaluation where session_id in"
+            + " (select id from interview_session where user_id = ?)", userId);
+        jdbc.update("delete from interview_report where session_id in"
+            + " (select id from interview_session where user_id = ?)", userId);
         jdbc.update("delete from interview_answer where session_id in"
             + " (select id from interview_session where user_id = ?)", userId);
         jdbc.update("delete from interview_session where user_id = ?", userId);

@@ -2,6 +2,7 @@ package io.annona.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.annona.modules.evaluation.entity.InterviewEvaluationEntity;
 import io.annona.modules.evaluation.entity.InterviewReportEntity;
 import io.annona.modules.evaluation.repository.InterviewEvaluationRepository;
 import io.annona.modules.evaluation.repository.InterviewReportRepository;
@@ -62,6 +63,8 @@ class EvaluationFlowIT {
     private UUID directionId;
     private UUID sessionId;
     private UUID questionId;
+    /** 语音会话夹具 id（仅多态化用例建；cleanup 据此显式清——V21 后无 session_id 级联）。 */
+    private UUID voiceSessionId;
 
     @BeforeEach
     void fixture() {
@@ -92,6 +95,11 @@ class EvaluationFlowIT {
 
     @AfterEach
     void cleanup() {
+        if (voiceSessionId != null) {
+            jdbc.update("delete from interview_evaluation where session_id = ?", voiceSessionId);
+            jdbc.update("delete from interview_report where session_id = ?", voiceSessionId);
+            jdbc.update("delete from voice_session where id = ?", voiceSessionId);
+        }
         jdbc.update("delete from interview_evaluation where session_id in"
             + " (select id from interview_session where user_id = ?)", userId);
         jdbc.update("delete from interview_report where session_id in"
@@ -105,7 +113,13 @@ class EvaluationFlowIT {
     }
 
     private void upsert(Short score, boolean fallback, String raw) {
-        tx.executeWithoutResult(s -> evaluationRepository.upsert(UUID.randomUUID(), sessionId,
+        upsertInto(sessionId, score, fallback, raw);
+    }
+
+    /** 逐题 upsert（会话宿主由调用方给：文字面试与语音会话同一幂等链）。
+     * 写经 TransactionTemplate 自带短事务（check-modifying-callers 雷型）。 */
+    private void upsertInto(UUID session, Short score, boolean fallback, String raw) {
+        tx.executeWithoutResult(s -> evaluationRepository.upsert(UUID.randomUUID(), session,
             questionId, (short) 0, "v2", score, "fb", "[]", "[]", fallback, raw, Instant.now()));
     }
 
@@ -143,5 +157,39 @@ class EvaluationFlowIT {
 
         var found = tx.execute(s -> reportRepository.findBySessionIdAndEvaluatorVersion(sessionId, "v2"));
         assertThat(found).isPresent().get().extracting(InterviewReportEntity::getStatus).isEqualTo("DONE");
+    }
+
+    /**
+     * V21 多态化的证伪点（voice-adr 修订 1 §2）：VOICE 报告与逐题明细以 voice_session 为宿主
+     * 必须能插进同一张表——旧形状下两处 session_id 外键指向 interview_session，语音报告插行
+     * 当场撞 FK（本批修的雷）。user_id 外键保留，账号删除仍能级联清掉报告。
+     */
+    @Test
+    @DisplayName("VOICE 报告与逐题明细以语音会话为宿主可落库（报告多态化）")
+    void voiceReportIsPolymorphicOnRealDb() {
+        voiceSessionId = UUID.randomUUID();
+        jdbc.update("insert into voice_session (id, user_id, direction_id, status, opening,"
+                + " question_ids, transcript, created_at, updated_at)"
+                + " values (?, ?, ?, 'FINALIZED', 'IT 开场白', ?::jsonb, '', now(), now())",
+            voiceSessionId, userId, directionId,
+            "[\"" + questionId + "\"]");
+
+        tx.executeWithoutResult(s -> reportRepository.save(InterviewReportEntity.pending(
+            voiceSessionId, userId, "v2", InterviewReportEntity.SESSION_TYPE_VOICE, Instant.now())));
+        upsertInto(voiceSessionId, (short) 88, false, null);
+
+        var report = tx.execute(s -> reportRepository
+            .findBySessionIdAndEvaluatorVersion(voiceSessionId, "v2"));
+        assertThat(report).isPresent().get()
+            .extracting(InterviewReportEntity::getSessionType, InterviewReportEntity::getStatus)
+            .containsExactly("VOICE", "PENDING");
+        List<InterviewEvaluationEntity> grades = tx.execute(s -> evaluationRepository
+            .findBySessionIdAndEvaluatorVersionOrderByQuestionIdAscFollowUpIndexAsc(voiceSessionId, "v2"));
+        assertThat(grades)
+            .as("语音会话的逐题明细与文字会话同表同幂等链")
+            .hasSize(1);
+        // 同一会话的语音轮作答只能经 voice 端口装配（表里没有 interview_session 行）
+        assertThat(jdbc.queryForObject(
+            "select count(*) from interview_session where id = ?", Integer.class, voiceSessionId)).isZero();
     }
 }

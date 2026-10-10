@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -55,8 +56,11 @@ class VoiceFlowIT {
 
     /** 注册 + 登录换取会话 Cookie（WS 握手凭据与浏览器同路径）。 */
     private String loginCookie() throws Exception {
-        AuthUserResponse user = registrar.register("p3-" + java.util.UUID.randomUUID() + "@example.test",
-            "GoodPass123");
+        return loginCookie(registrar.register("p3-" + java.util.UUID.randomUUID() + "@example.test",
+            "GoodPass123"));
+    }
+
+    private String loginCookie(AuthUserResponse user) throws Exception {
         HttpResponse<String> response = http.send(HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/api/auth/login"))
                 .header("Content-Type", "application/json")
@@ -199,5 +203,126 @@ class VoiceFlowIT {
             bytes[i] = (byte) i;
         }
         return java.util.Base64.getEncoder().encodeToString(bytes);
+    }
+
+    // ── 批 2：题库驱动的对话轮（P3-03/05）──────────────────────────────
+
+    /** 已收帧里的 text 帧个数（开场白与每个面试官轮各一条）。 */
+    private static long countTextFrames(List<String> frames) {
+        return frames.stream().filter(raw -> {
+            try {
+                return "text".equals(MAPPER.readTree(raw).path("type").asText());
+            } catch (Exception e) {
+                return false;
+            }
+        }).count();
+    }
+
+    private static void awaitTextFrames(List<String> frames, int expected) throws Exception {
+        Instant deadline = Instant.now().plusSeconds(15);
+        while (Instant.now().isBefore(deadline)) {
+            synchronized (frames) {
+                if (countTextFrames(frames) >= expected) {
+                    return;
+                }
+            }
+            Thread.sleep(25);
+        }
+        throw new AssertionError("等待第 " + expected + " 条 text 帧超时；已收到 " + frames);
+    }
+
+    private UUID insertDirection(UUID userId, String name) {
+        UUID id = java.util.UUID.randomUUID();
+        jdbc.update("insert into direction (id, key, name, origin, status, user_id)"
+                + " values (?, ?, ?, 'USER_CUSTOM', 'ACTIVE', ?)",
+            id, "it-voice-" + id, name, userId);
+        return id;
+    }
+
+    private UUID insertQuestion(UUID userId, UUID directionId, String stem) {
+        UUID id = java.util.UUID.randomUUID();
+        jdbc.update("insert into qb_question (id, user_id, direction_id, question,"
+                + " key_points, difficulty, follow_ups, sources, status, updated_at)"
+                + " values (?, ?, ?, ?, '[]'::jsonb, 3, '[]'::jsonb, '[]'::jsonb, 'ACTIVE', now())",
+            id, userId, directionId, stem);
+        return id;
+    }
+
+    @Test
+    @DisplayName("对话轮：题库队列→QUESTION/ANSWER 交替落 voice_message，收口后建 VOICE 报告")
+    void turnQueuePersistsAndFinalizes() throws Exception {
+        AuthUserResponse user = registrar.register(
+            "p3-q-" + java.util.UUID.randomUUID() + "@example.test", "GoodPass123");
+        UUID userId = UUID.fromString(user.id());
+        UUID directionId = insertDirection(userId, "IT 语音轮次方向");
+        List<UUID> fixtureQuestions = List.of(
+            insertQuestion(userId, directionId, "语音轮题干一？"),
+            insertQuestion(userId, directionId, "语音轮题干二？"));
+        CollectingListener listener = new CollectingListener();
+        WebSocket ws = http.newWebSocketBuilder()
+            .header("Cookie", loginCookie(user))
+            .buildAsync(URI.create("ws://localhost:" + port + "/ws/voice"), listener)
+            .get(5, TimeUnit.SECONDS);
+
+        // 开场：快照题目队列（V19）→ 开场白 text → 第一个面试官轮 text
+        ws.sendText(MAPPER.writeValueAsString(Map.of("type", "start",
+            "directionId", directionId.toString())), true);
+        awaitFrame(listener.frames, n -> "ready".equals(n.path("type").asText()), "ready");
+        awaitTextFrames(listener.frames, 1);   // 开场白
+        awaitTextFrames(listener.frames, 2);   // 面试官轮 0
+
+        // 两轮作答：键入即收本轮（语音作答同走 finishAnswerTurn，只差在答案来源）
+        ws.sendText(MAPPER.writeValueAsString(Map.of("type", "submit",
+            "text", "我的作答一")), true);
+        awaitTextFrames(listener.frames, 3);   // 面试官轮 1
+        ws.sendText(MAPPER.writeValueAsString(Map.of("type", "submit", "text", "我的作答二")), true);
+        awaitTextFrames(listener.frames, 4);   // 队列耗尽→结束语
+
+        ws.sendText("{\"type\":\"control\",\"action\":\"stop\"}", true);
+        awaitFrame(listener.frames, n -> "state".equals(n.path("type").asText())
+            && "FINALIZED".equals(n.path("status").asText()), "state FINALIZED");
+
+        // 队列快照与进度：2 题都来自夹具（activePool 时序倒排，不断具体次序），答完两题后推到 2
+        String idsJson = jdbc.queryForObject(
+            "select question_ids::text from voice_session where user_id = ?", String.class, userId);
+        JsonNode snapshot = MAPPER.readTree(idsJson);
+        assertThat(snapshot.size()).as("队列按 question-count 截取夹具两题").isEqualTo(2);
+        assertThat(idsJson)
+            .as("队列只能来自该方向的 ACTIVE 题池")
+            .contains(fixtureQuestions.get(0).toString(), fixtureQuestions.get(1).toString());
+        Integer progress = jdbc.queryForObject(
+            "select current_question_seq from voice_session where user_id = ?", Integer.class, userId);
+        assertThat(progress).as("两轮作答后指向队列尾").isEqualTo(2);
+
+        // 轮次交替：Q/A/Q/A/Q，末轮是结束语（不关联题目→不进评分）；ANSWER 的题 id 与
+        // 紧邻的上一 QUESTION 对齐——这是 P3-05 "同题库同 rubric 可比"的数据地基
+        List<Map<String, Object>> rows = jdbc.queryForList(
+            "select seq, role, question_id, content from voice_message"
+                + " where session_id = (select id from voice_session where user_id = ?)"
+                + " order by seq asc", userId);
+        assertThat(rows).extracting(r -> String.valueOf(r.get("role")))
+            .containsExactly("QUESTION", "ANSWER", "QUESTION", "ANSWER", "QUESTION");
+        assertThat(rows).filteredOn(r -> "ANSWER".equals(r.get("role")))
+            .extracting(r -> String.valueOf(r.get("content")))
+            .containsExactly("我的作答一", "我的作答二");
+        assertThat(rows.get(1).get("question_id"))
+            .as("ANSWER 轮对齐它作答的那道题")
+            .isEqualTo(rows.get(0).get("question_id"));
+        assertThat(rows.get(3).get("question_id")).isEqualTo(rows.get(2).get("question_id"));
+        assertThat(rows.get(2).get("question_id"))
+            .as("两轮问答覆盖队列里的两道不同的题")
+            .isNotEqualTo(rows.get(0).get("question_id"));
+        assertThat(rows.get(4).get("question_id")).as("结束语不关联题目").isNull();
+
+        // 收口事件→同一评估引擎：报告行以 voice_session 为宿主（V21 多态化），
+        // session_type=VOICE；状态到哪个阶段取决于评估流是否投递，本用例只钉存活性
+        Map<String, Object> report = jdbc.queryForMap(
+            "select session_type, status, user_id from interview_report where session_id = ("
+                + "select id from voice_session where user_id = ?)", userId);
+        assertThat(report.get("session_type")).isEqualTo("VOICE");
+        assertThat(String.valueOf(report.get("user_id"))).isEqualTo(userId.toString());
+        assertThat(String.valueOf(report.get("status")))
+            .isIn("PENDING", "RUNNING", "DONE", "FAILED");
+        // stop 已让服务端正常关连接（测试 1 同样不显式关），此处不需补 close
     }
 }
