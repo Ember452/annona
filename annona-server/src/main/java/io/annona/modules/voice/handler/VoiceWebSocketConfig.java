@@ -1,9 +1,7 @@
 package io.annona.modules.voice.handler;
 
-import io.annona.modules.voice.config.VoiceProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
@@ -20,11 +18,12 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
  * {@code annona.voice.enabled}：test profile（无 DB 冒烟，懒加载）里
  * DelegatingWebSocketConfiguration 会强制实例化全部 WebSocketConfigurer，把
  * voiceSessionService→JPA repository 的懒加载链整条拉醒——无 DB 冒烟上下文必须关
- * （questionbank/evaluation 门控同先例）。
+ * （questionbank/evaluation 门控同先例）。因此 {@code VoiceProperties} 的注册点不得放在本类：
+ * 消费它的 voice service / handler 不受这道 web 门控，NONE 上下文会因缺 bean 整片连坐
+ * （CI run #115），注册已转到不受门控的 {@code VoiceInterviewService}。
  */
 @Configuration
 @EnableWebSocket
-@EnableConfigurationProperties(VoiceProperties.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnProperty(prefix = "annona.voice", name = "enabled", havingValue = "true",
     matchIfMissing = true)

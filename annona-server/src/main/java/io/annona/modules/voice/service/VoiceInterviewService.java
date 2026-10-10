@@ -27,6 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Service;
 
 /**
@@ -39,8 +40,15 @@ import org.springframework.stereotype.Service;
  * （AGENTS §0.3 外部 IO 不进事务）；调用方（WS handler）只负责持久化与帧下发。
  * 计量：LLM 流式在 {@code UsageContext.bind(userId,"VOICE",...)} 内运行，token_usage
  * scene='VOICE'（V20）。
+ *
+ * <p>为什么 Properties 在本类上注册：主类没有 {@code @ConfigurationPropertiesScan}，而
+ * {@code VoiceWebSocketConfig} 带 {@code @ConditionalOnWebApplication(SERVLET)}。本类与 WS handler
+ * 是不受那道门控的普通 bean，在 {@code webEnvironment=NONE} 的上下文（docker IT 的主流形态）
+ * 里照样被创建——注册点只放在门控配置上会让整个上下文起不来（CI run #115 的 61 个 IT 连坐）。
+ * SkillQueryService 先例同款。
  */
 @Service
+@EnableConfigurationProperties(VoiceProperties.class)
 public class VoiceInterviewService {
 
     private static final Logger log = LoggerFactory.getLogger(VoiceInterviewService.class);
