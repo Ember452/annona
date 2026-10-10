@@ -8,16 +8,18 @@ import {
   voiceWebSocketUrl,
   type VoiceSessionState,
 } from '@/lib/voiceProtocol'
+import { AudioChunkQueue } from '@/lib/audioQueue'
 
 /**
- * /ws/voice 会话 hook（P3-01，voice-adr §决策 5）。
+ * /ws/voice 会话 hook（P3-01/03，voice-adr §决策 5 + 修订 1）。
  *
  * 副作用与调用约束：
  * - {@link start} 必须在用户手势回调里调用（麦克风权限 + 浏览器自动播放解锁都依赖手势链）；
  * - WS 断连自动重连 3 次 × 2s（弱网恢复口径，P3-01 验收）；重连成功后需重新 start；
- * - audio_chunk 播放经 {@code <Audio>}（data URL），被浏览器自动播放策略拦截时置
- *   {@link playbackBlocked}，由 UI 提示用户点击（🅢 手势解锁模式）；
- * - 卸载即断连；组件不得在 FINALIZED 后继续 sendAudio（后端会静默丢弃）。
+ * - audio_chunk 经 {@link AudioChunkQueue} 串行播放（一轮多句，同时播会叠音），
+ *   排空后上行 {@code control audio_done} 让服务端立即解除回声窗；
+ *   被自动播放策略拦截时置 {@link playbackBlocked}，由 UI 提示用户点击（🅢 手势解锁模式）；
+ * - 卸载即断连并停播；组件不得在 FINALIZED 后继续 sendAudio（后端会静默丢弃）。
  */
 export interface UseVoiceSessionResult {
   state: VoiceSessionState
@@ -30,6 +32,8 @@ export interface UseVoiceSessionResult {
   start: (directionId?: string) => void
   pause: () => void
   resume: () => void
+  /** 回答完毕：把本轮语音作答收口并触发下一个面试官轮（语音作答靠它，不靠静默）。 */
+  finishAnswer: () => void
   stop: () => void
   submitText: (text: string) => void
   sendAudio: (base64Pcm: string) => void
@@ -40,6 +44,7 @@ export function useVoiceSession(): UseVoiceSessionResult {
   const [connected, setConnected] = useState(false)
   const [playbackBlocked, setPlaybackBlocked] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
+  const queueRef = useRef<AudioChunkQueue | null>(null)
   const retriesRef = useRef(0)
   /** 由 start 记录 directionId，重连后自动重开（弱网恢复）。 */
   const lastDirectionRef = useRef<string | undefined>(undefined)
@@ -50,6 +55,29 @@ export function useVoiceSession(): UseVoiceSessionResult {
       ws.send(encodeClientFrame(frame))
     }
   }, [])
+
+  /**
+   * 播一段 base64 WAV。无论播完、被拦截还是解码失败都必须回调 onEnded——
+   * 串行队列靠它推进，漏回调会把本轮后续句子全部卡住（audioQueue.ts 的注入契约）。
+   */
+  const playClip = useCallback((base64Wav: string, onEnded: () => void) => {
+    const audio = new Audio(`data:audio/wav;base64,${base64Wav}`)
+    audio.onended = onEnded
+    audio.onerror = onEnded
+    audio.play().catch(() => {
+      // 自动播放被策略拦截：不吞掉，交 UI 引导手势解锁；本段放弃但队列继续推进
+      setPlaybackBlocked(true)
+      onEnded()
+    })
+  }, [])
+
+  // 队列与 WS 连接同命（一 hook 实例一个）：惰性初始化避开 render 期依赖顺序问题
+  if (queueRef.current === null) {
+    queueRef.current = new AudioChunkQueue({
+      playClip,
+      onDrained: () => send({ type: 'control', action: 'audio_done' }),
+    })
+  }
 
   const connect = useCallback((): Promise<WebSocket> => {
     // 不 reject：失败由 onclose 的重连逻辑承接（3 次后放弃，UI 以 connected=false 呈现）
@@ -89,7 +117,7 @@ export function useVoiceSession(): UseVoiceSessionResult {
           return
         }
         if (event.type === 'audio_chunk') {
-          playAudioChunk(event.data)
+          queueRef.current?.push(event.data, event.isLast)
         }
         dispatch(event)
       }
@@ -97,14 +125,6 @@ export function useVoiceSession(): UseVoiceSessionResult {
     })
     // send 在闭包里被 onmessage/onclose 引用，依赖不随渲染变化（useCallback 空依赖）
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const playAudioChunk = useCallback((base64Wav: string) => {
-    const audio = new Audio(`data:audio/wav;base64,${base64Wav}`)
-    audio.play().catch(() => {
-      // 自动播放被策略拦截：不吞掉，交 UI 引导用户手势解锁
-      setPlaybackBlocked(true)
-    })
   }, [])
 
   const start = useCallback(
@@ -137,6 +157,7 @@ export function useVoiceSession(): UseVoiceSessionResult {
   useEffect(
     () => () => {
       const ws = wsRef.current
+      queueRef.current?.close()
       if (ws) {
         // 卸载不触发重连：先摘回调再关
         ws.onclose = null
@@ -157,6 +178,7 @@ export function useVoiceSession(): UseVoiceSessionResult {
       start,
       pause: () => send({ type: 'control', action: 'pause' }),
       resume: () => send({ type: 'control', action: 'resume' }),
+      finishAnswer: () => send({ type: 'control', action: 'submit' }),
       stop: () => send({ type: 'control', action: 'stop' }),
       submitText: (text: string) => send({ type: 'submit', text }),
       sendAudio: (base64Pcm: string) => send({ type: 'audio', data: base64Pcm }),

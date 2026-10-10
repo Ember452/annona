@@ -3,17 +3,21 @@ import { Link } from 'react-router-dom'
 
 import RealtimeSubtitle from '@/components/voice/RealtimeSubtitle'
 import AudioRecorder from '@/components/voice/AudioRecorder'
+import DirectionSelector from '@/components/direction/DirectionSelector'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useVoiceSession } from '@/hooks/useVoiceSession'
+import type { Direction } from '@/types/direction'
 
 /**
- * 语音面试页（P3-01 批 1 骨架）：WS 链路 + 流式字幕 + 开场白播报 + 手动作答。
- * 对话式追问与评估接入在批 2（P3_VOICE_PLAN）；本页即最小可复现的用户路径。
+ * 语音面试页（P3-01/03）：WS 链路 + 实时字幕 + 开场白播报 + 题库驱动的逐题对话轮。
+ * 方向决定题目队列（无方向/题库空 → 自由问答，不进评分）；音频作答靠「回答完毕」
+ * 收本轮，文字作答靠下方提交（P3 出口③的降级路径）。
  */
 export default function VoicePage() {
   const voice = useVoiceSession()
+  const [direction, setDirection] = useState<Direction | null>(null)
   const [recording, setRecording] = useState(false)
   const [manualText, setManualText] = useState('')
 
@@ -27,8 +31,8 @@ export default function VoicePage() {
         <div>
           <h1 className="font-heading text-2xl font-semibold tracking-tight">语音面试 · 内测</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            全双工语音链路骨架（批 1）：说话即出字幕，开场白自动播报；追问与评估在后续批次。
-            建议佩戴耳机；外放场景请用手动提交。
+            逐题语音面试：选方向后面试官按题库逐题提问，说完点「回答完毕」。
+            建议佩戴耳机；外放或识别不可用时用文字提交。
           </p>
         </div>
         <Link
@@ -67,9 +71,16 @@ export default function VoicePage() {
             />
             <div className="flex flex-wrap items-center justify-center gap-2">
               {!started && (
-                <Button onClick={() => voice.start()} data-testid="voice-start" disabled={!voice.connected}>
-                  开始会话
-                </Button>
+                <>
+                  <DirectionSelector value={direction} onChange={setDirection} />
+                  <Button
+                    onClick={() => voice.start(direction?.id)}
+                    disabled={!voice.connected}
+                    data-testid="voice-start"
+                  >
+                    开始会话
+                  </Button>
+                </>
               )}
               {started && !finalized && (
                 <>
@@ -82,6 +93,9 @@ export default function VoicePage() {
                       暂停
                     </Button>
                   )}
+                  <Button size="sm" onClick={voice.finishAnswer} data-testid="voice-answer-done">
+                    回答完毕
+                  </Button>
                   <Button size="sm" variant="destructive" onClick={voice.stop} data-testid="voice-stop">
                     结束会话
                   </Button>

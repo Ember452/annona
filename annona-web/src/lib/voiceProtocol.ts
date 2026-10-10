@@ -11,7 +11,8 @@ import { API_BASE_URL } from '@/api/request'
 export interface VoiceClientFrame {
   type: 'start' | 'audio' | 'control' | 'submit' | 'ping'
   data?: string
-  action?: 'pause' | 'resume' | 'stop'
+  /** submit=回答完毕（音频作答靠它收本轮）；audio_done=播放队列排空，服务端立即解除回声窗。 */
+  action?: 'pause' | 'resume' | 'submit' | 'audio_done' | 'stop'
   text?: string
   directionId?: string
 }
