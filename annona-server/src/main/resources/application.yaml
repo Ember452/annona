@@ -104,6 +104,14 @@ annona:
   # 与 questionbank/evaluation 门控同先例）；开 = WebSocket 端点随 servlet 语境装配。
   voice:
     enabled: ${ANNONA_VOICE_ENABLED:true}
+    # 开场白与对话轮（voice-adr 修订 1）：开场白会话创建时落快照；题库题数上限从
+    # activePool 截取；TTS 句级并发信号量与单句超时对齐 🅖 先例（3 并发 / 8s 跳过）；
+    # 历史装配上限截最旧（完整压缩器批 3）
+    opening: ${ANNONA_VOICE_OPENING:}
+    question-count: ${ANNONA_VOICE_QUESTION_COUNT:5}
+    tts-max-concurrent: ${ANNONA_VOICE_TTS_MAX_CONCURRENT:3}
+    tts-chunk-timeout-seconds: ${ANNONA_VOICE_TTS_CHUNK_TIMEOUT_SECONDS:8}
+    history-max-turns: ${ANNONA_VOICE_HISTORY_MAX_TURNS:20}
   # P1b-10：计量与配额（llmprovider-metering-adr）。daily-token-limit 每用户每日 token 上限
   # （0=不限；自部署默认宽松，托管收紧）；model-prices 单价在部署侧 yaml 手改（无 env 映射），
   # 缺键=成本列隐藏，只供面板估算不是对账单。

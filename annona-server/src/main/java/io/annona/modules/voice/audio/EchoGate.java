@@ -39,4 +39,12 @@ public final class EchoGate {
     public boolean isMuted(Instant now) {
         return now.isBefore(mutedUntil);
     }
+
+    /**
+     * 客户端上报音频播放完毕（control audio_done）：队列化播放的实际结束时刻晚于服务端
+     * 估算窗，此信号立即解禁——时间窗仅作无信号时的兜底。
+     */
+    public void reset() {
+        mutedUntil = Instant.EPOCH;
+    }
 }

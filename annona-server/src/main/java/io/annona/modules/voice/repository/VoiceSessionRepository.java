@@ -43,6 +43,13 @@ public interface VoiceSessionRepository extends JpaRepository<VoiceSessionEntity
         + " where s.id = :id and s.userId = :userId and s.status in ('ACTIVE', 'PAUSED')")
     int abandonIfOpen(@Param("id") UUID id, @Param("userId") UUID userId, @Param("now") Instant now);
 
+    /** 题目推进：作答轮落库后指向下一题（仅 ACTIVE 可推进）。 */
+    @Modifying
+    @Query("update VoiceSessionEntity s set s.currentQuestionSeq = :seq, s.updatedAt = :now"
+        + " where s.id = :id and s.userId = :userId and s.status = 'ACTIVE'")
+    int advanceQuestionSeq(@Param("id") UUID id, @Param("userId") UUID userId,
+                           @Param("seq") int seq, @Param("now") Instant now);
+
     /** 追加一句 VAD 定稿转写（顺序拼接；空白文本由调用方过滤）。 */
     @Modifying
     @Query("update VoiceSessionEntity s set s.transcript = concat(s.transcript, :text),"

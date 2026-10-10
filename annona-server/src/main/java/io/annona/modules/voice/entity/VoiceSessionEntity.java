@@ -6,6 +6,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 语音面试会话（V18 voice_session，voice-adr §决策 3）：独立于 interview_session 的
@@ -62,6 +64,18 @@ public class VoiceSessionEntity {
     /** 端到端延迟 P95（毫秒），口径同 p50。 */
     @Column(name = "e2e_latency_p95_ms")
     private Integer e2eLatencyP95Ms;
+
+    /**
+     * 开场时从题库 activePool 截取的题目 id 队列快照（JSON 数组字符串，保序）；重连后按它
+     * 恢复队列，不重查题库。空数组 = 未绑定方向或题库为空（对话退化为自由问答，不进评分）。
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "question_ids", nullable = false, columnDefinition = "jsonb")
+    private String questionIds = "[]";
+
+    /** 当前进行到的题目下标（0 基）；条件 UPDATE 随轮推进。 */
+    @Column(name = "current_question_seq", nullable = false)
+    private int currentQuestionSeq;
 
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false,
         columnDefinition = "timestamptz")
@@ -151,6 +165,22 @@ public class VoiceSessionEntity {
 
     public void setE2eLatencyP95Ms(Integer e2eLatencyP95Ms) {
         this.e2eLatencyP95Ms = e2eLatencyP95Ms;
+    }
+
+    public String getQuestionIds() {
+        return questionIds;
+    }
+
+    public void setQuestionIds(String questionIds) {
+        this.questionIds = questionIds;
+    }
+
+    public int getCurrentQuestionSeq() {
+        return currentQuestionSeq;
+    }
+
+    public void setCurrentQuestionSeq(int currentQuestionSeq) {
+        this.currentQuestionSeq = currentQuestionSeq;
     }
 
     public Instant getCreatedAt() {

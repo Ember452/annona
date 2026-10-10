@@ -1,9 +1,13 @@
 package io.annona.modules.voice.service;
 
 import io.annona.modules.voice.entity.VoiceSessionEntity;
+import io.annona.modules.voice.entity.VoiceSessionMessageEntity;
+import io.annona.modules.voice.repository.VoiceSessionMessageRepository;
 import io.annona.modules.voice.repository.VoiceSessionRepository;
+import io.annona.shared.domain.VoiceSessionFinalizedEvent;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,9 +24,15 @@ public class VoiceSessionService {
         + "准备好了就点开始，用语音回答我的问题。";
 
     private final VoiceSessionRepository repository;
+    private final VoiceSessionMessageRepository messages;
+    private final ApplicationEventPublisher events;
 
-    public VoiceSessionService(VoiceSessionRepository repository) {
+    public VoiceSessionService(VoiceSessionRepository repository,
+                               VoiceSessionMessageRepository messages,
+                               ApplicationEventPublisher events) {
         this.repository = repository;
+        this.messages = messages;
+        this.events = events;
     }
 
     /**
@@ -34,15 +44,17 @@ public class VoiceSessionService {
      * @param ttsModel 本会话 TTS 模型快照；通道未装配（降级纯字幕）时传 null
      */
     @Transactional
-    public VoiceSessionEntity create(UUID userId, UUID directionId, String asrModel, String ttsModel) {
+    public VoiceSessionEntity create(UUID userId, UUID directionId, String asrModel, String ttsModel,
+                                     String questionIdsJson, String opening) {
         VoiceSessionEntity session = new VoiceSessionEntity();
         session.setId(UUID.randomUUID());
         session.setUserId(userId);
         session.setDirectionId(directionId);
         session.setStatus(VoiceSessionEntity.STATUS_ACTIVE);
-        session.setOpening(DEFAULT_OPENING);
+        session.setOpening(opening == null || opening.isBlank() ? DEFAULT_OPENING : opening);
         session.setAsrModel(asrModel);
         session.setTtsModel(ttsModel);
+        session.setQuestionIds(questionIdsJson);
         session.setTranscript("");
         session.setUpdatedAt(Instant.now());
         repository.save(session);
@@ -61,10 +73,39 @@ public class VoiceSessionService {
         return repository.resumeIfPaused(sessionId, userId, Instant.now()) > 0;
     }
 
-    /** 收口（幂等守门）：ACTIVE/PAUSED → FINALIZED；false = 已终态，调用方不再发状态帧。 */
+    /**
+     * 收口（幂等守门）：ACTIVE/PAUSED → FINALIZED；赢者发布
+     * {@link VoiceSessionFinalizedEvent}（事务内发布，AFTER_COMMIT 消费——evaluation
+     * 建 VOICE 报告并投递评估，与 interview 交卷同口径）。
+     */
     @Transactional
     public boolean finalizeSession(UUID sessionId, UUID userId) {
-        return repository.finalizeIfOpen(sessionId, userId, Instant.now()) > 0;
+        var session = repository.findByIdAndUserId(sessionId, userId).orElse(null);
+        if (session == null) {
+            return false;
+        }
+        if (repository.finalizeIfOpen(sessionId, userId, Instant.now()) <= 0) {
+            return false;
+        }
+        events.publishEvent(new VoiceSessionFinalizedEvent(sessionId, userId, session.getDirectionId()));
+        return true;
+    }
+
+    /** 追加一轮（ANSWER/QUESTION）；seq 取会话内最大 +1（单连接串行推进，无竞争面）。 */
+    @Transactional
+    public void appendTurn(UUID sessionId, String role, UUID questionId, String content) {
+        int nextSeq = messages.findTopBySessionIdOrderBySeqDesc(sessionId)
+            .map(m -> m.getSeq() + 1).orElse(0);
+        var turn = VoiceSessionMessageEntity.ROLE_ANSWER.equals(role)
+            ? VoiceSessionMessageEntity.answer(sessionId, nextSeq, questionId, content)
+            : VoiceSessionMessageEntity.question(sessionId, nextSeq, questionId, content);
+        messages.save(turn);
+    }
+
+    /** 推进题目下标（仅 ACTIVE；轮落库后调用）。 */
+    @Transactional
+    public void advanceQuestionSeq(UUID sessionId, UUID userId, int seq) {
+        repository.advanceQuestionSeq(sessionId, userId, seq, Instant.now());
     }
 
     /** 断连未收口的兜底：置 ABANDONED（幂等）。 */

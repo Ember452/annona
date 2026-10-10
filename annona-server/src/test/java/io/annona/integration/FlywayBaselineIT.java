@@ -22,9 +22,10 @@ import org.springframework.test.context.ActiveProfiles;
  * <p>断言四件事：
  * <ol>
  *   <li>{@code flyway_schema_history} 有 V1 成功记录；</li>
- *   <li>public schema 下 27 张表齐全（V1 基线八张 + V2 采集三张 + V4 知识库两张 + V5 评测一张
+ *   <li>public schema 下 28 张表齐全（V1 基线八张 + V2 采集三张 + V4 知识库两张 + V5 评测一张
  *       + V6 问答两张 + V8 出题两张 + V9 面试会话两张 + V10 配置一张 + V11 用量一张
- *       + V13 评估两张 + V14 简历一张 + V15/V16 决策两张）；</li>
+ *       + V13 评估两张 + V14 简历一张 + V15/V16 决策两张 + V17 计划两张
+ *       + V18/V19 语音两张）；</li>
  *   <li>{@code pg_extension} 含 vector、citext 与 pg_trgm；</li>
  *   <li>二次启动 skip 迁移（V1 记录数仍为 1）。</li>
  * </ol>
@@ -53,7 +54,7 @@ class FlywayBaselineIT {
     }
 
     @Test
-    @DisplayName("public schema 下 27 张业务表齐全（V1–V16 各迁移登记表）")
+    @DisplayName("public schema 下 28 张业务表齐全（V1–V19 各迁移登记表）")
     void allBaselineTablesExist() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         List<String> tables = jdbc.queryForList(
@@ -85,7 +86,9 @@ class FlywayBaselineIT {
                 // V17（P2-06 计划与任务：plan-module-adr）
                 "plan", "plan_task",
                 // V18（P3-01 语音会话：voice-adr）
-                "voice_session");
+                "voice_session",
+                // V19（P3-03/05 语音对话轮：voice-adr 修订 1）
+                "voice_message");
     }
 
     @Test
