@@ -141,8 +141,12 @@ class VoiceFlowIT {
         JsonNode opening = awaitFrame(listener.frames, n -> "text".equals(n.path("type").asText()), "text");
         assertThat(opening.path("content").asText()).isNotBlank();
 
-        // 开场白音频触发了回声半双工静音窗（100ms 音频 ×1.5 + 300ms 冷却 ≈ 450ms）：
-        // 窗内上行会被正确丢弃——真实用户不可能在开场白后 100ms 内开口，测试同样等过窗口
+        // 开场白之后现在紧跟着一个面试官轮（P3-03 对话轮）：先等到它的 text 帧，再按
+        // “最后一段 AI 音频”算回声窗——否则 sleep 只盖住开场白，后到的回采句会把上行吃掉
+        awaitTextFrames(listener.frames, 2);
+
+        // 回声半双工静音窗（4800 字节 ≈ 100ms 音频 ×1.5 + 300ms 冷却 ≈ 450ms）：
+        // 窗内上行会被正确丢弃——真实用户不可能在面试官说完 100ms 内开口，测试同样等过窗口
         Thread.sleep(600);
 
         // 两帧出一句：partial → final（FakeAsr 确定性脚本）

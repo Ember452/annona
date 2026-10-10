@@ -310,6 +310,10 @@ public class VoiceWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         if (text != null && !text.isBlank()) {
+            // 手打答案与 ASR 定稿同走 transcript（V18 口径：音频不落库，转写是唯一存留物）。
+            // 批 2 重写时这一句被弄丢过：纯手动提交的降级会话会留下空 transcript，
+            // 而 voice_message 的结构轮次不能代替它（两者不是二选一）。
+            sessions.appendTranscript(conn.voiceSessionId, conn.userId, text.trim());
             conn.answerBuffer.add(text.trim());
             trySend(conn, VoiceProtocol.subtitle(text.trim(), true));
         }
