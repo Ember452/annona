@@ -1,6 +1,6 @@
 # P3 语音实施计划（VOICE_PLAN）
 
-- 日期 / 状态：2026-10-06 开批 / Active（2026-10-10更新：**批 1 已入 main**；**批 2 代码已落工作区待提交**，本机 `mvnw -B verify` 483 tests 绿、前端四门绿；批 3 未开始）
+- 日期 / 状态：2026-10-06 开批 / Active（2026-10-10更新：**批 1 已入 main**；**批 2 已入 main `5e9dfc7..901993d`，[CI run #117](https://github.com/Ember452/annona/actions/runs/38051324983) 六 job 全绿含 docker-it 真 PG**；批 3 未开始）
 - 承接：[开发计划 P3 任务表](../annona-开发计划.md)（P3-01..07，12 人日）、[voice-adr](../specs/2026-10-06-voice-adr.md)（含修订 1）、[批 2 收口小结](../reports/P3-批2-语音对话轮与评估接入-收口小结.md)
 - 依据：P2 关账后用户裁决——分三批推进；DashScope 为 ASR/TTS 首个真实现；**独立语音会话**（不套用 interview_session）。报告归属（原决策 4 留给装配时定案）已于 2026-10-10 用户裁决为**多态化**（修订 1 §2，V21）。
 
@@ -16,7 +16,7 @@
 | 前端地基 | AudioWorklet pcm-processor（16k/200ms）+ useVoiceSession（重连/事件归一 reducer + vitest）+ AudioRecorder/RealtimeSubtitle/voice 页骨架 |
 | 批出口 | fake 全链路 docker-it 绿 + mvnw verify 绿 + 前端四门绿 + DashScope 实现编译通过 + 最小真 Key 冒烟教程 |
 
-### 批 2：句级并发 TTS + 评估接入（P3-03/04/05 剩余）——🔶 代码已落，待提交与 CI 取证
+### 批 2：句级并发 TTS + 评估接入（P3-03/04/05 剩余）——✅ 已入 main，CI 六 job 全绿（缺陷链见收口小结）
 
 - `OrderedTtsChunkEmitter`：LLM 流式按句切分、信号量限并发、按序推 `audio_chunk`（首句优先、边合成边播）。
   **收口时发现并修掉自锁雷**：`submit` 原在调用线程等许可，而排空线程与合成任务跑同一个
